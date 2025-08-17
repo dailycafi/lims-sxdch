@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 现有的颜色变量 */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+  
+  * {
+    border-color: rgb(229 231 235);
+  }
+  body {
+    background-color: rgb(255 255 255);
+    color: rgb(17 24 39);
+  }
+}
+
+/* Catalyst UI Kit 兼容性修复 for Tailwind v3 */
+@layer utilities {
+  /* 修复 calc(--spacing(N)) 语法 - 适用于所有元素 */
+  [class*="px-\\[calc\\(--spacing\\(3\\.5\\)"] {
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+  [class*="py-\\[calc\\(--spacing\\(2\\.5\\)"] {
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+  [class*="px-\\[calc\\(--spacing\\(3\\)"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  [class*="py-\\[calc\\(--spacing\\(1\\.5\\)"] {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+  }
+  
+  /* 修复按钮样式 */
+  [class*="bg-\\(--btn-"] {
+    background-color: var(--btn-bg);
+  }
+  [class*="before\\:bg-\\(--btn-bg\\)"]::before {
+    background-color: var(--btn-bg);
+  }
+  [class*="after\\:bg-\\(--btn-hover-overlay\\)"]::after {
+    background-color: var(--btn-hover-overlay);
+  }
+  
+  /* 修复文字颜色 */
+  [class*="text-\\(--btn-icon\\)"] {
+    color: var(--btn-icon);
+  }
+  
+  /* 修复边框 */
+  [class*="border-\\(--btn-border\\)"] {
+    border-color: var(--btn-border);
+  }
+}
+
+/* 输入框修复 */
+@layer components {
+  /* 确保输入框有适当的高度和内边距 */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"] {
+    min-height: 2.75rem !important;
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+  
+  @media (min-width: 640px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="number"] {
+      padding-left: 0.75rem !important;
+      padding-right: 0.75rem !important;
+      padding-top: 0.375rem !important;
+      padding-bottom: 0.375rem !important;
+    }
+  }
+}
+
+/* 按钮修复 */
+@layer components {
+  /* 黑白按钮样式 */
+  button[color="blue"],
+  button[color="dark"],
+  button[type="submit"] {
+    --btn-bg: rgb(17 24 39) !important;
+    --btn-border: rgb(0 0 0) !important;
+    --btn-hover-overlay: rgba(255, 255, 255, 0.1) !important;
+    --btn-icon: rgb(156 163 175) !important;
+    background-color: rgb(17 24 39) !important;
+    border-color: rgb(0 0 0) !important;
+    color: white !important;
+  }
+  
+  button[color="blue"]:hover,
+  button[color="dark"]:hover,
+  button[type="submit"]:hover {
+    background-color: rgb(0 0 0) !important;
+  }
+  
+  /* 修复按钮的基础样式 */
+  button {
+    position: relative;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 3rem !important;
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border-width: 1px;
+    border-style: solid;
+  }
+  
+  @media (min-width: 640px) {
+    button {
+      min-height: 2.5rem !important;
+      padding: 0.5rem 1rem !important;
+    }
+  }
+  
+  /* 修复按钮内部的 flexbox 对齐 */
+  button[class*="items-baseline"] {
+    align-items: center !important;
+  }
+  
+  /* 修复按钮行高 */
+  button[class*="inline-flex"] {
+    line-height: 1.5rem !important;
+  }
+}
