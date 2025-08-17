@@ -80,3 +80,11 @@ export const BadgeButton = forwardRef(function BadgeButton(
     </Headless.Button>
   )
 })
+
+export function NewBadge({ className }: { className?: string }) {
+  return (
+    <Badge color="green" className={clsx("ml-2 text-xs", className)}>
+      New
+    </Badge>
+  );
+}

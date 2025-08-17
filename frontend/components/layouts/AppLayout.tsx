@@ -1,12 +1,22 @@
 import { ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
+import { Image } from '@/components/image';
 import { useAuthStore } from '@/store/auth';
 import { SidebarLayout } from '@/components/sidebar-layout';
-import { Sidebar, SidebarSection, SidebarItem } from '@/components/sidebar';
+import { 
+  Sidebar, 
+  SidebarBody, 
+  SidebarHeader, 
+  SidebarSection, 
+  SidebarItem,
+  SidebarHeading,
+  SidebarSpacer,
+  SidebarLabel
+} from '@/components/sidebar';
 import { Navbar } from '@/components/navbar';
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown';
 import { Avatar } from '@/components/avatar';
+import { Badge } from '@/components/badge';
 import {
   HomeIcon,
   BeakerIcon,
@@ -16,7 +26,10 @@ import {
   Cog6ToothIcon,
   ChartBarIcon,
   ArrowRightOnRectangleIcon,
-} from '@heroicons/react/24/outline';
+  CircleStackIcon,
+  ExclamationTriangleIcon,
+  ArchiveBoxIcon,
+} from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -31,59 +44,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     router.push('/login');
   };
 
-  const navigation = [
-    {
-      name: '主页',
-      href: '/',
-      icon: HomeIcon,
-    },
-    {
-      name: '项目管理',
-      href: '/projects',
-      icon: FolderIcon,
-      role: ['SYSTEM_ADMIN', 'SAMPLE_ADMIN'],
-    },
-    {
-      name: '样本管理',
-      icon: BeakerIcon,
-      children: [
-        { name: '样本接收', href: '/samples/receive' },
-        { name: '样本查询', href: '/samples' },
-        { name: '样本领用', href: '/samples/checkout' },
-        { name: '样本归还', href: '/samples/return' },
-        { name: '样本转移', href: '/samples/transfer' },
-        { name: '样本销毁', href: '/samples/destroy' },
-      ],
-    },
-    {
-      name: '用户管理',
-      href: '/users',
-      icon: UsersIcon,
-      role: ['SYSTEM_ADMIN', 'SAMPLE_ADMIN'],
-    },
-    {
-      name: '统计报表',
-      href: '/reports',
-      icon: ChartBarIcon,
-    },
-    {
-      name: '审计日志',
-      href: '/audit',
-      icon: DocumentTextIcon,
-    },
-    {
-      name: '系统设置',
-      href: '/settings',
-      icon: Cog6ToothIcon,
-      role: ['SYSTEM_ADMIN'],
-    },
-  ];
+  // 判断当前路径是否匹配
+  const isCurrentPath = (href: string) => {
+    return router.pathname === href;
+  };
 
-  // 根据用户角色过滤导航项
-  const filteredNavigation = navigation.filter((item) => {
-    if (!item.role) return true;
-    return item.role.includes(user?.role || '');
-  });
+  // 根据用户角色判断是否显示菜单项
+  const shouldShowMenuItem = (roles?: string[]) => {
+    if (!roles) return true;
+    return roles.includes(user?.role || '');
+  };
 
   return (
     <SidebarLayout
@@ -108,7 +78,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <DropdownItem href="/profile">个人信息</DropdownItem>
                 <DropdownItem href="/settings">设置</DropdownItem>
                 <DropdownItem onClick={handleLogout}>
-                  <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
+                  <ArrowRightOnRectangleIcon className="h-4 w-4" />
                   退出登录
                 </DropdownItem>
               </DropdownMenu>
@@ -118,31 +88,136 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
       sidebar={
         <Sidebar>
-          {filteredNavigation.map((section) => (
-            <SidebarSection key={section.name}>
-              {section.children ? (
-                <>
-                  <div className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {section.name}
-                  </div>
-                  {section.children.map((item) => (
-                    <SidebarItem key={item.name} href={item.href}>
-                      {item.name}
-                    </SidebarItem>
-                  ))}
-                </>
-              ) : (
-                <SidebarItem href={section.href}>
-                  {section.icon && <section.icon className="h-5 w-5 mr-3" />}
-                  {section.name}
-                </SidebarItem>
-              )}
+          <SidebarHeader>
+            <SidebarSection>
+              <SidebarItem href="/" current={isCurrentPath('/')}>
+                <HomeIcon data-slot="icon" className="!w-5 !h-5" />
+                <SidebarLabel>主页</SidebarLabel>
+              </SidebarItem>
             </SidebarSection>
-          ))}
+          </SidebarHeader>
+          
+          <SidebarBody>
+            {/* 样本管理 */}
+            <div className="space-y-6">
+              <div>
+                <div className="mb-2 flex items-center">
+                  <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    样本管理
+                  </h3>
+                  <Badge color="green" className="ml-2 text-xs">New</Badge>
+                </div>
+                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <SidebarItem href="/samples/receive" current={isCurrentPath('/samples/receive')}>
+                    <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>样本接收</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/samples" current={isCurrentPath('/samples')}>
+                    <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>样本查询</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
+
+              {/* 项目管理 - 仅管理员可见 */}
+              {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    项目管理
+                  </h3>
+                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                    <SidebarItem href="/projects" current={isCurrentPath('/projects')}>
+                      <FolderIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>项目列表</SidebarLabel>
+                    </SidebarItem>
+                    <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
+                      <FolderIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>新建项目</SidebarLabel>
+                    </SidebarItem>
+                  </div>
+                </div>
+              )}
+
+              {/* 系统管理 */}
+              {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    系统管理
+                  </h3>
+                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                    <SidebarItem href="/global-params" current={isCurrentPath('/global-params')}>
+                      <CircleStackIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>全局参数</SidebarLabel>
+                    </SidebarItem>
+                    <SidebarItem href="/users" current={isCurrentPath('/users')}>
+                      <UsersIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>用户管理</SidebarLabel>
+                    </SidebarItem>
+                  </div>
+                </div>
+              )}
+
+              {/* 统计与报表 */}
+              <div>
+                <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  统计与报表
+                </h3>
+                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <SidebarItem href="/reports" current={isCurrentPath('/reports')}>
+                    <ChartBarIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>统计报表</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
+                    <DocumentTextIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>审计日志</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
+
+              {/* 其他功能 */}
+              <div>
+                <div className="mb-2 flex items-center">
+                  <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    其他功能
+                  </h3>
+                  <Badge color="blue" className="ml-2 text-xs">Beta</Badge>
+                </div>
+                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <SidebarItem href="/deviation" current={isCurrentPath('/deviation')}>
+                    <ExclamationTriangleIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>偏差管理</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
+                    <ArchiveBoxIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>项目归档</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
+
+              {/* 系统设置 - 仅系统管理员可见 */}
+              {shouldShowMenuItem(['SYSTEM_ADMIN']) && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    系统设置
+                  </h3>
+                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                    <SidebarItem href="/settings" current={isCurrentPath('/settings')}>
+                      <Cog6ToothIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>系统设置</SidebarLabel>
+                    </SidebarItem>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <SidebarSpacer />
+          </SidebarBody>
         </Sidebar>
       }
     >
-      <main className="p-6">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6">{children}</div>
+      </main>
     </SidebarLayout>
   );
 }

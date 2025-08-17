@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
-import Image from 'next/image';
+import { Image } from '@/components/image';  // 改为使用自定义 Image 组件
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/button';
@@ -113,6 +113,7 @@ export default function LoginPage() {
                   width={64}
                   height={64}
                   className="rounded-xl"
+                  priority // 添加 priority 属性以优化 LCP
                 />
               </div>
             </div>
