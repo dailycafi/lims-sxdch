@@ -76,6 +76,14 @@ export default function ProjectDetailPage() {
     sampleSeqs: '',
   });
 
+  // 稳定性及质控样本
+  const [stabilityQCParams, setStabilityQCParams] = useState({
+    sample_category: '',
+    code: '',
+    quantity: 0,
+    start_number: 1
+  });
+
   useEffect(() => {
     if (id) {
       fetchProject();
@@ -161,6 +169,29 @@ export default function ProjectDetailPage() {
     });
     
     setSelectedElements(newElements);
+  };
+
+  const handleGenerateStabilityQCCodes = async () => {
+    try {
+      const response = await api.post(`/projects/${id}/generate-stability-qc-codes`, stabilityQCParams);
+      
+      // 显示生成结果
+      alert(`成功生成 ${response.data.count} 个${stabilityQCParams.sample_category === 'STB' ? '稳定性' : '质控'}样本编号`);
+      
+      // 可以在这里显示生成的编号列表
+      console.log('生成的编号:', response.data.sample_codes);
+      
+      // 重置表单
+      setStabilityQCParams({
+        sample_category: '',
+        code: '',
+        quantity: 0,
+        start_number: 1
+      });
+    } catch (error) {
+      console.error('生成失败:', error);
+      alert('生成失败，请重试');
+    }
   };
 
   const generateSamplePreview = () => {
@@ -503,7 +534,10 @@ export default function ProjectDetailPage() {
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     样本类别
                   </label>
-                  <Select>
+                  <Select
+                    value={stabilityQCParams.sample_category}
+                    onChange={(e) => setStabilityQCParams({...stabilityQCParams, sample_category: e.target.value})}
+                  >
                     <option value="">请选择</option>
                     <option value="STB">稳定性样本</option>
                     <option value="QC">质控样本</option>
@@ -513,20 +547,44 @@ export default function ProjectDetailPage() {
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     代码
                   </label>
-                  <Input placeholder="如：L, M, H" />
+                  <Input 
+                    placeholder="如：L, M, H"
+                    value={stabilityQCParams.code}
+                    onChange={(e) => setStabilityQCParams({...stabilityQCParams, code: e.target.value})}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     数量
                   </label>
-                  <Input type="number" placeholder="生成数量" min="1" />
+                  <Input 
+                    type="number" 
+                    placeholder="生成数量" 
+                    min="1"
+                    value={stabilityQCParams.quantity || ''}
+                    onChange={(e) => setStabilityQCParams({...stabilityQCParams, quantity: parseInt(e.target.value) || 0})}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     起始编号
                   </label>
-                  <Input type="number" placeholder="如：31" min="1" />
+                  <Input 
+                    type="number" 
+                    placeholder="如：31" 
+                    min="1"
+                    value={stabilityQCParams.start_number || ''}
+                    onChange={(e) => setStabilityQCParams({...stabilityQCParams, start_number: parseInt(e.target.value) || 1})}
+                  />
                 </div>
+              </div>
+              <div className="mt-4">
+                <Button 
+                  onClick={handleGenerateStabilityQCCodes}
+                  disabled={!stabilityQCParams.sample_category || !stabilityQCParams.code || !stabilityQCParams.quantity}
+                >
+                  生成稳定性/质控样本编号
+                </Button>
               </div>
             </div>
           </div>

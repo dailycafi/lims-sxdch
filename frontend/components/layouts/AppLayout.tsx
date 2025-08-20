@@ -167,6 +167,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <ExclamationTriangleIcon data-slot="icon" className="!w-5 !h-5" />
                     <SidebarLabel>偏差管理</SidebarLabel>
                   </SidebarItem>
+                  <SidebarItem href="/deviation/complete" current={isCurrentPath('/deviation/complete')}>
+                    <ClipboardDocumentCheckIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>偏差管理(8步)</SidebarLabel>
+                  </SidebarItem>
                   <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
                     <ArchiveBoxIcon data-slot="icon" className="!w-5 !h-5" />
                     <SidebarLabel>项目归档</SidebarLabel>

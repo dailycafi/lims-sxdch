@@ -78,7 +78,8 @@ async def create_archive_request(
         reason=request_data.reason,
         completion_summary=request_data.completion_summary,
         final_report_path=request_data.final_report_path,
-        status="pending"
+        status="pending_manager",
+        current_step=2
     )
     
     db.add(archive_request)
@@ -186,23 +187,25 @@ async def get_archived_projects(
     return response
 
 
+class ArchiveApprovalStep(BaseModel):
+    action: str  # approve, reject
+    comments: str
+
+
 @router.post("/request/{request_id}/approve")
 async def approve_archive_request(
     request_id: int,
+    approval_data: ArchiveApprovalStep,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """批准归档申请"""
-    # 检查用户权限
-    if current_user.role not in [UserRole.LAB_DIRECTOR, UserRole.SYSTEM_ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有研究室主任或系统管理员可以批准归档申请"
-        )
+    """处理归档申请审批（支持4步流程）"""
     
     # 获取归档申请
     result = await db.execute(
-        select(ProjectArchiveRequest).where(ProjectArchiveRequest.id == request_id)
+        select(ProjectArchiveRequest).options(
+            selectinload(ProjectArchiveRequest.project)
+        ).where(ProjectArchiveRequest.id == request_id)
     )
     archive_request = result.scalar_one_or_none()
     
@@ -212,44 +215,103 @@ async def approve_archive_request(
             detail="归档申请不存在"
         )
     
-    if archive_request.status != "pending":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该申请已处理"
-        )
+    # 根据当前步骤检查权限并处理
+    if archive_request.current_step == 2:
+        # 步骤2: 分析测试主管审批
+        if current_user.role not in [UserRole.TEST_MANAGER, UserRole.SYSTEM_ADMIN]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有分析测试主管可以在此步骤审批"
+            )
+        
+        archive_request.test_manager_id = current_user.id
+        archive_request.test_manager_approved_at = datetime.utcnow()
+        archive_request.test_manager_comments = approval_data.comments
+        archive_request.test_manager_action = approval_data.action
+        
+        if approval_data.action == "approve":
+            archive_request.status = "pending_qa"
+            archive_request.current_step = 3
+        else:
+            archive_request.status = "rejected"
+            # 恢复项目状态
+            archive_request.project.status = "active"
     
-    # 更新申请状态
-    archive_request.status = "approved"
-    archive_request.approved_by = current_user.id
-    archive_request.approved_at = datetime.utcnow()
+    elif archive_request.current_step == 3:
+        # 步骤3: QA审批
+        if current_user.role not in [UserRole.QA, UserRole.SYSTEM_ADMIN]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有QA可以在此步骤审批"
+            )
+        
+        archive_request.qa_id = current_user.id
+        archive_request.qa_approved_at = datetime.utcnow()
+        archive_request.qa_comments = approval_data.comments
+        archive_request.qa_action = approval_data.action
+        
+        if approval_data.action == "approve":
+            archive_request.status = "pending_admin"
+            archive_request.current_step = 4
+        else:
+            archive_request.status = "rejected"
+            # 恢复项目状态
+            archive_request.project.status = "active"
     
-    # 执行归档
-    result = await db.execute(
-        select(Project).where(Project.id == archive_request.project_id)
-    )
-    project = result.scalar_one_or_none()
-    
-    if project:
+    elif archive_request.current_step == 4:
+        # 步骤4: 计算机管理员执行归档
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有系统管理员可以执行归档"
+            )
+        
+        archive_request.admin_id = current_user.id
+        archive_request.admin_executed_at = datetime.utcnow()
+        archive_request.admin_comments = approval_data.comments
+        archive_request.status = "archived"
+        
+        # 执行归档
+        project = archive_request.project
         project.is_archived = True
         project.status = "archived"
         project.archived_at = datetime.utcnow()
         project.is_active = False
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的审批步骤"
+        )
     
     await db.commit()
     
     # 创建审计日志
+    action_detail = f"step_{archive_request.current_step}_{approval_data.action}"
     audit_log = AuditLog(
         user_id=current_user.id,
         entity_type="project_archive",
         entity_id=archive_request.project_id,
-        action="approve",
-        reason="批准项目归档",
+        action=action_detail,
+        reason=approval_data.comments,
+        details={
+            "step": archive_request.current_step,
+            "action": approval_data.action,
+            "project_code": archive_request.project.lab_project_code
+        },
         timestamp=datetime.utcnow()
     )
     db.add(audit_log)
     await db.commit()
     
-    return {"message": "归档申请已批准，项目已锁定"}
+    step_names = {
+        2: "分析测试主管审批",
+        3: "QA审批",
+        4: "系统管理员执行归档"
+    }
+    
+    return {
+        "message": f"{step_names.get(archive_request.current_step, '审批')}{'完成' if approval_data.action == 'approve' else '已拒绝'}"
+    }
 
 
 @router.post("/request/{request_id}/reject")

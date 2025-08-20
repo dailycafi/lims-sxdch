@@ -210,8 +210,22 @@ async def receive_samples(
     # 保存温度文件
     temperature_file_path = None
     if temperature_file:
-        # TODO: 实现文件保存逻辑
-        temperature_file_path = f"uploads/temperature/{temperature_monitor_id}_{datetime.now().timestamp()}"
+        # 创建上传目录
+        import os
+        upload_dir = "uploads/temperature"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # 生成唯一文件名
+        file_extension = os.path.splitext(temperature_file.filename)[1]
+        file_name = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{file_extension}"
+        file_path = os.path.join(upload_dir, file_name)
+        
+        # 保存文件
+        with open(file_path, "wb") as f:
+            content = await temperature_file.read()
+            f.write(content)
+        
+        temperature_file_path = file_path
     
     # 创建接收记录
     receive_record = SampleReceiveRecord(

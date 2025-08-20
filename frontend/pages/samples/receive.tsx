@@ -50,6 +50,7 @@ export default function SampleReceivePage() {
     sample_count: '',
     sample_status: '',
     storage_location: '',
+    temperature_file: null as File | null,
   });
 
   useEffect(() => {
@@ -330,6 +331,32 @@ export default function SampleReceivePage() {
                   placeholder="输入温度记录仪编号"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  温度数据文件
+                </label>
+                <div className="mt-1 flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.txt,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setFormData({ ...formData, temperature_file: file });
+                      }
+                    }}
+                  />
+                  {formData.temperature_file && (
+                    <Text className="text-sm text-zinc-600">
+                      已选择: {formData.temperature_file.name}
+                    </Text>
+                  )}
+                </div>
+                <Text className="text-xs text-zinc-500 mt-1">
+                  支持格式：CSV, Excel, TXT, PDF
+                </Text>
               </div>
 
               <div>

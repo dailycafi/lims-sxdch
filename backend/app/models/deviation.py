@@ -92,3 +92,36 @@ class DeviationTracking(Base):
     
     # 关系
     deviation = relationship("Deviation", back_populates="tracking_items")
+
+
+class DeviationApproval(Base):
+    """偏差审批流程记录"""
+    __tablename__ = "deviation_approvals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deviation_id = Column(Integer, ForeignKey("deviations.id"), nullable=False)
+    
+    # 审批步骤
+    step = Column(Integer, nullable=False)  # 1-8的步骤
+    step_name = Column(String, nullable=False)  # 步骤名称
+    role = Column(String, nullable=False)  # 需要的角色
+    
+    # 审批信息
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action = Column(String, nullable=True)  # approve, reject, execute
+    comments = Column(Text, nullable=True)
+    executed_actions = Column(Text, nullable=True)  # 步骤5专用：实际执行情况
+    designated_executor_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 步骤4专用：指定的执行人
+    
+    # 时间戳
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # 关系
+    deviation = relationship("Deviation", back_populates="approvals")
+    user = relationship("User", foreign_keys=[user_id])
+    designated_executor = relationship("User", foreign_keys=[designated_executor_id])
+
+
+# 在Deviation类中添加关系
+Deviation.approvals = relationship("DeviationApproval", back_populates="deviation", order_by="DeviationApproval.step")

@@ -43,16 +43,34 @@ class ProjectArchiveRequest(Base):
     completion_summary = Column(Text, nullable=True)  # 项目完成总结
     final_report_path = Column(String, nullable=True)  # 最终报告路径
     
-    # 审批信息
-    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    approval_comments = Column(Text, nullable=True)
+    # 4步审批信息
+    # 步骤1: 项目负责人申请（已由requested_by体现）
+    
+    # 步骤2: 分析测试主管审批
+    test_manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    test_manager_approved_at = Column(DateTime(timezone=True), nullable=True)
+    test_manager_comments = Column(Text, nullable=True)
+    test_manager_action = Column(String, nullable=True)  # approve, reject
+    
+    # 步骤3: QA审批
+    qa_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    qa_approved_at = Column(DateTime(timezone=True), nullable=True)
+    qa_comments = Column(Text, nullable=True)
+    qa_action = Column(String, nullable=True)  # approve, reject
+    
+    # 步骤4: 计算机管理员执行归档
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    admin_executed_at = Column(DateTime(timezone=True), nullable=True)
+    admin_comments = Column(Text, nullable=True)
     
     # 状态
-    status = Column(String, default="pending")  # pending, approved, rejected, executed
+    status = Column(String, default="pending_manager")  # pending_manager, pending_qa, pending_admin, archived, rejected
+    current_step = Column(Integer, default=2)  # 2-4的步骤（1是申请）
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # 关系
     project = relationship("Project")
     requester = relationship("User", foreign_keys=[requested_by])
-    approver = relationship("User", foreign_keys=[approved_by])
+    test_manager = relationship("User", foreign_keys=[test_manager_id])
+    qa_user = relationship("User", foreign_keys=[qa_id])
+    admin_user = relationship("User", foreign_keys=[admin_id])

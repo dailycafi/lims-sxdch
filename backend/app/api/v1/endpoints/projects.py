@@ -328,3 +328,70 @@ async def generate_sample_codes(
         "message": f"成功生成{len(generated_codes)}个样本编号",
         "sample_codes": generated_codes
     }
+
+
+class StabilityQCCodeGenerate(BaseModel):
+    """稳定性及质控样本编号生成参数"""
+    sample_category: str  # STB 或 QC
+    code: str  # 代码，如 L, M, H
+    quantity: int  # 数量
+    start_number: int = 1  # 起始编号
+
+
+@router.post("/{project_id}/generate-stability-qc-codes")
+async def generate_stability_qc_codes(
+    project_id: int,
+    params: StabilityQCCodeGenerate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """生成稳定性及质控样本编号"""
+    # 检查权限
+    if current_user.role not in [UserRole.SAMPLE_ADMIN, UserRole.SYSTEM_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以生成样本编号"
+        )
+    
+    # 获取项目
+    result = await db.execute(
+        select(Project).where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    # 生成编号
+    # 格式：临床试验研究室项目编号-样本类别-代码-序号
+    # 例如：L2501-STB-L-31
+    sample_codes = []
+    for i in range(params.quantity):
+        code_number = params.start_number + i
+        sample_code = f"{project.lab_project_code}-{params.sample_category}-{params.code}-{code_number}"
+        sample_codes.append(sample_code)
+    
+    # 记录审计日志
+    await create_audit_log(
+        db,
+        user_id=current_user.id,
+        entity_type="project",
+        entity_id=project_id,
+        action="generate_stability_qc_codes",
+        details={
+            "project_code": project.lab_project_code,
+            "sample_category": params.sample_category,
+            "code": params.code,
+            "quantity": params.quantity,
+            "start_number": params.start_number,
+            "generated_codes": sample_codes[:10]  # 只记录前10个
+        }
+    )
+    
+    return {
+        "sample_codes": sample_codes,
+        "count": len(sample_codes)
+    }
