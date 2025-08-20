@@ -7,10 +7,12 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import verify_password, create_access_token, decode_token
+from app.core.security import verify_password, create_access_token, decode_token, pwd_context
 from app.models.user import User
+from app.models.audit import AuditLog
 from app.schemas.token import Token
 from app.schemas.user import UserResponse
+from datetime import datetime
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -97,6 +99,66 @@ async def login(
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/verify-signature")
+async def verify_signature(
+    signature_data: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """验证电子签名（密码验证）"""
+    password = signature_data.get("password")
+    
+    if not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码不能为空"
+        )
+    
+    # 验证用户密码
+    if not pwd_context.verify(password, current_user.hashed_password):
+        # 记录失败的签名尝试
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="e_signature",
+            entity_id=current_user.id,
+            action="verify_failed",
+            details={
+                "timestamp": datetime.utcnow().isoformat(),
+                "ip_address": signature_data.get("ip_address", "unknown")
+            },
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        await db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
+        )
+    
+    # 记录成功的签名验证
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="e_signature",
+        entity_id=current_user.id,
+        action="verify_success",
+        details={
+            "timestamp": datetime.utcnow().isoformat(),
+            "purpose": signature_data.get("purpose", "general")
+        },
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return {
+        "verified": True,
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 @router.get("/me", response_model=UserResponse)

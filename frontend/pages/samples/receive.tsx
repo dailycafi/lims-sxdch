@@ -38,6 +38,10 @@ export default function SampleReceivePage() {
   const [loading, setLoading] = useState(true);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState('');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [temperatureFile, setTemperatureFile] = useState<File | null>(null);
+  const [expressPhotos, setExpressPhotos] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     clinical_site: '',
     transport_company: '',
@@ -50,6 +54,8 @@ export default function SampleReceivePage() {
 
   useEffect(() => {
     fetchReceiveTasks();
+    fetchProjects();
+    fetchOrganizations();
   }, []);
 
   const fetchReceiveTasks = async () => {
@@ -63,13 +69,50 @@ export default function SampleReceivePage() {
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const response = await api.get('/projects');
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+    }
+  };
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/global_params/organizations');
+      setOrganizations(response.data);
+    } catch (error) {
+      console.error('Failed to fetch organizations:', error);
+    }
+  };
+
   const handleReceive = async () => {
     try {
-      await api.post('/samples/receive', {
-        project_id: selectedProject,
-        ...formData,
-        sample_count: parseInt(formData.sample_count),
+      const formDataToSend = new FormData();
+      formDataToSend.append('project_id', selectedProject);
+      formDataToSend.append('clinical_org_id', formData.clinical_site);
+      formDataToSend.append('transport_org_id', formData.transport_company);
+      formDataToSend.append('transport_method', formData.transport_method);
+      formDataToSend.append('temperature_monitor_id', formData.temperature_monitor_id);
+      formDataToSend.append('sample_count', formData.sample_count);
+      formDataToSend.append('sample_status', formData.sample_status);
+      formDataToSend.append('storage_location', formData.storage_location);
+      
+      if (temperatureFile) {
+        formDataToSend.append('temperature_file', temperatureFile);
+      }
+      
+      expressPhotos.forEach((photo, index) => {
+        formDataToSend.append(`express_photos_${index}`, photo);
       });
+
+      await api.post('/samples/receive', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
       setIsReceiveDialogOpen(false);
       resetForm();
       fetchReceiveTasks();
@@ -94,7 +137,24 @@ export default function SampleReceivePage() {
       sample_status: '',
       storage_location: '',
     });
+    setTemperatureFile(null);
+    setExpressPhotos([]);
   };
+
+  const handleTemperatureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setTemperatureFile(e.target.files[0]);
+    }
+  };
+
+  const handleExpressPhotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setExpressPhotos(Array.from(e.target.files));
+    }
+  };
+
+  const clinicalOrgs = organizations.filter(org => org.org_type === 'clinical');
+  const transportOrgs = organizations.filter(org => org.org_type === 'transport');
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -199,8 +259,11 @@ export default function SampleReceivePage() {
                   required
                 >
                   <option value="">请选择项目</option>
-                  <option value="1">L2501 - 某药物I期临床试验</option>
-                  <option value="2">L2502 - 某药物II期临床试验</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.lab_project_code} - {project.sponsor_project_code}
+                    </option>
+                  ))}
                 </Select>
               </div>
               
@@ -214,9 +277,11 @@ export default function SampleReceivePage() {
                   required
                 >
                   <option value="">请选择临床机构</option>
-                  <option value="site1">上海市第一人民医院</option>
-                  <option value="site2">复旦大学附属中山医院</option>
-                  <option value="site3">上海交通大学医学院附属瑞金医院</option>
+                  {clinicalOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
 
@@ -230,9 +295,11 @@ export default function SampleReceivePage() {
                   required
                 >
                   <option value="">请选择运输单位</option>
-                  <option value="company1">顺丰冷链</option>
-                  <option value="company2">京东物流</option>
-                  <option value="company3">专业医药物流公司</option>
+                  {transportOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
 
@@ -318,11 +385,23 @@ export default function SampleReceivePage() {
                   温度数据文件
                 </label>
                 <div className="flex items-center gap-2">
-                  <Button plain>
-                    <CloudArrowUpIcon />
-                    上传温度数据
-                  </Button>
-                  <Text className="text-sm text-zinc-500">支持 CSV, Excel 格式</Text>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={handleTemperatureFileChange}
+                      className="hidden"
+                    />
+                    <Button as="span" plain>
+                      <CloudArrowUpIcon />
+                      上传温度数据
+                    </Button>
+                  </label>
+                  {temperatureFile ? (
+                    <Text className="text-sm text-green-600">已选择: {temperatureFile.name}</Text>
+                  ) : (
+                    <Text className="text-sm text-zinc-500">支持 CSV, Excel 格式</Text>
+                  )}
                 </div>
               </div>
 
@@ -331,11 +410,24 @@ export default function SampleReceivePage() {
                   快递单及其他照片
                 </label>
                 <div className="flex items-center gap-2">
-                  <Button plain>
-                    <CloudArrowUpIcon />
-                    上传照片
-                  </Button>
-                  <Text className="text-sm text-zinc-500">支持 JPG, PNG 格式</Text>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png"
+                      multiple
+                      onChange={handleExpressPhotosChange}
+                      className="hidden"
+                    />
+                    <Button as="span" plain>
+                      <CloudArrowUpIcon />
+                      上传照片
+                    </Button>
+                  </label>
+                  {expressPhotos.length > 0 ? (
+                    <Text className="text-sm text-green-600">已选择 {expressPhotos.length} 个文件</Text>
+                  ) : (
+                    <Text className="text-sm text-zinc-500">支持 JPG, PNG 格式</Text>
+                  )}
                 </div>
               </div>
             </div>

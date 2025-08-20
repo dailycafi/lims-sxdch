@@ -29,6 +29,9 @@ import {
   CircleStackIcon,
   ExclamationTriangleIcon,
   ArchiveBoxIcon,
+  ArrowUpOnSquareIcon,
+  ArrowsRightLeftIcon,
+  TrashIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -112,6 +115,18 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
                     <SidebarLabel>样本接收</SidebarLabel>
                   </SidebarItem>
+                  <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
+                    <ArrowUpOnSquareIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>样本领用</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/samples/transfer" current={isCurrentPath('/samples/transfer')}>
+                    <ArrowsRightLeftIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>样本转移</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/samples/destroy" current={isCurrentPath('/samples/destroy')}>
+                    <TrashIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>样本销毁</SidebarLabel>
+                  </SidebarItem>
                   <SidebarItem href="/samples" current={isCurrentPath('/samples')}>
                     <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
                     <SidebarLabel>样本查询</SidebarLabel>
@@ -138,6 +153,27 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
               )}
 
+              {/* 统计分析 */}
+              <div>
+                <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  统计分析
+                </h3>
+                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <SidebarItem href="/statistics" current={isCurrentPath('/statistics')}>
+                    <ChartBarIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>统计查询</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/deviation" current={isCurrentPath('/deviation')}>
+                    <ExclamationTriangleIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>偏差管理</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
+                    <ArchiveBoxIcon data-slot="icon" className="!w-5 !h-5" />
+                    <SidebarLabel>项目归档</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
+
               {/* 系统管理 */}
               {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
                 <div>
@@ -152,6 +188,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <SidebarItem href="/users" current={isCurrentPath('/users')}>
                       <UsersIcon data-slot="icon" className="!w-5 !h-5" />
                       <SidebarLabel>用户管理</SidebarLabel>
+                    </SidebarItem>
+                    <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
+                      <DocumentTextIcon data-slot="icon" className="!w-5 !h-5" />
+                      <SidebarLabel>审计日志</SidebarLabel>
                     </SidebarItem>
                   </div>
                 </div>

@@ -1,54 +1,82 @@
 import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
+import { Input } from '@/components/input';
+import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
 import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
+import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { api } from '@/lib/api';
-import { ArchiveBoxIcon, EyeIcon, LockClosedIcon } from '@heroicons/react/20/solid';
+import { 
+  ArchiveBoxIcon,
+  LockClosedIcon,
+  DocumentCheckIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  XCircleIcon
+} from '@heroicons/react/20/solid';
 
-interface Project {
+interface ArchiveRequest {
   id: number;
-  sponsor_project_no: string;
-  lab_project_no: string;
-  sponsor_name: string;
+  project: {
+    id: number;
+    lab_project_code: string;
+    sponsor_project_code: string;
+    status: string;
+  };
+  requested_by: {
+    full_name: string;
+  };
+  reason: string;
   status: string;
   created_at: string;
-  updated_at: string;
-  is_archived: boolean;
-  archive_info?: {
-    reason: string;
-    archived_by: string;
-    archived_at: string;
-    approval_status: string;
-  };
+  approved_at?: string;
+  archived_at?: string;
 }
 
-const archiveStatuses: Record<string, { label: string; color: any }> = {
-  pending_manager: { label: '待主管审批', color: 'yellow' },
-  pending_qa: { label: '待QA审批', color: 'blue' },
-  pending_archive: { label: '待归档', color: 'purple' },
-  archived: { label: '已归档', color: 'green' },
-  rejected: { label: '已驳回', color: 'red' },
-};
+interface ProjectSummary {
+  total_samples: number;
+  destroyed_samples: number;
+  active_deviations: number;
+  pending_transfers: number;
+  unreturned_samples: number;
+}
 
 export default function ArchivePage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [requests, setRequests] = useState<ArchiveRequest[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [archiveReason, setArchiveReason] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'archived'>('active');
+  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [projectSummary, setProjectSummary] = useState<ProjectSummary | null>(null);
+  const [archiveForm, setArchiveForm] = useState({
+    project_id: '',
+    reason: '',
+    completion_summary: '',
+    final_report_path: ''
+  });
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (activeTab === 'active') {
+      fetchActiveProjects();
+    } else if (activeTab === 'pending') {
+      fetchPendingRequests();
+    } else {
+      fetchArchivedProjects();
+    }
+  }, [activeTab]);
 
-  const fetchProjects = async () => {
+  const fetchActiveProjects = async () => {
     try {
-      const response = await api.get('/projects');
+      const response = await api.get('/projects', {
+        params: { status: 'active' }
+      });
       setProjects(response.data);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
@@ -57,82 +85,204 @@ export default function ArchivePage() {
     }
   };
 
-  const handleArchiveRequest = async () => {
-    if (!selectedProject) return;
-    
+  const fetchPendingRequests = async () => {
     try {
-      await api.post(`/projects/${selectedProject.id}/archive`, {
-        reason: archiveReason
+      const response = await api.get('/archive/requests', {
+        params: { status: 'pending' }
       });
-      setIsArchiveDialogOpen(false);
-      setArchiveReason('');
-      setSelectedProject(null);
-      fetchProjects();
+      setRequests(response.data);
     } catch (error) {
-      console.error('Failed to request archive:', error);
+      console.error('Failed to fetch archive requests:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const openArchiveDialog = (project: Project) => {
-    setSelectedProject(project);
-    setIsArchiveDialogOpen(true);
+  const fetchArchivedProjects = async () => {
+    try {
+      const response = await api.get('/archive/archived');
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Failed to fetch archived projects:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const activeProjects = projects.filter(p => !p.is_archived);
-  const archivedProjects = projects.filter(p => p.is_archived);
+  const fetchProjectSummary = async (projectId: number) => {
+    try {
+      const response = await api.get(`/projects/${projectId}/archive-summary`);
+      setProjectSummary(response.data);
+    } catch (error) {
+      console.error('Failed to fetch project summary:', error);
+    }
+  };
+
+  const handleRequestArchive = async () => {
+    try {
+      await api.post('/archive/request', archiveForm);
+      setIsRequestDialogOpen(false);
+      resetForm();
+      alert('归档申请已提交');
+      setActiveTab('pending');
+    } catch (error) {
+      console.error('Failed to request archive:', error);
+      alert('归档申请失败');
+    }
+  };
+
+  const handleApprove = async (requestId: number) => {
+    if (!confirm('确定要批准此归档申请吗？项目归档后将被锁定，无法进行任何操作。')) return;
+
+    try {
+      await api.post(`/archive/request/${requestId}/approve`);
+      fetchPendingRequests();
+      alert('归档申请已批准');
+    } catch (error) {
+      console.error('Failed to approve archive:', error);
+      alert('批准失败');
+    }
+  };
+
+  const handleReject = async (requestId: number) => {
+    const reason = prompt('请输入拒绝原因：');
+    if (!reason) return;
+
+    try {
+      await api.post(`/archive/request/${requestId}/reject`, { reason });
+      fetchPendingRequests();
+      alert('归档申请已拒绝');
+    } catch (error) {
+      console.error('Failed to reject archive:', error);
+      alert('拒绝失败');
+    }
+  };
+
+  const resetForm = () => {
+    setArchiveForm({
+      project_id: '',
+      reason: '',
+      completion_summary: '',
+      final_report_path: ''
+    });
+    setProjectSummary(null);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge color="green">进行中</Badge>;
+      case 'pending_archive':
+        return <Badge color="yellow">待归档</Badge>;
+      case 'archived':
+        return <Badge color="zinc">已归档</Badge>;
+      case 'locked':
+        return <Badge color="red">已锁定</Badge>;
+      default:
+        return <Badge color="zinc">{status}</Badge>;
+    }
+  };
 
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <Heading>项目归档管理</Heading>
-          <Text className="mt-1 text-zinc-600">管理项目的归档申请和审批流程</Text>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <Heading>项目归档管理</Heading>
+            <Text className="mt-1 text-zinc-600">管理项目的归档申请和审批</Text>
+          </div>
+          {activeTab === 'active' && (
+            <Button onClick={() => setIsRequestDialogOpen(true)}>
+              <ArchiveBoxIcon />
+              申请归档
+            </Button>
+          )}
         </div>
 
-        {/* 活跃项目 */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">活跃项目</h2>
+        {/* 标签页 */}
+        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'active'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            进行中项目
+          </button>
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'pending'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            待审批
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'archived'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            已归档
+          </button>
+        </div>
+
+        {/* 内容区域 */}
+        {activeTab === 'active' && (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeader>实验室项目编号</TableHeader>
-                  <TableHeader>申办者项目编号</TableHeader>
+                  <TableHeader>项目编号</TableHeader>
+                  <TableHeader>申办方编号</TableHeader>
                   <TableHeader>申办者</TableHeader>
-                  <TableHeader>项目状态</TableHeader>
-                  <TableHeader>创建时间</TableHeader>
+                  <TableHeader>临床机构</TableHeader>
+                  <TableHeader>开始时间</TableHeader>
+                  <TableHeader>状态</TableHeader>
                   <TableHeader>操作</TableHeader>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <Text>加载中...</Text>
                     </TableCell>
                   </TableRow>
-                ) : activeProjects.length === 0 ? (
+                ) : projects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <Text>暂无活跃项目</Text>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Text>暂无进行中的项目</Text>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  activeProjects.map((project) => (
+                  projects.map((project) => (
                     <TableRow key={project.id}>
-                      <TableCell className="font-medium">{project.lab_project_no}</TableCell>
-                      <TableCell>{project.sponsor_project_no}</TableCell>
-                      <TableCell>{project.sponsor_name}</TableCell>
-                      <TableCell>
-                        <Badge color="green">活跃</Badge>
-                      </TableCell>
+                      <TableCell className="font-medium">{project.lab_project_code}</TableCell>
+                      <TableCell>{project.sponsor_project_code}</TableCell>
+                      <TableCell>{project.sponsor?.name || '-'}</TableCell>
+                      <TableCell>{project.clinical_org?.name || '-'}</TableCell>
                       <TableCell className="text-zinc-600">
                         {new Date(project.created_at).toLocaleDateString('zh-CN')}
                       </TableCell>
+                      <TableCell>{getStatusBadge(project.status)}</TableCell>
                       <TableCell>
-                        <Button plain onClick={() => openArchiveDialog(project)}>
-                          <ArchiveBoxIcon />
-                          申请归档
+                        <Button 
+                          plain
+                          size="small"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            fetchProjectSummary(project.id);
+                            setIsDetailDialogOpen(true);
+                          }}
+                        >
+                          查看详情
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -141,58 +291,64 @@ export default function ArchivePage() {
               </TableBody>
             </Table>
           </div>
-        </div>
+        )}
 
-        {/* 归档项目 */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">归档项目</h2>
+        {activeTab === 'pending' && (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeader>实验室项目编号</TableHeader>
-                  <TableHeader>申办者项目编号</TableHeader>
-                  <TableHeader>申办者</TableHeader>
-                  <TableHeader>归档状态</TableHeader>
-                  <TableHeader>归档时间</TableHeader>
-                  <TableHeader>归档理由</TableHeader>
+                  <TableHeader>项目编号</TableHeader>
+                  <TableHeader>申办方编号</TableHeader>
+                  <TableHeader>申请人</TableHeader>
+                  <TableHeader>申请原因</TableHeader>
+                  <TableHeader>申请时间</TableHeader>
+                  <TableHeader>状态</TableHeader>
                   <TableHeader>操作</TableHeader>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {archivedProjects.length === 0 ? (
+                {loading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
-                      <Text>暂无归档项目</Text>
+                      <Text>加载中...</Text>
+                    </TableCell>
+                  </TableRow>
+                ) : requests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Text>暂无待审批的归档申请</Text>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  archivedProjects.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="font-medium">{project.lab_project_no}</TableCell>
-                      <TableCell>{project.sponsor_project_no}</TableCell>
-                      <TableCell>{project.sponsor_name}</TableCell>
-                      <TableCell>
-                        <Badge color={archiveStatuses[project.archive_info?.approval_status || 'archived']?.color}>
-                          {archiveStatuses[project.archive_info?.approval_status || 'archived']?.label}
-                        </Badge>
-                      </TableCell>
+                  requests.map((request) => (
+                    <TableRow key={request.id}>
+                      <TableCell className="font-medium">{request.project.lab_project_code}</TableCell>
+                      <TableCell>{request.project.sponsor_project_code}</TableCell>
+                      <TableCell>{request.requested_by.full_name}</TableCell>
+                      <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
                       <TableCell className="text-zinc-600">
-                        {project.archive_info?.archived_at 
-                          ? new Date(project.archive_info.archived_at).toLocaleDateString('zh-CN')
-                          : '-'
-                        }
+                        {new Date(request.created_at).toLocaleDateString('zh-CN')}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {project.archive_info?.reason || '-'}
-                      </TableCell>
+                      <TableCell>{getStatusBadge(request.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button plain>
-                            <EyeIcon />
+                          <Button 
+                            plain
+                            size="small"
+                            onClick={() => handleApprove(request.id)}
+                          >
+                            <CheckCircleIcon />
+                            批准
                           </Button>
-                          <Button plain disabled>
-                            <LockClosedIcon />
+                          <Button 
+                            plain
+                            size="small"
+                            color="red"
+                            onClick={() => handleReject(request.id)}
+                          >
+                            <XCircleIcon />
+                            拒绝
                           </Button>
                         </div>
                       </TableCell>
@@ -202,60 +358,228 @@ export default function ArchivePage() {
               </TableBody>
             </Table>
           </div>
-        </div>
+        )}
+
+        {activeTab === 'archived' && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeader>项目编号</TableHeader>
+                  <TableHeader>申办方编号</TableHeader>
+                  <TableHeader>申办者</TableHeader>
+                  <TableHeader>临床机构</TableHeader>
+                  <TableHeader>归档时间</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>操作</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Text>加载中...</Text>
+                    </TableCell>
+                  </TableRow>
+                ) : projects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Text>暂无已归档的项目</Text>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  projects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">{project.lab_project_code}</TableCell>
+                      <TableCell>{project.sponsor_project_code}</TableCell>
+                      <TableCell>{project.sponsor?.name || '-'}</TableCell>
+                      <TableCell>{project.clinical_org?.name || '-'}</TableCell>
+                      <TableCell className="text-zinc-600">
+                        {project.archived_at ? new Date(project.archived_at).toLocaleDateString('zh-CN') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <LockClosedIcon className="h-4 w-4 text-red-500" />
+                          {getStatusBadge('locked')}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          plain
+                          size="small"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setIsDetailDialogOpen(true);
+                          }}
+                        >
+                          查看
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       {/* 申请归档对话框 */}
-      <Dialog open={isArchiveDialogOpen} onClose={setIsArchiveDialogOpen}>
+      <Dialog open={isRequestDialogOpen} onClose={setIsRequestDialogOpen} size="lg">
         <DialogTitle>申请项目归档</DialogTitle>
         <DialogDescription>
-          项目编号：{selectedProject?.lab_project_no}
+          项目归档后将被锁定，无法进行任何操作
         </DialogDescription>
         <DialogBody>
           <div className="space-y-4">
-            <div className="p-4 bg-amber-50 rounded-lg">
-              <Text className="text-sm text-amber-800">
-                <strong>注意：</strong>项目归档后将变为只读状态，不可进行任何操作。请确保所有工作已完成。
-              </Text>
-            </div>
-            
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">
-                归档理由 <span className="text-red-500">*</span>
+                选择项目 <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={archiveForm.project_id}
+                onChange={(e) => {
+                  setArchiveForm({...archiveForm, project_id: e.target.value});
+                  if (e.target.value) {
+                    fetchProjectSummary(parseInt(e.target.value));
+                  }
+                }}
+                required
+              >
+                <option value="">请选择要归档的项目</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.lab_project_code} - {project.sponsor_project_code}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {projectSummary && (
+              <div className="p-4 bg-amber-50 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-amber-500 mt-0.5" />
+                  <div className="text-sm">
+                    <Text className="font-medium text-amber-900">项目状态检查</Text>
+                    <div className="mt-2 space-y-1 text-amber-700">
+                      <div>样本总数：{projectSummary.total_samples}</div>
+                      <div>已销毁样本：{projectSummary.destroyed_samples}</div>
+                      {projectSummary.unreturned_samples > 0 && (
+                        <div className="text-red-600">
+                          ⚠️ 还有 {projectSummary.unreturned_samples} 个样本未归还
+                        </div>
+                      )}
+                      {projectSummary.pending_transfers > 0 && (
+                        <div className="text-red-600">
+                          ⚠️ 还有 {projectSummary.pending_transfers} 个转移未完成
+                        </div>
+                      )}
+                      {projectSummary.active_deviations > 0 && (
+                        <div className="text-red-600">
+                          ⚠️ 还有 {projectSummary.active_deviations} 个偏差未关闭
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                归档原因 <span className="text-red-500">*</span>
               </label>
               <Textarea
-                value={archiveReason}
-                onChange={(e) => setArchiveReason(e.target.value)}
-                placeholder="请说明申请归档的理由，如：项目已完成所有样本检测和数据分析"
-                rows={4}
+                value={archiveForm.reason}
+                onChange={(e) => setArchiveForm({...archiveForm, reason: e.target.value})}
+                placeholder="请说明项目归档的原因"
+                rows={3}
                 required
               />
             </div>
 
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-zinc-700 mb-2">审批流程</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-zinc-600">
-                <li>项目负责人提交归档申请</li>
-                <li>分析测试主管审核</li>
-                <li>QA审核</li>
-                <li>计算机管理员执行归档</li>
-              </ol>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                项目完成总结
+              </label>
+              <Textarea
+                value={archiveForm.completion_summary}
+                onChange={(e) => setArchiveForm({...archiveForm, completion_summary: e.target.value})}
+                placeholder="项目执行情况总结"
+                rows={4}
+              />
             </div>
           </div>
         </DialogBody>
         <DialogActions>
           <Button plain onClick={() => {
-            setIsArchiveDialogOpen(false);
-            setArchiveReason('');
-            setSelectedProject(null);
+            setIsRequestDialogOpen(false);
+            resetForm();
           }}>
             取消
           </Button>
           <Button 
-            onClick={handleArchiveRequest}
-            disabled={!archiveReason.trim()}
+            onClick={handleRequestArchive}
+            disabled={!archiveForm.project_id || !archiveForm.reason}
           >
             提交申请
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 项目详情对话框 */}
+      <Dialog open={isDetailDialogOpen} onClose={setIsDetailDialogOpen} size="lg">
+        <DialogTitle>项目详情</DialogTitle>
+        <DialogBody>
+          {selectedProject && (
+            <div className="space-y-4">
+              <DescriptionList>
+                <div>
+                  <DescriptionTerm>项目编号</DescriptionTerm>
+                  <DescriptionDetails>{selectedProject.lab_project_code}</DescriptionDetails>
+                </div>
+                <div>
+                  <DescriptionTerm>申办方编号</DescriptionTerm>
+                  <DescriptionDetails>{selectedProject.sponsor_project_code}</DescriptionDetails>
+                </div>
+                <div>
+                  <DescriptionTerm>申办者</DescriptionTerm>
+                  <DescriptionDetails>{selectedProject.sponsor?.name || '-'}</DescriptionDetails>
+                </div>
+                <div>
+                  <DescriptionTerm>临床机构</DescriptionTerm>
+                  <DescriptionDetails>{selectedProject.clinical_org?.name || '-'}</DescriptionDetails>
+                </div>
+                <div>
+                  <DescriptionTerm>状态</DescriptionTerm>
+                  <DescriptionDetails>{getStatusBadge(selectedProject.status)}</DescriptionDetails>
+                </div>
+                {selectedProject.archived_at && (
+                  <div>
+                    <DescriptionTerm>归档时间</DescriptionTerm>
+                    <DescriptionDetails>
+                      {new Date(selectedProject.archived_at).toLocaleString('zh-CN')}
+                    </DescriptionDetails>
+                  </div>
+                )}
+              </DescriptionList>
+
+              {selectedProject.status === 'archived' && (
+                <div className="p-4 bg-red-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <LockClosedIcon className="h-5 w-5 text-red-500" />
+                    <Text className="font-medium text-red-900">
+                      项目已锁定，无法进行任何操作
+                    </Text>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsDetailDialogOpen(false)}>
+            关闭
           </Button>
         </DialogActions>
       </Dialog>

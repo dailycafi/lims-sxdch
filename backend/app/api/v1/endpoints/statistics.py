@@ -1,0 +1,332 @@
+from typing import Optional, Annotated
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+import pandas as pd
+from io import BytesIO
+
+from app.core.database import get_db
+from app.models.sample import Sample, SampleStatus, SampleBorrowItem, SampleTransferItem
+from app.models.audit import AuditLog
+from app.models.user import User
+from app.models.project import Project
+from app.api.v1.endpoints.auth import get_current_user
+
+router = APIRouter()
+
+
+@router.get("/sample-records")
+async def get_sample_records(
+    project_id: Optional[int] = None,
+    sample_code: Optional[str] = None,
+    operation_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    operator: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取样本存取记录"""
+    # 查询审计日志
+    query = select(AuditLog).options(
+        selectinload(AuditLog.user)
+    ).where(
+        AuditLog.entity_type.in_([
+            "sample", "sample_receive", "sample_inventory", 
+            "sample_borrow", "sample_return", "sample_transfer", 
+            "sample_destroy"
+        ])
+    )
+    
+    # 应用筛选条件
+    if start_date:
+        query = query.where(AuditLog.timestamp >= datetime.fromisoformat(start_date))
+    if end_date:
+        query = query.where(AuditLog.timestamp <= datetime.fromisoformat(end_date))
+    if operator:
+        query = query.join(User).where(User.full_name.contains(operator))
+    
+    query = query.order_by(AuditLog.timestamp.desc()).limit(500)
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    # 转换为响应格式
+    records = []
+    for log in logs:
+        # 从详情中提取信息
+        details = log.details or {}
+        
+        # 确定操作类型
+        operation_type_map = {
+            "sample_receive": "receive",
+            "sample_inventory": "inventory",
+            "sample_borrow": "checkout",
+            "sample_return": "return",
+            "sample_transfer": "transfer",
+            "sample_destroy": "destroy"
+        }
+        op_type = operation_type_map.get(log.entity_type, log.action)
+        
+        # 如果有操作类型筛选，跳过不匹配的
+        if operation_type and op_type != operation_type:
+            continue
+        
+        # 提取样本编号
+        sample_codes = details.get("sample_codes", [])
+        if not sample_codes and "sample_code" in details:
+            sample_codes = [details["sample_code"]]
+        elif not sample_codes and "sample_count" in details:
+            # 如果没有具体编号，创建占位符
+            sample_codes = [f"批量操作({details['sample_count']}个)"]
+        
+        # 为每个样本创建一条记录
+        for sample_code in sample_codes[:10]:  # 限制每个操作最多显示10个样本
+            # 如果有样本编号筛选，跳过不匹配的
+            if sample_code and sample_code != sample_code:
+                continue
+            
+            record = {
+                "id": log.id,
+                "sample_code": sample_code,
+                "project": details.get("project", ""),
+                "operation_type": op_type,
+                "operation_detail": _get_operation_detail(log),
+                "operator": log.user.full_name if log.user else "",
+                "operation_time": log.timestamp.isoformat(),
+                "location": details.get("location", ""),
+                "temperature": details.get("temperature")
+            }
+            records.append(record)
+    
+    return records
+
+
+@router.get("/exposure-records")
+async def get_exposure_records(
+    project_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取样本暴露记录"""
+    # 查询领用记录（样本离开冷库的主要原因）
+    query = select(SampleBorrowItem).options(
+        selectinload(SampleBorrowItem.request),
+        selectinload(SampleBorrowItem.sample)
+    ).where(
+        SampleBorrowItem.borrowed_at.is_not(None)
+    )
+    
+    if start_date:
+        query = query.where(SampleBorrowItem.borrowed_at >= datetime.fromisoformat(start_date))
+    if end_date:
+        query = query.where(SampleBorrowItem.borrowed_at <= datetime.fromisoformat(end_date))
+    
+    result = await db.execute(query)
+    borrow_items = result.scalars().all()
+    
+    # 计算暴露时间
+    exposure_records = []
+    for item in borrow_items:
+        if not item.sample:
+            continue
+            
+        # 计算暴露时长
+        end_time = item.returned_at or datetime.utcnow()
+        duration = int((end_time - item.borrowed_at).total_seconds() / 60)  # 分钟
+        
+        # 根据项目ID筛选
+        if project_id and item.sample.project_id != project_id:
+            continue
+        
+        record = {
+            "id": item.id,
+            "sample_code": item.sample.sample_code,
+            "project": item.request.project.lab_project_code if item.request and item.request.project else "",
+            "start_time": item.borrowed_at.isoformat(),
+            "end_time": item.returned_at.isoformat() if item.returned_at else None,
+            "duration": duration,
+            "max_temperature": -20,  # TODO: 从温度监控系统获取
+            "reason": f"领用用途: {item.request.purpose if item.request else '未知'}"
+        }
+        exposure_records.append(record)
+    
+    return exposure_records
+
+
+@router.get("/summary")
+async def get_statistics_summary(
+    project_id: Optional[int] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取统计汇总数据"""
+    # 基础查询
+    base_query = select(Sample)
+    if project_id:
+        base_query = base_query.where(Sample.project_id == project_id)
+    
+    # 样本总数
+    total_result = await db.execute(
+        select(func.count()).select_from(Sample).where(
+            Sample.project_id == project_id if project_id else True
+        )
+    )
+    total_samples = total_result.scalar() or 0
+    
+    # 各状态样本数
+    status_counts = {}
+    for status in [SampleStatus.IN_STORAGE, SampleStatus.CHECKED_OUT, 
+                   SampleStatus.TRANSFERRED, SampleStatus.DESTROYED]:
+        result = await db.execute(
+            select(func.count()).select_from(Sample).where(
+                and_(
+                    Sample.status == status,
+                    Sample.project_id == project_id if project_id else True
+                )
+            )
+        )
+        count = result.scalar() or 0
+        status_counts[status.value] = count
+    
+    # 计算平均存储天数
+    result = await db.execute(
+        select(func.avg(
+            func.extract('epoch', func.now() - Sample.created_at) / 86400
+        )).select_from(Sample).where(
+            and_(
+                Sample.status == SampleStatus.IN_STORAGE,
+                Sample.project_id == project_id if project_id else True
+            )
+        )
+    )
+    avg_storage_days = result.scalar() or 0
+    
+    # 计算总暴露时间和事件数
+    exposure_query = select(SampleBorrowItem).where(
+        SampleBorrowItem.borrowed_at.is_not(None)
+    )
+    if project_id:
+        exposure_query = exposure_query.join(Sample).where(Sample.project_id == project_id)
+    
+    result = await db.execute(exposure_query)
+    borrow_items = result.scalars().all()
+    
+    total_exposure_time = 0
+    exposure_events = len(borrow_items)
+    
+    for item in borrow_items:
+        if item.returned_at:
+            duration = (item.returned_at - item.borrowed_at).total_seconds() / 60
+            total_exposure_time += duration
+    
+    return {
+        "total_samples": total_samples,
+        "in_storage": status_counts.get("in_storage", 0),
+        "checked_out": status_counts.get("checked_out", 0),
+        "transferred": status_counts.get("transferred", 0),
+        "destroyed": status_counts.get("destroyed", 0),
+        "avg_storage_days": float(avg_storage_days),
+        "total_exposure_time": int(total_exposure_time),
+        "exposure_events": exposure_events
+    }
+
+
+@router.get("/export")
+async def export_statistics(
+    type: str = Query(..., description="导出类型: records, exposure, summary"),
+    project_id: Optional[int] = None,
+    sample_code: Optional[str] = None,
+    operation_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    operator: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """导出统计数据为Excel"""
+    # 根据类型获取数据
+    if type == "records":
+        data = await get_sample_records(
+            project_id, sample_code, operation_type, 
+            start_date, end_date, operator, current_user, db
+        )
+        df = pd.DataFrame(data)
+        if not df.empty:
+            df['operation_time'] = pd.to_datetime(df['operation_time'])
+            df = df.sort_values('operation_time', ascending=False)
+    
+    elif type == "exposure":
+        data = await get_exposure_records(project_id, start_date, end_date, current_user, db)
+        df = pd.DataFrame(data)
+        if not df.empty:
+            df['start_time'] = pd.to_datetime(df['start_time'])
+            df['duration_hours'] = df['duration'] / 60
+    
+    elif type == "summary":
+        data = await get_statistics_summary(project_id, current_user, db)
+        df = pd.DataFrame([data])
+    
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的导出类型"
+        )
+    
+    # 创建Excel文件
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='数据', index=False)
+    
+    output.seek(0)
+    
+    from fastapi.responses import StreamingResponse
+    
+    return StreamingResponse(
+        output,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            f'Content-Disposition': f'attachment; filename=statistics_{type}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        }
+    )
+
+
+def _get_operation_detail(log: AuditLog) -> str:
+    """根据审计日志生成操作详情描述"""
+    details = log.details or {}
+    action_map = {
+        "create": "创建",
+        "update": "更新",
+        "delete": "删除",
+        "receive": "接收",
+        "inventory": "入库",
+        "checkout": "领用",
+        "return": "归还",
+        "transfer": "转移",
+        "destroy": "销毁",
+        "approve": "审批",
+        "execute": "执行"
+    }
+    
+    action_text = action_map.get(log.action, log.action)
+    
+    # 根据不同的实体类型生成详情
+    if log.entity_type == "sample_receive":
+        return f"{action_text}了 {details.get('sample_count', '')} 个样本"
+    elif log.entity_type == "sample_inventory":
+        return f"清点入库 {details.get('scanned_samples', '')} 个样本"
+    elif log.entity_type == "sample_borrow":
+        return f"{action_text}样本，用途: {details.get('purpose', '')}"
+    elif log.entity_type == "sample_return":
+        return f"归还了 {details.get('returned_count', '')} 个样本"
+    elif log.entity_type == "sample_transfer":
+        return f"{action_text}到 {details.get('to', details.get('target_org', ''))}"
+    elif log.entity_type == "sample_destroy":
+        return f"{action_text}了 {details.get('sample_count', '')} 个样本"
+    else:
+        return f"{action_text}{log.entity_type}"

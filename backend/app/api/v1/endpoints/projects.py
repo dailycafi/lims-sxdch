@@ -1,22 +1,54 @@
-from typing import List, Annotated
+from typing import List, Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel
+from datetime import datetime
 
 from app.core.database import get_db
 from app.models.project import Project
 from app.models.user import User, UserRole
+from app.models.audit import AuditLog
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 
 
+# Pydantic schemas for sample code rule
+class SampleCodeRuleUpdate(BaseModel):
+    sample_code_rule: dict
+    audit_reason: str
+
+
 def check_project_permission(user: User) -> bool:
     """检查项目管理权限"""
     allowed_roles = [UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]
     return user.role in allowed_roles
+
+
+async def create_audit_log(
+    db: AsyncSession,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    action: str,
+    details: dict,
+    reason: Optional[str] = None
+):
+    """创建审计日志"""
+    audit_log = AuditLog(
+        user_id=user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        action=action,
+        details=details,
+        reason=reason,
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
 
 
 @router.post("/", response_model=ProjectResponse)
@@ -68,7 +100,12 @@ async def read_projects(
     db: AsyncSession = Depends(get_db)
 ):
     """获取项目列表"""
-    query = select(Project)
+    from sqlalchemy.orm import selectinload
+    
+    query = select(Project).options(
+        selectinload(Project.sponsor),
+        selectinload(Project.clinical_org)
+    )
     if active_only:
         query = query.where(Project.is_active == True)
     
@@ -84,7 +121,14 @@ async def read_project(
     db: AsyncSession = Depends(get_db)
 ):
     """获取项目详情"""
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    from sqlalchemy.orm import selectinload
+    
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.sponsor))
+        .options(selectinload(Project.clinical_org))
+        .where(Project.id == project_id)
+    )
     project = result.scalar_one_or_none()
     
     if not project:
@@ -169,3 +213,118 @@ async def archive_project(
     await db.commit()
     
     return {"message": "项目已归档"}
+
+
+@router.put("/{project_id}/sample-code-rule")
+async def update_sample_code_rule(
+    project_id: int,
+    rule_data: SampleCodeRuleUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新项目的样本编号规则"""
+    if not check_project_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以配置样本编号规则"
+        )
+    
+    # 查找项目
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    # TODO: 检查是否已有样本接收，如果有则不允许修改
+    # if project.has_samples:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="项目已有样本接收，不能修改编号规则"
+    #     )
+    
+    # 记录原始规则
+    original_rule = project.sample_code_rule
+    
+    # 更新规则
+    project.sample_code_rule = rule_data.sample_code_rule
+    project.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(project)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="project",
+        entity_id=project.id,
+        action="update_sample_code_rule",
+        details={
+            "original": original_rule,
+            "updated": rule_data.sample_code_rule
+        },
+        reason=rule_data.audit_reason
+    )
+    
+    return {"message": "样本编号规则已更新", "sample_code_rule": project.sample_code_rule}
+
+
+@router.post("/{project_id}/generate-sample-codes")
+async def generate_sample_codes(
+    project_id: int,
+    generation_params: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """批量生成样本编号"""
+    if not check_project_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以生成样本编号"
+        )
+    
+    # 查找项目
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    if not project.sample_code_rule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请先配置样本编号规则"
+        )
+    
+    # TODO: 实现批量生成样本编号的逻辑
+    # 1. 解析generation_params中的参数
+    # 2. 根据sample_code_rule生成编号
+    # 3. 保存生成的编号到数据库
+    # 4. 返回生成的编号列表
+    
+    generated_codes = []
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="project",
+        entity_id=project.id,
+        action="generate_sample_codes",
+        details={
+            "parameters": generation_params,
+            "count": len(generated_codes)
+        }
+    )
+    
+    return {
+        "message": f"成功生成{len(generated_codes)}个样本编号",
+        "sample_codes": generated_codes
+    }
