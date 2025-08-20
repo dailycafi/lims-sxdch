@@ -21,6 +21,8 @@ export const Select = forwardRef(function Select(
         'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset has-data-focus:after:ring-2 has-data-focus:after:ring-blue-500',
         // Disabled state
         'has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none',
+        // 增加阴影效果
+        'shadow-sm hover:shadow-md transition-shadow duration-200',
       ])}
     >
       <Headless.Select
@@ -28,18 +30,18 @@ export const Select = forwardRef(function Select(
         multiple={multiple}
         {...props}
         className={clsx([
-          // Basic layout
-          'relative block w-full appearance-none rounded-lg py-[calc(--spacing(2.5)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
-          // Horizontal padding
+          // Basic layout - 增加圆角
+          'relative block w-full appearance-none rounded-xl py-[calc(--spacing(2.5)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
+          // Horizontal padding - 确保文字有适当的左边距
           multiple
-            ? 'px-[calc(--spacing(3.5)-1px)] sm:px-[calc(--spacing(3)-1px)]'
-            : 'pr-[calc(--spacing(10)-1px)] pl-[calc(--spacing(3.5)-1px)] sm:pr-[calc(--spacing(9)-1px)] sm:pl-[calc(--spacing(3)-1px)]',
+            ? 'px-4 sm:px-3'
+            : 'pr-10 pl-4 sm:pr-9 sm:pl-3',
           // Options (multi-select)
           '[&_optgroup]:font-semibold',
           // Typography
-          'text-base/6 text-zinc-950 placeholder:text-zinc-500 sm:text-sm/6 dark:text-white dark:*:text-white',
-          // Border
-          'border border-zinc-950/10 data-hover:border-zinc-950/20 dark:border-white/10 dark:data-hover:border-white/20',
+          'text-base/6 text-zinc-950 placeholder:text-zinc-400 sm:text-sm/6 dark:text-white dark:*:text-white',
+          // Border - 更新边框颜色
+          'border border-gray-200 data-hover:border-gray-300 dark:border-white/10 dark:data-hover:border-white/20',
           // Background color
           'bg-transparent dark:bg-white/5 dark:*:bg-zinc-800',
           // Hide default focus styles
@@ -48,18 +50,23 @@ export const Select = forwardRef(function Select(
           'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
           // Disabled state
           'data-disabled:border-zinc-950/20 data-disabled:opacity-100 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
+          // 确保统一的高度
+          'h-full min-h-[2.75rem]',
+          // 自定义 select 样式类
+          'custom-select',
         ])}
       />
       {!multiple && (
-        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
           <svg
-            className="size-5 stroke-zinc-500 group-has-data-disabled:stroke-zinc-600 sm:size-4 dark:stroke-zinc-400 forced-colors:stroke-[CanvasText]"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
+            className="size-5 text-gray-400 sm:size-4"
+            viewBox="0 0 20 20"
             fill="none"
+            stroke="currentColor"
+            aria-hidden="true"
           >
-            <path d="M5.75 10.75L8 13L10.25 10.75" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M10.25 5.25L8 3L5.75 5.25" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="10" cy="10" r="7" strokeWidth={1.5} />
+            <path d="M14 14L17 17" strokeWidth={1.5} strokeLinecap="round" />
           </svg>
         </span>
       )}

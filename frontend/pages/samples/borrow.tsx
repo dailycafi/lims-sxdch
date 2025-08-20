@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -10,6 +11,7 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Textarea } from '@/components/textarea';
+import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { 
   PlusIcon,
@@ -18,7 +20,10 @@ import {
   ArrowDownOnSquareIcon,
   ClockIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  FunnelIcon,
+  ChevronUpIcon,
+  XMarkIcon
 } from '@heroicons/react/20/solid';
 
 interface BorrowRequest {
@@ -53,7 +58,7 @@ interface Sample {
 export default function SampleBorrowPage() {
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'borrowed' | 'history'>('pending');
+  const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'borrowed' | 'returned' | 'all'>('pending');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BorrowRequest | null>(null);
@@ -61,6 +66,18 @@ export default function SampleBorrowPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
+  
+  // 新增筛选状态
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  const [filters, setFilters] = useState({
+    searchText: '',
+    project: 'all',
+    requestedBy: 'all',
+    targetLocation: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
+  
   const [borrowForm, setBorrowForm] = useState({
     purpose: '',
     target_location: '',
@@ -71,12 +88,12 @@ export default function SampleBorrowPage() {
   useEffect(() => {
     fetchRequests();
     fetchProjects();
-  }, [activeTab]);
+  }, [viewMode]); // 依赖于 viewMode 变化
 
   const fetchRequests = async () => {
     try {
       const response = await api.get('/samples/borrow-requests', {
-        params: { status: activeTab }
+        params: { status: viewMode } // 根据 viewMode 筛选
       });
       setRequests(response.data);
     } catch (error) {
@@ -165,14 +182,19 @@ export default function SampleBorrowPage() {
     }
   };
 
-  const handleExecuteBorrow = async (requestId: number) => {
+  const handleExecuteBorrow = async (request: BorrowRequest) => {
     // 跳转到领用执行页面
-    window.location.href = `/samples/borrow/execute/${requestId}`;
+    window.location.href = `/samples/borrow/execute/${request.id}`;
   };
 
   const handleReturnSamples = async (requestId: number) => {
     // 跳转到归还页面
     window.location.href = `/samples/return/${requestId}`;
+  };
+
+  const handleViewDetails = (request: BorrowRequest) => {
+    setSelectedRequest(request);
+    setIsDetailDialogOpen(true);
   };
 
   const resetForm = () => {
@@ -217,148 +239,329 @@ export default function SampleBorrowPage() {
     }
   };
 
+  // 计算活跃筛选器数量
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    return value !== '' && value !== 'all';
+  }).length;
+
+  // 重置筛选
+  const resetFilters = () => {
+    setFilters({
+      searchText: '',
+      project: 'all',
+      requestedBy: 'all',
+      targetLocation: 'all',
+      dateFrom: '',
+      dateTo: ''
+    });
+  };
+
+  // 应用视图模式过滤
+  const filteredByViewMode = (requests: BorrowRequest[]) => {
+    if (viewMode === 'all') return requests;
+    return requests.filter(r => r.status === viewMode);
+  };
+
+  // 应用筛选
+  const applyFilters = (requests: BorrowRequest[]) => {
+    return requests.filter(request => {
+      // 搜索文本筛选
+      if (filters.searchText && 
+          !request.request_code.toLowerCase().includes(filters.searchText.toLowerCase()) &&
+          !request.purpose.toLowerCase().includes(filters.searchText.toLowerCase())) {
+        return false;
+      }
+      
+      // 项目筛选
+      if (filters.project !== 'all' && request.project.lab_project_code !== filters.project) {
+        return false;
+      }
+      
+      // 申请人筛选
+      if (filters.requestedBy !== 'all' && request.requested_by.full_name !== filters.requestedBy) {
+        return false;
+      }
+      
+      // 目标位置筛选
+      if (filters.targetLocation !== 'all' && request.target_location !== filters.targetLocation) {
+        return false;
+      }
+      
+      // 日期范围筛选
+      const requestDate = new Date(request.created_at);
+      if (filters.dateFrom && new Date(filters.dateFrom) > requestDate) {
+        return false;
+      }
+      if (filters.dateTo && new Date(filters.dateTo) < requestDate) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredRequests = applyFilters(filteredByViewMode(requests));
+
+  // 获取唯一值用于筛选
+  const uniqueRequesters = Array.from(new Set(requests.map(r => r.requested_by.full_name)));
+  const uniqueLocations = Array.from(new Set(requests.map(r => r.target_location)));
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        {/* 页面标题和操作按钮 */}
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <Heading>样本领用管理</Heading>
-            <Text className="mt-1 text-zinc-600">管理样本领用申请和归还流程</Text>
+            <Heading>样本领用</Heading>
+            <Text className="mt-1 text-zinc-600">管理样本领用申请和记录</Text>
           </div>
-          <Button onClick={() => setIsRequestDialogOpen(true)}>
-            <PlusIcon />
-            申请领用
+          <Button color="blue" onClick={() => setIsRequestDialogOpen(true)}>
+            <PlusIcon className="h-4 w-4" />
+            新建领用申请
           </Button>
         </div>
 
-        {/* 标签页 */}
-        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'pending'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
+        {/* 筛选区域 - 可折叠 */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100 mb-6 overflow-hidden">
+          {/* 筛选标题栏 */}
+          <div 
+            className="px-5 py-3 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
           >
-            待处理
-          </button>
-          <button
-            onClick={() => setActiveTab('borrowed')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'borrowed'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            已领用
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'history'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            历史记录
-          </button>
+            <div className="flex items-center gap-2">
+              <FunnelIcon className="h-5 w-5 text-gray-600" />
+              <span className="font-medium text-gray-900">筛选条件</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+            </div>
+            <motion.div
+              animate={{ rotate: isFilterExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+            </motion.div>
+          </div>
+
+          {/* 可折叠的筛选内容 */}
+          <AnimatePresence initial={false}>
+            {isFilterExpanded && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* 搜索框行 */}
+                  <div className="mb-4">
+                    <Input
+                      type="text"
+                      placeholder="搜索申请编号或用途..."
+                      value={filters.searchText}
+                      onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
+                      className="w-full max-w-md h-11"
+                    />
+                  </div>
+
+                  {/* 筛选器行 */}
+                  <div className="grid grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">项目</label>
+                      <Select
+                        value={filters.project}
+                        onChange={(e) => setFilters({ ...filters, project: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部项目</option>
+                        {projects.map(project => (
+                          <option key={project.id} value={project.lab_project_code}>
+                            {project.lab_project_code}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">申请人</label>
+                      <Select
+                        value={filters.requestedBy}
+                        onChange={(e) => setFilters({ ...filters, requestedBy: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部申请人</option>
+                        {uniqueRequesters.map(requester => (
+                          <option key={requester} value={requester}>{requester}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">目标位置</label>
+                      <Select
+                        value={filters.targetLocation}
+                        onChange={(e) => setFilters({ ...filters, targetLocation: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部位置</option>
+                        {uniqueLocations.map(location => (
+                          <option key={location} value={location}>{location}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {activeFilterCount > 0 && (
+                        <Button
+                          color="white"
+                          onClick={resetFilters}
+                          className="h-11"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                          清除筛选
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 日期范围筛选 */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">申请日期范围</label>
+                    <div className="flex items-center gap-2 max-w-md">
+                      <Input
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                      <span className="text-gray-500">至</span>
+                      <Input
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* 请求列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>申请编号</TableHeader>
-                <TableHeader>项目</TableHeader>
-                <TableHeader>申请人</TableHeader>
-                <TableHeader>样本数量</TableHeader>
-                <TableHeader>用途</TableHeader>
-                <TableHeader>目标位置</TableHeader>
-                <TableHeader>申请时间</TableHeader>
-                <TableHeader>状态</TableHeader>
-                <TableHeader>操作</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
+        {/* 表格容器 - 包含tabs */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden"
+        >
+          {/* Tabs 栏 */}
+          <div className="bg-gray-50 px-6 py-3">
+            <Tabs
+              tabs={[
+                { key: 'pending', label: '待审批' },
+                { key: 'approved', label: '已批准' },
+                { key: 'borrowed', label: '已领用' },
+                { key: 'returned', label: '已归还' },
+                { key: 'all', label: '全部' }
+              ]}
+              activeTab={viewMode}
+              onChange={(key) => setViewMode(key as any)}
+            />
+          </div>
+
+          {/* 结果统计 */}
+          <div className="px-6 py-3 bg-gray-50/50">
+            <Text className="text-sm text-zinc-600">
+              共 {filteredRequests.length} 条记录
+              {activeFilterCount > 0 && ` (已应用 ${activeFilterCount} 个筛选条件)`}
+            </Text>
+          </div>
+          
+          {/* 表格内容 */}
+          <div>
+            <Table bleed={true} striped>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>加载中...</Text>
-                  </TableCell>
+                  <TableHeader>申请编号</TableHeader>
+                  <TableHeader>项目</TableHeader>
+                  <TableHeader>申请人</TableHeader>
+                  <TableHeader>样本数量</TableHeader>
+                  <TableHeader>用途</TableHeader>
+                  <TableHeader>目标位置</TableHeader>
+                  <TableHeader>预计日期</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>操作</TableHeader>
                 </TableRow>
-              ) : requests.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>暂无数据</Text>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                requests.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell className="font-medium">{request.request_code}</TableCell>
-                    <TableCell>
-                      {request.project.lab_project_code}
-                    </TableCell>
-                    <TableCell>{request.requested_by.full_name}</TableCell>
-                    <TableCell>{request.sample_count}</TableCell>
-                    <TableCell>{getPurposeLabel(request.purpose)}</TableCell>
-                    <TableCell>{request.target_location}</TableCell>
-                    <TableCell className="text-zinc-600">
-                      {new Date(request.created_at).toLocaleDateString('zh-CN')}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(request.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button 
-                          plain
-                          size="small"
-                          onClick={() => {
-                            setSelectedRequest(request);
-                            setIsDetailDialogOpen(true);
-                          }}
-                        >
-                          查看
-                        </Button>
-                        {request.status === 'pending' && (
-                          <Button
-                            plain
-                            size="small"
-                            onClick={() => handleApproveBorrow(request.id)}
-                          >
-                            <CheckCircleIcon />
-                            批准
-                          </Button>
-                        )}
-                        {request.status === 'approved' && (
-                          <Button
-                            plain
-                            size="small"
-                            onClick={() => handleExecuteBorrow(request.id)}
-                          >
-                            <ArrowUpOnSquareIcon />
-                            执行领用
-                          </Button>
-                        )}
-                        {request.status === 'borrowed' && (
-                          <Button
-                            plain
-                            size="small"
-                            onClick={() => handleReturnSamples(request.id)}
-                          >
-                            <ArrowDownOnSquareIcon />
-                            归还
-                          </Button>
-                        )}
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
+                        <Text className="text-zinc-500">加载中...</Text>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : filteredRequests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-3">
+                        <BeakerIcon className="h-12 w-12 text-zinc-300" />
+                        <Text className="text-zinc-500">
+                          {activeFilterCount > 0 
+                            ? '没有符合筛选条件的领用申请' 
+                            : '暂无领用申请'}
+                        </Text>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRequests.map((request) => (
+                    <TableRow key={request.id}>
+                      <TableCell className="font-medium">{request.request_code}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{request.project.lab_project_code}</div>
+                          <div className="text-xs text-zinc-500">{request.project.sponsor_project_code}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{request.requested_by.full_name}</TableCell>
+                      <TableCell>{request.sample_count}</TableCell>
+                      <TableCell className="max-w-xs truncate">{request.purpose}</TableCell>
+                      <TableCell>{request.target_location}</TableCell>
+                      <TableCell>{new Date(request.target_date).toLocaleDateString('zh-CN')}</TableCell>
+                      <TableCell>{getStatusBadge(request.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button 
+                            plain 
+                            onClick={() => handleViewDetails(request)}
+                          >
+                            查看
+                          </Button>
+                          {request.status === 'approved' && (
+                            <Button 
+                              color="blue"
+                              onClick={() => handleExecuteBorrow(request)}
+                            >
+                              执行领用
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </motion.div>
       </div>
 
       {/* 申请领用对话框 */}
@@ -447,7 +650,7 @@ export default function SampleBorrowPage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <Text className="font-medium">选择样本（已选 {selectedSamples.length} 个）</Text>
-                  <Button plain size="small" onClick={handleSelectAll}>
+                  <Button plain onClick={handleSelectAll}>
                     {selectedSamples.length === availableSamples.length ? '取消全选' : '全选'}
                   </Button>
                 </div>

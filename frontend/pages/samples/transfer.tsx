@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -9,6 +10,7 @@ import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
+import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { 
   ArrowsRightLeftIcon,
@@ -16,8 +18,13 @@ import {
   BuildingOfficeIcon,
   QrCodeIcon,
   CloudArrowUpIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  FunnelIcon,
+  ChevronUpIcon,
+  XMarkIcon
 } from '@heroicons/react/20/solid';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { ArrowsRightLeftIcon as ArrowsRightLeftIconOutline } from '@heroicons/react/24/outline';
 
 interface TransferRequest {
   id: number;
@@ -45,7 +52,7 @@ interface Sample {
 }
 
 export default function SampleTransferPage() {
-  const [activeTab, setActiveTab] = useState<'internal' | 'external'>('external');
+  const [viewMode, setViewMode] = useState<'internal' | 'external' | 'completed' | 'all'>('external');
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -55,6 +62,18 @@ export default function SampleTransferPage() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
+  
+  // 新增筛选状态
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  const [filters, setFilters] = useState({
+    searchText: '',
+    project: 'all',
+    fromLocation: 'all',
+    toLocation: 'all',
+    transferType: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
   
   // 外部转移表单
   const [externalForm, setExternalForm] = useState({
@@ -79,12 +98,12 @@ export default function SampleTransferPage() {
     fetchTransfers();
     fetchProjects();
     fetchOrganizations();
-  }, [activeTab]);
+  }, [viewMode]); // 依赖项改为 viewMode
 
   const fetchTransfers = async () => {
     try {
       const response = await api.get('/samples/transfers', {
-        params: { type: activeTab }
+        params: { type: viewMode } // 根据 viewMode 传递参数
       });
       setTransfers(response.data);
     } catch (error) {
@@ -222,99 +241,360 @@ export default function SampleTransferPage() {
     }
   };
 
+  // 计算活跃筛选器数量
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    return value !== '' && value !== 'all';
+  }).length;
+
+  // 重置筛选
+  const resetFilters = () => {
+    setFilters({
+      searchText: '',
+      project: 'all',
+      fromLocation: 'all',
+      toLocation: 'all',
+      transferType: 'all',
+      dateFrom: '',
+      dateTo: ''
+    });
+  };
+
+  // 应用视图模式过滤
+  const filteredByViewMode = (transfers: TransferRequest[]) => {
+    if (viewMode === 'all') return transfers;
+    if (viewMode === 'internal') return transfers.filter(t => t.transfer_type === 'internal');
+    if (viewMode === 'external') return transfers.filter(t => t.transfer_type === 'external');
+    if (viewMode === 'completed') return transfers.filter(t => t.status === 'completed');
+    return transfers;
+  };
+
+  // 应用筛选
+  const applyFilters = (transfers: TransferRequest[]) => {
+    return transfers.filter(transfer => {
+      // 搜索文本筛选
+      if (filters.searchText && 
+          !transfer.transfer_code.toLowerCase().includes(filters.searchText.toLowerCase()) &&
+          !transfer.project.lab_project_code.toLowerCase().includes(filters.searchText.toLowerCase())) {
+        return false;
+      }
+      
+      // 项目筛选
+      if (filters.project !== 'all' && transfer.project.lab_project_code !== filters.project) {
+        return false;
+      }
+      
+      // 来源位置筛选
+      if (filters.fromLocation !== 'all' && transfer.from_location !== filters.fromLocation) {
+        return false;
+      }
+      
+      // 目标位置筛选
+      if (filters.toLocation !== 'all' && transfer.to_location !== filters.toLocation) {
+        return false;
+      }
+      
+      // 转移类型筛选
+      if (filters.transferType !== 'all' && transfer.transfer_type !== filters.transferType) {
+        return false;
+      }
+      
+      // 日期范围筛选
+      const transferDate = new Date(transfer.created_at);
+      if (filters.dateFrom && new Date(filters.dateFrom) > transferDate) {
+        return false;
+      }
+      if (filters.dateTo && new Date(filters.dateTo) < transferDate) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredTransfers = applyFilters(filteredByViewMode(transfers));
+
+  // 获取唯一值用于筛选
+  const uniqueFromLocations = Array.from(new Set(transfers.map(t => t.from_location)));
+  const uniqueToLocations = Array.from(new Set(transfers.map(t => t.to_location)));
+
+  const handleViewDetails = (transfer: TransferRequest) => {
+    // 实现查看详情逻辑
+    console.log('Viewing details for transfer:', transfer);
+    // 可以打开一个对话框或导航到详情页面
+  };
+
+  const handleExecuteTransfer = (transfer: TransferRequest) => {
+    // 实现执行转移逻辑
+    console.log('Executing transfer:', transfer);
+    // 可以打开一个确认对话框
+  };
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        {/* 页面标题和操作按钮 */}
+        <div className="mb-6 flex items-center justify-between">
           <div>
             <Heading>样本转移</Heading>
-            <Text className="mt-1 text-zinc-600">管理样本的内部和外部转移</Text>
+            <Text className="mt-1 text-zinc-600">管理样本内部和外部转移</Text>
           </div>
-          <Button onClick={() => activeTab === 'external' ? setIsTransferDialogOpen(true) : setIsInternalTransferOpen(true)}>
-            <ArrowsRightLeftIcon />
-            {activeTab === 'external' ? '申请外部转移' : '内部转移'}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              color="white" 
+              onClick={() => setIsInternalTransferOpen(true)}
+            >
+              <BuildingOfficeIcon className="h-4 w-4" />
+              内部转移
+            </Button>
+            <Button 
+              color="blue" 
+              onClick={() => setIsTransferDialogOpen(true)}
+            >
+              <TruckIcon className="h-4 w-4" />
+              外部转移
+            </Button>
+          </div>
         </div>
 
-        {/* 标签页 */}
-        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
-          <button
-            onClick={() => setActiveTab('external')}
-            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'external'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
+        {/* 筛选区域 - 可折叠 */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100 mb-6 overflow-hidden">
+          {/* 筛选标题栏 */}
+          <div 
+            className="px-5 py-3 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
           >
-            <TruckIcon className="h-5 w-5" />
-            外部转移
-          </button>
-          <button
-            onClick={() => setActiveTab('internal')}
-            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'internal'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            <BuildingOfficeIcon className="h-5 w-5" />
-            内部转移
-          </button>
-        </div>
-
-        {/* 转移记录列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>转移编号</TableHeader>
-                <TableHeader>项目</TableHeader>
-                <TableHeader>申请人</TableHeader>
-                <TableHeader>样本数量</TableHeader>
-                <TableHeader>出发地</TableHeader>
-                <TableHeader>目的地</TableHeader>
-                <TableHeader>申请时间</TableHeader>
-                <TableHeader>状态</TableHeader>
-                <TableHeader>操作</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>加载中...</Text>
-                  </TableCell>
-                </TableRow>
-              ) : transfers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>暂无转移记录</Text>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transfers.map((transfer) => (
-                  <TableRow key={transfer.id}>
-                    <TableCell className="font-medium">{transfer.transfer_code}</TableCell>
-                    <TableCell>{transfer.project.lab_project_code}</TableCell>
-                    <TableCell>{transfer.requested_by.full_name}</TableCell>
-                    <TableCell>{transfer.sample_count}</TableCell>
-                    <TableCell>{transfer.from_location}</TableCell>
-                    <TableCell>{transfer.to_location}</TableCell>
-                    <TableCell className="text-zinc-600">
-                      {new Date(transfer.created_at).toLocaleDateString('zh-CN')}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(transfer.status)}</TableCell>
-                    <TableCell>
-                      <Button plain size="small">
-                        查看
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+            <div className="flex items-center gap-2">
+              <FunnelIcon className="h-5 w-5 text-gray-600" />
+              <span className="font-medium text-gray-900">筛选条件</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {activeFilterCount}
+                </span>
               )}
-            </TableBody>
-          </Table>
+            </div>
+            <motion.div
+              animate={{ rotate: isFilterExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+            </motion.div>
+          </div>
+
+          {/* 可折叠的筛选内容 */}
+          <AnimatePresence initial={false}>
+            {isFilterExpanded && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* 搜索框行 */}
+                  <div className="mb-4">
+                    <Input
+                      type="text"
+                      placeholder="搜索转移编号或项目..."
+                      value={filters.searchText}
+                      onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
+                      className="w-full max-w-md h-11"
+                    />
+                  </div>
+
+                  {/* 筛选器行 */}
+                  <div className="grid grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">项目</label>
+                      <Select
+                        value={filters.project}
+                        onChange={(e) => setFilters({ ...filters, project: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部项目</option>
+                        {projects.map(project => (
+                          <option key={project.id} value={project.lab_project_code}>
+                            {project.lab_project_code}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">来源位置</label>
+                      <Select
+                        value={filters.fromLocation}
+                        onChange={(e) => setFilters({ ...filters, fromLocation: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部来源</option>
+                        {uniqueFromLocations.map(location => (
+                          <option key={location} value={location}>{location}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">目标位置</label>
+                      <Select
+                        value={filters.toLocation}
+                        onChange={(e) => setFilters({ ...filters, toLocation: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部目标</option>
+                        {uniqueToLocations.map(location => (
+                          <option key={location} value={location}>{location}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {activeFilterCount > 0 && (
+                        <Button
+                          color="white"
+                          onClick={resetFilters}
+                          className="h-11"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                          清除筛选
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 日期范围筛选 */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">转移日期范围</label>
+                    <div className="flex items-center gap-2 max-w-md">
+                      <Input
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                      <span className="text-gray-500">至</span>
+                      <Input
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
+
+        {/* 表格容器 - 包含tabs */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden"
+        >
+          {/* Tabs 栏 */}
+          <div className="bg-gray-50 px-6 py-3">
+            <Tabs
+              tabs={[
+                { key: 'external', label: '外部转移' },
+                { key: 'internal', label: '内部转移' },
+                { key: 'completed', label: '已完成' },
+                { key: 'all', label: '全部' }
+              ]}
+              activeTab={viewMode}
+              onChange={(key) => setViewMode(key as any)}
+            />
+          </div>
+
+          {/* 结果统计 */}
+          <div className="px-6 py-3 bg-gray-50/50">
+            <Text className="text-sm text-zinc-600">
+              共 {filteredTransfers.length} 条记录
+              {activeFilterCount > 0 && ` (已应用 ${activeFilterCount} 个筛选条件)`}
+            </Text>
+          </div>
+          
+          {/* 表格内容 */}
+          <div>
+            <Table bleed={true} striped>
+              <TableHead>
+                <TableRow>
+                  <TableHeader>转移编号</TableHeader>
+                  <TableHeader>项目</TableHeader>
+                  <TableHeader>类型</TableHeader>
+                  <TableHeader>样本数量</TableHeader>
+                  <TableHeader>来源</TableHeader>
+                  <TableHeader>目标</TableHeader>
+                  <TableHeader>申请人</TableHeader>
+                  <TableHeader>申请时间</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>操作</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <AnimatedLoadingState 
+                      key="loading"
+                      colSpan={10} 
+                      variant="skeleton"
+                    />
+                  ) : filteredTransfers.length === 0 ? (
+                    <AnimatedEmptyState
+                      key="empty"
+                      colSpan={10}
+                      icon={ArrowsRightLeftIcon}
+                      text={activeFilterCount > 0 
+                        ? '没有符合筛选条件的转移记录' 
+                        : '暂无转移记录'}
+                    />
+                  ) : (
+                    filteredTransfers.map((transfer) => (
+                      <AnimatedTableRow key={transfer.id} index={0}>
+                        <TableCell className="font-medium">{transfer.transfer_code}</TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{transfer.project.lab_project_code}</div>
+                            <div className="text-xs text-zinc-500">{transfer.project.sponsor_project_code}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {transfer.transfer_type === 'internal' ? (
+                            <Badge color="blue">内部</Badge>
+                          ) : (
+                            <Badge color="purple">外部</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{transfer.sample_count}</TableCell>
+                        <TableCell className="text-sm">{transfer.from_location}</TableCell>
+                        <TableCell className="text-sm">{transfer.to_location}</TableCell>
+                        <TableCell>{transfer.requested_by.full_name}</TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(transfer.created_at).toLocaleDateString('zh-CN')}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(transfer.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button plain onClick={() => handleViewDetails(transfer)}>
+                              查看
+                            </Button>
+                            {transfer.status === 'pending' && (
+                              <Button color="blue" onClick={() => handleExecuteTransfer(transfer)}>
+                                执行
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </AnimatedTableRow>
+                    ))
+                  )}
+                </AnimatePresence>
+              </TableBody>
+            </Table>
+          </div>
+        </motion.div>
       </div>
 
       {/* 外部转移对话框 */}
@@ -400,7 +680,7 @@ export default function SampleTransferPage() {
               <label className="block text-sm font-medium text-zinc-700 mb-1">
                 申办方批准文件 <span className="text-red-500">*</span>
               </label>
-              <label className="cursor-pointer">
+              <div className="cursor-pointer">
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
@@ -410,12 +690,15 @@ export default function SampleTransferPage() {
                     }
                   }}
                   className="hidden"
+                  id="approval-file-input"
                 />
-                <Button as="span" plain>
-                  <CloudArrowUpIcon />
-                  上传批准文件
-                </Button>
-              </label>
+                <label htmlFor="approval-file-input">
+                  <Button plain onClick={(e: React.MouseEvent) => e.preventDefault()}>
+                    <CloudArrowUpIcon />
+                    上传批准文件
+                  </Button>
+                </label>
+              </div>
               {externalForm.approval_file && (
                 <Text className="text-sm text-green-600 mt-1">
                   已选择: {externalForm.approval_file.name}
@@ -628,7 +911,7 @@ export default function SampleTransferPage() {
           }}>
             取消
           </Button>
-          <Button onClick={() => alert('确认转出')} variant="secondary">
+          <Button onClick={() => alert('确认转出')} color="white">
             确认转出
           </Button>
           <Button 

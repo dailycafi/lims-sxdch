@@ -26,20 +26,58 @@ api.interceptors.request.use(
 );
 
 // 响应拦截器
+let isRedirecting = false; // 防止多次重定向
+
+// 添加一个防止重复错误提示的机制
+let lastErrorTime = 0;
+let lastErrorMessage = '';
+const ERROR_THROTTLE_TIME = 2000; // 2秒内相同错误不重复提示
+
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
+  (error: AxiosError<any>) => {
+    // 处理 401 错误 - 只显示一次提示
+    if (error.response?.status === 401 && !isRedirecting) {
+      isRedirecting = true;
       localStorage.removeItem('access_token');
-      window.location.href = '/login';
       toast.error('登录已过期，请重新登录');
-    } else if (error.response?.status === 403) {
-      toast.error('没有权限执行此操作');
-    } else if (error.response?.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
-      toast.error(error.response.data.detail as string);
-    } else {
-      toast.error('操作失败，请稍后重试');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 100);
+      // 返回一个不会触发额外错误处理的 rejected promise
+      return new Promise(() => {});
     }
+    
+    // 处理其他错误 - 但避免重复提示
+    if (!isRedirecting) {
+      const now = Date.now();
+      let errorMessage = '';
+      
+      if (error.response?.status === 403) {
+        errorMessage = '没有权限执行此操作';
+      } else if (error.response?.status === 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      } else if (error.response?.status === 422) {
+        // 处理验证错误
+        const validationErrors = (error.response?.data as any)?.detail;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          // 只显示第一个验证错误
+          errorMessage = validationErrors[0]?.msg || '数据验证失败';
+        } else if (typeof validationErrors === 'string') {
+          errorMessage = validationErrors;
+        } else {
+          errorMessage = '数据验证失败';
+        }
+      }
+      
+      // 防止重复显示相同的错误
+      if (errorMessage && (errorMessage !== lastErrorMessage || now - lastErrorTime > ERROR_THROTTLE_TIME)) {
+        toast.error(errorMessage);
+        lastErrorMessage = errorMessage;
+        lastErrorTime = now;
+      }
+    }
+    
     return Promise.reject(error);
   }
 );

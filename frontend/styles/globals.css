@@ -163,3 +163,78 @@
     line-height: 1.5rem !important;
   }
 }
+
+/* 修复 select option 的内边距 - 更具体的选择器 */
+@layer components {
+  /* Select 选项内边距 - 使用更强的选择器 */
+  .custom-select option,
+  select.custom-select option {
+    padding: 0.5rem 1rem !important;
+    text-indent: 0 !important;
+  }
+  
+  /* 确保在 Firefox 中也工作 */
+  @-moz-document url-prefix() {
+    .custom-select option,
+    select.custom-select option {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+  }
+  
+  /* 为不同浏览器添加兼容性 */
+  select option {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+}
+
+/* 日期输入框样式修复 */
+@layer components {
+  /* 修复日期输入框的内边距 */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="time"],
+  input[type="week"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  
+  /* WebKit 浏览器（Chrome, Safari）的日期选择器 */
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="datetime-local"]::-webkit-datetime-edit,
+  input[type="month"]::-webkit-datetime-edit,
+  input[type="time"]::-webkit-datetime-edit,
+  input[type="week"]::-webkit-datetime-edit {
+    padding-left: 0 !important;
+  }
+  
+  /* 确保日期文本不会贴边 */
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="month"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="week"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0 !important;
+  }
+  
+  /* Firefox 日期输入框修复 */
+  @-moz-document url-prefix() {
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"],
+    input[type="week"] {
+      padding-left: 1rem !important;
+      text-indent: 0 !important;
+    }
+  }
+  
+  /* 自定义日期输入类 */
+  .custom-date-input {
+    text-indent: 0 !important;
+  }
+}

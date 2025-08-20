@@ -44,7 +44,7 @@ export const Input = forwardRef(function Input(
         // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
         'dark:before:hidden',
         // Focus ring
-        'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-blue-500',
+        'after:pointer-events-none after:absolute after:inset-0 after:rounded-xl after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-blue-500',
         // Disabled state
         'has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none',
         // Invalid state
@@ -55,7 +55,7 @@ export const Input = forwardRef(function Input(
         ref={ref}
         {...props}
         className={clsx([
-          // Date classes
+          // Date classes - 修复日期输入的内边距
           props.type &&
             dateTypes.includes(props.type) && [
               '[&::-webkit-datetime-edit-fields-wrapper]:p-0',
@@ -70,13 +70,15 @@ export const Input = forwardRef(function Input(
               '[&::-webkit-datetime-edit-second-field]:p-0',
               '[&::-webkit-datetime-edit-millisecond-field]:p-0',
               '[&::-webkit-datetime-edit-meridiem-field]:p-0',
+              // 添加自定义类名
+              'custom-date-input',
             ],
-          // Basic layout
-          'relative block w-full appearance-none rounded-lg px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
+          // Basic layout - 增加圆角，使用固定的内边距值
+          'relative block w-full appearance-none rounded-xl px-4 py-2.5 sm:px-3 sm:py-1.5',
           // Typography
-          'text-base/6 text-zinc-950 placeholder:text-zinc-500 sm:text-sm/6 dark:text-white',
-          // Border
-          'border border-zinc-950/10 data-hover:border-zinc-950/20 dark:border-white/10 dark:data-hover:border-white/20',
+          'text-base/6 text-zinc-950 placeholder:text-gray-400 placeholder:font-normal sm:text-sm/6 dark:text-white',
+          // Border - 更新边框颜色
+          'border border-gray-200 data-hover:border-gray-300 dark:border-white/10 dark:data-hover:border-white/20',
           // Background color
           'bg-transparent dark:bg-white/5',
           // Hide default focus styles
@@ -84,9 +86,13 @@ export const Input = forwardRef(function Input(
           // Invalid state
           'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-500 dark:data-invalid:data-hover:border-red-500',
           // Disabled state
-          'data-disabled:border-zinc-950/20 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
+          'data-disabled:border-gray-200 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
           // System icons
           'dark:scheme-dark',
+          // 确保统一的高度
+          'h-full min-h-[2.75rem]',
+          // 增加阴影效果
+          'shadow-sm hover:shadow-md transition-shadow duration-200',
         ])}
       />
     </span>

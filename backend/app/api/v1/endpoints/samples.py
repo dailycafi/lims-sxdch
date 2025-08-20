@@ -111,6 +111,53 @@ async def create_samples_batch(
         )
 
 
+@router.get("/receive-tasks", response_model=List[dict])
+async def get_receive_tasks(
+    status: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取接收任务列表"""
+    from sqlalchemy.orm import selectinload
+    from app.models.project import Project
+    from app.models.global_params import Organization
+    
+    query = select(SampleReceiveRecord).options(
+        selectinload(SampleReceiveRecord.project),
+        selectinload(SampleReceiveRecord.clinical_org),
+        selectinload(SampleReceiveRecord.transport_org),
+        selectinload(SampleReceiveRecord.receiver)
+    )
+    
+    if status:
+        query = query.where(SampleReceiveRecord.status == status)
+    
+    query = query.order_by(SampleReceiveRecord.received_at.desc())
+    
+    result = await db.execute(query)
+    records = result.scalars().all()
+    
+    # 转换为响应格式
+    tasks = []
+    for record in records:
+        tasks.append({
+            "id": record.id,
+            "project_id": record.project_id,
+            "project_name": record.project.lab_project_code if record.project else "",
+            "clinical_site": record.clinical_org.name if record.clinical_org else "",
+            "transport_company": record.transport_org.name if record.transport_org else "",
+            "transport_method": record.transport_method,
+            "temperature_monitor_id": record.temperature_monitor_id,
+            "sample_count": record.sample_count,
+            "sample_status": record.sample_status,
+            "received_by": record.receiver.full_name if record.receiver else "",
+            "received_at": record.received_at.isoformat(),
+            "status": record.status
+        })
+    
+    return tasks
+
+
 @router.get("/", response_model=List[SampleResponse])
 async def read_samples(
     project_id: int = None,
@@ -266,51 +313,7 @@ async def receive_samples(
     return {"message": f"成功接收 {sample_count} 个样本", "receive_id": receive_record.id}
 
 
-@router.get("/receive-tasks", response_model=List[dict])
-async def get_receive_tasks(
-    status: Optional[str] = None,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-    db: AsyncSession = Depends(get_db)
-):
-    """获取接收任务列表"""
-    from sqlalchemy.orm import selectinload
-    from app.models.project import Project
-    from app.models.global_params import Organization
-    
-    query = select(SampleReceiveRecord).options(
-        selectinload(SampleReceiveRecord.project),
-        selectinload(SampleReceiveRecord.clinical_org),
-        selectinload(SampleReceiveRecord.transport_org),
-        selectinload(SampleReceiveRecord.receiver)
-    )
-    
-    if status:
-        query = query.where(SampleReceiveRecord.status == status)
-    
-    query = query.order_by(SampleReceiveRecord.received_at.desc())
-    
-    result = await db.execute(query)
-    records = result.scalars().all()
-    
-    # 转换为响应格式
-    tasks = []
-    for record in records:
-        tasks.append({
-            "id": record.id,
-            "project_id": record.project_id,
-            "project_name": record.project.lab_project_code if record.project else "",
-            "clinical_site": record.clinical_org.name if record.clinical_org else "",
-            "transport_company": record.transport_org.name if record.transport_org else "",
-            "transport_method": record.transport_method,
-            "temperature_monitor_id": record.temperature_monitor_id,
-            "sample_count": record.sample_count,
-            "sample_status": record.sample_status,
-            "received_by": record.receiver.full_name if record.receiver else "",
-            "received_at": record.received_at.isoformat(),
-            "status": record.status
-        })
-    
-    return tasks
+
 
 
 @router.get("/receive-records/{record_id}")

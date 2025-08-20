@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -9,6 +10,7 @@ import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
+import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { 
@@ -17,8 +19,12 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  FunnelIcon,
+  ChevronUpIcon,
+  XMarkIcon
 } from '@heroicons/react/20/solid';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 
 interface DestroyRequest {
   id: number;
@@ -51,7 +57,7 @@ interface ApprovalFlow {
 export default function SampleDestroyPage() {
   const [requests, setRequests] = useState<DestroyRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'completed'>('pending');
+  const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'completed' | 'rejected' | 'all'>('pending');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DestroyRequest | null>(null);
@@ -60,6 +66,18 @@ export default function SampleDestroyPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<any[]>([]);
+  
+  // 新增筛选状态
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  const [filters, setFilters] = useState({
+    searchText: '',
+    project: 'all',
+    requestedBy: 'all',
+    reason: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
+
   const [destroyForm, setDestroyForm] = useState({
     reason: '',
     approval_file: null as File | null,
@@ -75,12 +93,12 @@ export default function SampleDestroyPage() {
   useEffect(() => {
     fetchRequests();
     fetchProjects();
-  }, [activeTab]);
+  }, [viewMode]);
 
   const fetchRequests = async () => {
     try {
       const response = await api.get('/samples/destroy-requests', {
-        params: { status: activeTab }
+        params: { status: viewMode }
       });
       setRequests(response.data);
     } catch (error) {
@@ -205,23 +223,46 @@ export default function SampleDestroyPage() {
     });
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusColor = (status: string): "yellow" | "blue" | "purple" | "orange" | "green" | "red" | "zinc" => {
     switch (status) {
       case 'pending':
-        return <Badge color="yellow">待审批</Badge>;
+        return "yellow";
       case 'test_manager_approved':
-        return <Badge color="blue">主管已批准</Badge>;
+        return "blue";
       case 'director_approved':
-        return <Badge color="purple">主任已批准</Badge>;
+        return "purple";
       case 'ready':
-        return <Badge color="orange">待执行</Badge>;
+        return "orange";
       case 'completed':
-        return <Badge color="green">已销毁</Badge>;
+        return "green";
       case 'rejected':
-        return <Badge color="red">已拒绝</Badge>;
+        return "red";
       default:
-        return <Badge color="zinc">{status}</Badge>;
+        return "zinc";
     }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '待审批';
+      case 'test_manager_approved':
+        return '主管已批准';
+      case 'director_approved':
+        return '主任已批准';
+      case 'ready':
+        return '待执行';
+      case 'completed':
+        return '已销毁';
+      case 'rejected':
+        return '已拒绝';
+      default:
+        return status;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    return <Badge color={getStatusColor(status)}>{getStatusText(status)}</Badge>;
   };
 
   const getRoleLabel = (role: string) => {
@@ -235,139 +276,329 @@ export default function SampleDestroyPage() {
     }
   };
 
+  const handleViewDetails = (request: DestroyRequest) => {
+    setSelectedRequest(request);
+    fetchApprovalFlow(request.id);
+    setIsApprovalDialogOpen(true);
+  };
+
+  const handleOpenApproval = (request: DestroyRequest) => {
+    setSelectedRequest(request);
+    setIsApprovalDialogOpen(true);
+  };
+
+  // 计算活跃筛选器数量
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    return value !== '' && value !== 'all';
+  }).length;
+
+  // 重置筛选
+  const resetFilters = () => {
+    setFilters({
+      searchText: '',
+      project: 'all',
+      requestedBy: 'all',
+      reason: 'all',
+      dateFrom: '',
+      dateTo: ''
+    });
+  };
+
+  // 应用视图模式过滤
+  const filteredByViewMode = (requests: DestroyRequest[]) => {
+    if (viewMode === 'all') return requests;
+    return requests.filter(r => r.status === viewMode);
+  };
+
+  // 应用筛选
+  const applyFilters = (requests: DestroyRequest[]) => {
+    return requests.filter(request => {
+      // 搜索文本筛选
+      if (filters.searchText && 
+          !request.request_code.toLowerCase().includes(filters.searchText.toLowerCase()) &&
+          !request.reason.toLowerCase().includes(filters.searchText.toLowerCase())) {
+        return false;
+      }
+      
+      // 项目筛选
+      if (filters.project !== 'all' && request.project.lab_project_code !== filters.project) {
+        return false;
+      }
+      
+      // 申请人筛选
+      if (filters.requestedBy !== 'all' && request.requested_by.full_name !== filters.requestedBy) {
+        return false;
+      }
+      
+      // 销毁原因筛选
+      if (filters.reason !== 'all' && request.reason !== filters.reason) {
+        return false;
+      }
+      
+      // 日期范围筛选
+      const requestDate = new Date(request.created_at);
+      if (filters.dateFrom && new Date(filters.dateFrom) > requestDate) {
+        return false;
+      }
+      if (filters.dateTo && new Date(filters.dateTo) < requestDate) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredRequests = applyFilters(filteredByViewMode(requests));
+
+  // 获取唯一值用于筛选
+  const uniqueRequesters = Array.from(new Set(requests.map(r => r.requested_by.full_name)));
+  const uniqueReasons = Array.from(new Set(requests.map(r => r.reason)));
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        {/* 页面标题和操作按钮 */}
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <Heading>样本销毁管理</Heading>
+            <Heading>样本销毁</Heading>
             <Text className="mt-1 text-zinc-600">管理样本销毁申请和审批流程</Text>
           </div>
-          <Button onClick={() => setIsRequestDialogOpen(true)} color="red">
-            <TrashIcon />
+          <Button color="blue" onClick={() => setIsRequestDialogOpen(true)}>
+            <TrashIcon className="h-4 w-4" />
             申请销毁
           </Button>
         </div>
 
-        {/* 标签页 */}
-        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'pending'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
+        {/* 筛选区域 - 可折叠 */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100 mb-6 overflow-hidden">
+          {/* 筛选标题栏 */}
+          <div 
+            className="px-5 py-3 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
           >
-            待审批
-          </button>
-          <button
-            onClick={() => setActiveTab('approved')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'approved'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            已批准
-          </button>
-          <button
-            onClick={() => setActiveTab('completed')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'completed'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            已完成
-          </button>
+            <div className="flex items-center gap-2">
+              <FunnelIcon className="h-5 w-5 text-gray-600" />
+              <span className="font-medium text-gray-900">筛选条件</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+            </div>
+            <motion.div
+              animate={{ rotate: isFilterExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+            </motion.div>
+          </div>
+
+          {/* 可折叠的筛选内容 */}
+          <AnimatePresence initial={false}>
+            {isFilterExpanded && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* 搜索框行 */}
+                  <div className="mb-4">
+                    <Input
+                      type="text"
+                      placeholder="搜索申请编号或销毁原因..."
+                      value={filters.searchText}
+                      onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
+                      className="w-full max-w-md h-11"
+                    />
+                  </div>
+
+                  {/* 筛选器行 */}
+                  <div className="grid grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">项目</label>
+                      <Select
+                        value={filters.project}
+                        onChange={(e) => setFilters({ ...filters, project: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部项目</option>
+                        {projects.map(project => (
+                          <option key={project.id} value={project.lab_project_code}>
+                            {project.lab_project_code}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">申请人</label>
+                      <Select
+                        value={filters.requestedBy}
+                        onChange={(e) => setFilters({ ...filters, requestedBy: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部申请人</option>
+                        {uniqueRequesters.map(requester => (
+                          <option key={requester} value={requester}>{requester}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">销毁原因</label>
+                      <Select
+                        value={filters.reason}
+                        onChange={(e) => setFilters({ ...filters, reason: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部原因</option>
+                        {uniqueReasons.map(reason => (
+                          <option key={reason} value={reason}>{reason}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {activeFilterCount > 0 && (
+                        <Button
+                          color="white"
+                          onClick={resetFilters}
+                          className="h-11"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                          清除筛选
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 日期范围筛选 */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">申请日期范围</label>
+                    <div className="flex items-center gap-2 max-w-md">
+                      <Input
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                      <span className="text-gray-500">至</span>
+                      <Input
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                        className="flex-1 h-11 custom-date-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* 请求列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>申请编号</TableHeader>
-                <TableHeader>项目</TableHeader>
-                <TableHeader>申请人</TableHeader>
-                <TableHeader>样本数量</TableHeader>
-                <TableHeader>销毁原因</TableHeader>
-                <TableHeader>当前审批</TableHeader>
-                <TableHeader>申请时间</TableHeader>
-                <TableHeader>状态</TableHeader>
-                <TableHeader>操作</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
+        {/* 表格容器 - 包含tabs */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden"
+        >
+          {/* Tabs 栏 */}
+          <div className="bg-gray-50 px-6 py-3">
+            <Tabs
+              tabs={[
+                { key: 'pending', label: '待审批' },
+                { key: 'approved', label: '已批准' },
+                { key: 'completed', label: '已销毁' },
+                { key: 'rejected', label: '已拒绝' },
+                { key: 'all', label: '全部' }
+              ]}
+              activeTab={viewMode}
+              onChange={(key) => setViewMode(key as any)}
+            />
+          </div>
+
+          {/* 结果统计 */}
+          <div className="px-6 py-3 bg-gray-50/50">
+            <Text className="text-sm text-zinc-600">
+              共 {filteredRequests.length} 条记录
+              {activeFilterCount > 0 && ` (已应用 ${activeFilterCount} 个筛选条件)`}
+            </Text>
+          </div>
+          
+          {/* 表格内容 */}
+          <div>
+            <Table bleed={true} striped>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>加载中...</Text>
-                  </TableCell>
+                  <TableHeader>申请编号</TableHeader>
+                  <TableHeader>项目</TableHeader>
+                  <TableHeader>申请人</TableHeader>
+                  <TableHeader>样本数量</TableHeader>
+                  <TableHeader>销毁原因</TableHeader>
+                  <TableHeader>当前审批人</TableHeader>
+                  <TableHeader>申请时间</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>操作</TableHeader>
                 </TableRow>
-              ) : requests.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>暂无数据</Text>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                requests.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell className="font-medium">{request.request_code}</TableCell>
-                    <TableCell>{request.project.lab_project_code}</TableCell>
-                    <TableCell>{request.requested_by.full_name}</TableCell>
-                    <TableCell>{request.sample_count}</TableCell>
-                    <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
-                    <TableCell>{request.current_approver || '-'}</TableCell>
-                    <TableCell className="text-zinc-600">
-                      {new Date(request.created_at).toLocaleDateString('zh-CN')}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(request.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button 
-                          plain
-                          size="small"
-                          onClick={() => {
-                            setSelectedRequest(request);
-                            fetchApprovalFlow(request.id);
-                            setIsApprovalDialogOpen(true);
-                          }}
-                        >
-                          查看
-                        </Button>
-                        {['pending', 'test_manager_approved'].includes(request.status) && (
+              </TableHead>
+              <TableBody>
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <AnimatedLoadingState 
+                      key="loading"
+                      colSpan={9} 
+                      variant="skeleton"
+                    />
+                  ) : filteredRequests.length === 0 ? (
+                    <AnimatedEmptyState
+                      key="empty"
+                      colSpan={9}
+                      icon={TrashIcon}
+                      text={activeFilterCount > 0 
+                        ? '没有符合筛选条件的销毁申请' 
+                        : '暂无销毁申请'}
+                    />
+                  ) : (
+                    filteredRequests.map((request, index) => (
+                      <AnimatedTableRow key={request.id} index={index}>
+                        <TableCell className="font-medium">{request.request_code}</TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{request.project.lab_project_code}</div>
+                            <div className="text-sm text-zinc-500">{request.project.sponsor_project_code}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{request.requested_by.full_name}</TableCell>
+                        <TableCell>{request.sample_count}</TableCell>
+                        <TableCell>{request.reason}</TableCell>
+                        <TableCell>{request.current_approver || '-'}</TableCell>
+                        <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Badge color={getStatusColor(request.status)}>
+                            {getStatusText(request.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
                           <Button
-                            plain
-                            size="small"
-                            onClick={() => {
-                              setSelectedRequest(request);
-                              setIsApprovalDialogOpen(true);
-                            }}
+                            color="white"
+                            onClick={() => handleViewDetails(request)}
                           >
-                            审批
+                            查看
                           </Button>
-                        )}
-                        {request.status === 'ready' && (
-                          <Button
-                            plain
-                            size="small"
-                            color="red"
-                            onClick={() => handleExecuteDestroy(request.id)}
-                          >
-                            执行销毁
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        </TableCell>
+                      </AnimatedTableRow>
+                    ))
+                  )}
+                </AnimatePresence>
+              </TableBody>
+            </Table>
+          </div>
+        </motion.div>
       </div>
 
       {/* 申请销毁对话框 */}
@@ -418,7 +649,7 @@ export default function SampleDestroyPage() {
               <label className="block text-sm font-medium text-zinc-700 mb-1">
                 申办方批准文件 <span className="text-red-500">*</span>
               </label>
-              <label className="cursor-pointer">
+              <div className="cursor-pointer">
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
@@ -428,12 +659,15 @@ export default function SampleDestroyPage() {
                     }
                   }}
                   className="hidden"
+                  id="destroy-approval-file-input"
                 />
-                <Button as="span" plain>
-                  <CloudArrowUpIcon />
-                  上传批准文件
-                </Button>
-              </label>
+                <label htmlFor="destroy-approval-file-input">
+                  <Button plain onClick={(e: React.MouseEvent) => e.preventDefault()}>
+                    <CloudArrowUpIcon />
+                    上传批准文件
+                  </Button>
+                </label>
+              </div>
               {destroyForm.approval_file && (
                 <Text className="text-sm text-green-600 mt-1">
                   已选择: {destroyForm.approval_file.name}

@@ -32,6 +32,7 @@ import {
   ArrowUpOnSquareIcon,
   ArrowsRightLeftIcon,
   TrashIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -92,43 +93,50 @@ export function AppLayout({ children }: AppLayoutProps) {
       sidebar={
         <Sidebar>
           <SidebarHeader>
+            <div className="flex items-center gap-3 px-2 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+                <BeakerIcon className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white">LIMS</div>
+                <div className="text-xs text-zinc-400">实验室信息系统</div>
+              </div>
+            </div>
             <SidebarSection>
               <SidebarItem href="/" current={isCurrentPath('/')}>
-                <HomeIcon data-slot="icon" className="!w-5 !h-5" />
+                <HomeIcon data-slot="icon" className="!w-4 !h-4" />
                 <SidebarLabel>主页</SidebarLabel>
               </SidebarItem>
             </SidebarSection>
           </SidebarHeader>
           
           <SidebarBody>
-            {/* 样本管理 */}
             <div className="space-y-6">
+              {/* 样本管理 */}
               <div>
-                <div className="mb-2 flex items-center">
-                  <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    样本管理
-                  </h3>
-                  <Badge color="green" className="ml-2 text-xs">New</Badge>
-                </div>
-                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  样本管理
+                </h3>
+                <div className="space-y-1">
                   <SidebarItem href="/samples/receive" current={isCurrentPath('/samples/receive')}>
-                    <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
+                    <BeakerIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本接收</SidebarLabel>
+                    <Badge className="ml-auto bg-gradient-to-r from-green-400 to-green-500 text-zinc-900 text-[10px] font-semibold">NEW</Badge>
                   </SidebarItem>
                   <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
-                    <ArrowUpOnSquareIcon data-slot="icon" className="!w-5 !h-5" />
+                    <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本领用</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/samples/transfer" current={isCurrentPath('/samples/transfer')}>
-                    <ArrowsRightLeftIcon data-slot="icon" className="!w-5 !h-5" />
+                    <ArrowsRightLeftIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本转移</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/samples/destroy" current={isCurrentPath('/samples/destroy')}>
-                    <TrashIcon data-slot="icon" className="!w-5 !h-5" />
+                    <TrashIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本销毁</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/samples" current={isCurrentPath('/samples')}>
-                    <BeakerIcon data-slot="icon" className="!w-5 !h-5" />
+                    <MagnifyingGlassIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本查询</SidebarLabel>
                   </SidebarItem>
                 </div>
@@ -137,16 +145,16 @@ export function AppLayout({ children }: AppLayoutProps) {
               {/* 项目管理 - 仅管理员可见 */}
               {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
                 <div>
-                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     项目管理
                   </h3>
-                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <div className="space-y-1">
                     <SidebarItem href="/projects" current={isCurrentPath('/projects')}>
-                      <FolderIcon data-slot="icon" className="!w-5 !h-5" />
+                      <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>项目列表</SidebarLabel>
                     </SidebarItem>
                     <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
-                      <FolderIcon data-slot="icon" className="!w-5 !h-5" />
+                      <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>新建项目</SidebarLabel>
                     </SidebarItem>
                   </div>
@@ -155,98 +163,46 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* 统计分析 */}
               <div>
-                <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                   统计分析
                 </h3>
-                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                <div className="space-y-1">
                   <SidebarItem href="/statistics" current={isCurrentPath('/statistics')}>
-                    <ChartBarIcon data-slot="icon" className="!w-5 !h-5" />
+                    <ChartBarIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>统计查询</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/deviation" current={isCurrentPath('/deviation')}>
-                    <ExclamationTriangleIcon data-slot="icon" className="!w-5 !h-5" />
+                    <ExclamationTriangleIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>偏差管理</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/deviation/complete" current={isCurrentPath('/deviation/complete')}>
-                    <ClipboardDocumentCheckIcon data-slot="icon" className="!w-5 !h-5" />
-                    <SidebarLabel>偏差管理(8步)</SidebarLabel>
-                  </SidebarItem>
                   <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
-                    <ArchiveBoxIcon data-slot="icon" className="!w-5 !h-5" />
+                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目归档</SidebarLabel>
                   </SidebarItem>
                 </div>
               </div>
 
-              {/* 系统管理 */}
+              {/* 系统管理 - 仅管理员可见 */}
               {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
                 <div>
-                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     系统管理
                   </h3>
-                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                  <div className="space-y-1">
                     <SidebarItem href="/global-params" current={isCurrentPath('/global-params')}>
-                      <CircleStackIcon data-slot="icon" className="!w-5 !h-5" />
+                      <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>全局参数</SidebarLabel>
                     </SidebarItem>
                     <SidebarItem href="/users" current={isCurrentPath('/users')}>
-                      <UsersIcon data-slot="icon" className="!w-5 !h-5" />
+                      <UsersIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>用户管理</SidebarLabel>
                     </SidebarItem>
                     <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
-                      <DocumentTextIcon data-slot="icon" className="!w-5 !h-5" />
+                      <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>审计日志</SidebarLabel>
                     </SidebarItem>
-                  </div>
-                </div>
-              )}
-
-              {/* 统计与报表 */}
-              <div>
-                <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                  统计与报表
-                </h3>
-                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
-                  <SidebarItem href="/reports" current={isCurrentPath('/reports')}>
-                    <ChartBarIcon data-slot="icon" className="!w-5 !h-5" />
-                    <SidebarLabel>统计报表</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
-                    <DocumentTextIcon data-slot="icon" className="!w-5 !h-5" />
-                    <SidebarLabel>审计日志</SidebarLabel>
-                  </SidebarItem>
-                </div>
-              </div>
-
-              {/* 其他功能 */}
-              <div>
-                <div className="mb-2 flex items-center">
-                  <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    其他功能
-                  </h3>
-                  <Badge color="blue" className="ml-2 text-xs">Beta</Badge>
-                </div>
-                <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
-                  <SidebarItem href="/deviation" current={isCurrentPath('/deviation')}>
-                    <ExclamationTriangleIcon data-slot="icon" className="!w-5 !h-5" />
-                    <SidebarLabel>偏差管理</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
-                    <ArchiveBoxIcon data-slot="icon" className="!w-5 !h-5" />
-                    <SidebarLabel>项目归档</SidebarLabel>
-                  </SidebarItem>
-                </div>
-              </div>
-
-              {/* 系统设置 - 仅系统管理员可见 */}
-              {shouldShowMenuItem(['SYSTEM_ADMIN']) && (
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    系统设置
-                  </h3>
-                  <div className="relative space-y-1 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
                     <SidebarItem href="/settings" current={isCurrentPath('/settings')}>
-                      <Cog6ToothIcon data-slot="icon" className="!w-5 !h-5" />
+                      <Cog6ToothIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>系统设置</SidebarLabel>
                     </SidebarItem>
                   </div>
@@ -259,7 +215,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </Sidebar>
       }
     >
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-white">
         <div className="p-6">{children}</div>
       </main>
     </SidebarLayout>

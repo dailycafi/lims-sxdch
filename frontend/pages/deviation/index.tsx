@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -9,7 +10,10 @@ import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
+import { Tabs } from '@/components/tabs';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { 
   ExclamationTriangleIcon,
   PlusIcon,
@@ -17,7 +21,11 @@ import {
   XCircleIcon,
   ClockIcon,
   DocumentTextIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  ArrowPathIcon,
+  FunnelIcon,
+  ChevronUpIcon,
+  ChevronDownIcon
 } from '@heroicons/react/20/solid';
 
 interface Deviation {
@@ -26,70 +34,107 @@ interface Deviation {
   title: string;
   severity: 'minor' | 'major' | 'critical';
   category: string;
-  reported_by: {
+  reporter: {
     full_name: string;
   };
   project?: {
+    id: number;
     lab_project_code: string;
   };
   status: string;
+  current_step?: {
+    step: number;
+    name: string;
+    role: string;
+  };
   created_at: string;
-  closed_at?: string;
 }
 
-interface DeviationDetail {
-  id: number;
-  deviation_code: string;
-  title: string;
-  severity: string;
-  category: string;
+interface DeviationDetail extends Deviation {
   description: string;
   impact_assessment: string;
   immediate_action?: string;
   root_cause?: string;
   corrective_action?: string;
   preventive_action?: string;
-  status: string;
-  reported_by: any;
-  approved_by?: any;
-  closed_by?: any;
-  created_at: string;
-  approved_at?: string;
-  closed_at?: string;
-  samples?: any[];
-  attachments?: any[];
-  tracking_items?: any[];
+  samples: Array<{
+    id: number;
+    sample_code: string;
+  }>;
+  approvals: Array<{
+    step: number;
+    step_name: string;
+    user?: {
+      full_name: string;
+    };
+    action?: string;
+    comments?: string;
+    executed_actions?: string;
+    processed_at?: string;
+  }>;
 }
 
-export default function DeviationPage() {
-  const [deviations, setDeviations] = useState<Deviation[]>([]);
+export default function DeviationManagement() {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'in_progress' | 'closed'>('pending');
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [deviations, setDeviations] = useState<Deviation[]>([]);
   const [selectedDeviation, setSelectedDeviation] = useState<DeviationDetail | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [samples, setSamples] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('pending');
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  
+  const [filters, setFilters] = useState({
+    project_id: 'all',
+    severity: 'all',
+    category: 'all',
+    reporter: ''
+  });
+  
   const [reportForm, setReportForm] = useState({
     title: '',
-    severity: 'minor',
+    severity: 'minor' as 'minor' | 'major' | 'critical',
     category: '',
-    project_id: '',
     description: '',
     impact_assessment: '',
     immediate_action: '',
-    sample_codes: [] as string[]
+    project_id: null as number | null,
+    sample_ids: [] as number[]
+  });
+
+  const [approvalForm, setApprovalForm] = useState({
+    action: 'approve' as 'approve' | 'reject' | 'execute',
+    comments: '',
+    designated_executor_id: null as number | null,
+    executed_actions: '',
+    root_cause: '',
+    corrective_action: '',
+    preventive_action: ''
   });
 
   useEffect(() => {
     fetchDeviations();
     fetchProjects();
+    fetchSamples();
   }, [activeTab]);
 
   const fetchDeviations = async () => {
+    setLoading(true);
     try {
-      const response = await api.get('/deviations', {
-        params: { status: activeTab }
-      });
+      const params: any = {};
+      if (activeTab === 'pending') {
+        params.status = 'pending_action';
+      } else if (activeTab === 'in_progress') {
+        params.status = 'in_progress';
+      } else if (activeTab === 'completed') {
+        params.status = 'completed';
+      }
+      
+      const response = await api.get('/deviations/', { params });
       setDeviations(response.data);
     } catch (error) {
       console.error('Failed to fetch deviations:', error);
@@ -100,250 +145,330 @@ export default function DeviationPage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects');
+      const response = await api.get('/projects/');
       setProjects(response.data);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
   };
 
-  const fetchDeviationDetail = async (id: number) => {
+  const fetchSamples = async () => {
     try {
-      const response = await api.get(`/deviations/${id}`);
-      setSelectedDeviation(response.data);
+      const response = await api.get('/samples/');
+      setSamples(response.data);
     } catch (error) {
-      console.error('Failed to fetch deviation detail:', error);
+      console.error('Failed to fetch samples:', error);
     }
   };
 
-  const handleReport = async () => {
+  const handleReportDeviation = async () => {
     try {
-      await api.post('/deviations', reportForm);
+      const response = await api.post('/deviations/', reportForm);
+      setDeviations([response.data, ...deviations]);
       setIsReportDialogOpen(false);
-      resetForm();
-      fetchDeviations();
+      setReportForm({
+        title: '',
+        severity: 'minor',
+        category: '',
+        description: '',
+        impact_assessment: '',
+        immediate_action: '',
+        project_id: null,
+        sample_ids: []
+      });
     } catch (error) {
       console.error('Failed to report deviation:', error);
     }
   };
 
-  const handleApprove = async (id: number) => {
+  const handleViewDetail = async (deviation: Deviation) => {
     try {
-      await api.post(`/deviations/${id}/approve`, {
-        root_cause: selectedDeviation?.root_cause,
-        corrective_action: selectedDeviation?.corrective_action,
-        preventive_action: selectedDeviation?.preventive_action
-      });
-      fetchDeviations();
+      const response = await api.get(`/deviations/${deviation.id}`);
+      setSelectedDeviation(response.data);
+      setIsDetailDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch deviation detail:', error);
+    }
+  };
+
+  const handleApprovalAction = async () => {
+    if (!selectedDeviation) return;
+    
+    try {
+      await api.post(`/deviations/${selectedDeviation.id}/process`, approvalForm);
+      setIsApprovalDialogOpen(false);
       setIsDetailDialogOpen(false);
-    } catch (error) {
-      console.error('Failed to approve deviation:', error);
-    }
-  };
-
-  const handleClose = async (id: number) => {
-    if (!confirm('确定要关闭此偏差吗？')) return;
-
-    try {
-      await api.post(`/deviations/${id}/close`);
       fetchDeviations();
+      setApprovalForm({
+        action: 'approve',
+        comments: '',
+        designated_executor_id: null,
+        executed_actions: '',
+        root_cause: '',
+        corrective_action: '',
+        preventive_action: ''
+      });
     } catch (error) {
-      console.error('Failed to close deviation:', error);
+      console.error('Failed to process deviation:', error);
     }
-  };
-
-  const resetForm = () => {
-    setReportForm({
-      title: '',
-      severity: 'minor',
-      category: '',
-      project_id: '',
-      description: '',
-      impact_assessment: '',
-      immediate_action: '',
-      sample_codes: []
-    });
   };
 
   const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'minor':
-        return <Badge color="yellow">轻微</Badge>;
-      case 'major':
-        return <Badge color="orange">重大</Badge>;
-      case 'critical':
-        return <Badge color="red">严重</Badge>;
-      default:
-        return <Badge color="zinc">{severity}</Badge>;
-    }
+    const config = {
+      minor: { color: 'yellow' as const, text: '轻微' },
+      major: { color: 'purple' as const, text: '重大' },
+      critical: { color: 'red' as const, text: '严重' }
+    };
+    const { color, text } = config[severity as keyof typeof config] || { color: 'zinc' as const, text: severity };
+    return <Badge color={color}>{text}</Badge>;
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'reported':
-        return <Badge color="blue">已报告</Badge>;
-      case 'approved':
-        return <Badge color="purple">已批准</Badge>;
-      case 'in_progress':
-        return <Badge color="amber">执行中</Badge>;
-      case 'closed':
-        return <Badge color="green">已关闭</Badge>;
-      default:
-        return <Badge color="zinc">{status}</Badge>;
-    }
+    const config = {
+      pending_action: { color: 'yellow' as const, text: '待处理' },
+      in_progress: { color: 'blue' as const, text: '处理中' },
+      completed: { color: 'green' as const, text: '已完成' },
+      rejected: { color: 'red' as const, text: '已驳回' }
+    };
+    const { color, text } = config[status as keyof typeof config] || { color: 'zinc' as const, text: status };
+    return <Badge color={color}>{text}</Badge>;
   };
 
-  const getCategoryLabel = (category: string) => {
-    const categoryMap: { [key: string]: string } = {
-      'temperature': '温度偏差',
-      'operation': '操作偏差',
-      'equipment': '设备异常',
-      'sample': '样本异常',
-      'process': '流程偏差',
-      'other': '其他'
-    };
-    return categoryMap[category] || category;
+  // 筛选偏差记录
+  const filteredDeviations = deviations.filter(deviation => {
+    if (searchQuery && !deviation.deviation_code.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        !deviation.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    if (filters.project_id !== 'all' && deviation.project?.id !== parseInt(filters.project_id)) {
+      return false;
+    }
+    if (filters.severity !== 'all' && deviation.severity !== filters.severity) {
+      return false;
+    }
+    if (filters.category !== 'all' && deviation.category !== filters.category) {
+      return false;
+    }
+    if (filters.reporter && !deviation.reporter.full_name.toLowerCase().includes(filters.reporter.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+
+  const activeFilterCount = Object.values(filters).filter(v => v && v !== 'all').length;
+
+  const categories = ['温度偏差', '操作偏差', '设备偏差', '样本偏差', '流程偏差', '其他'];
+
+  const canProcessDeviation = (deviation: DeviationDetail) => {
+    if (!deviation.current_step || !user) return false;
+    
+    // 检查用户角色是否匹配当前步骤要求的角色
+    const requiredRole = deviation.current_step.role;
+    return user.role === requiredRole;
   };
 
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        {/* 页面标题 */}
+        <div className="mb-6 flex items-center justify-between">
           <div>
             <Heading>偏差管理</Heading>
-            <Text className="mt-1 text-zinc-600">记录、追踪和处理实验室偏差事件</Text>
+            <Text className="mt-1 text-zinc-600">管理和跟踪实验室偏差事件</Text>
           </div>
-          <Button onClick={() => setIsReportDialogOpen(true)}>
-            <PlusIcon />
+          <Button color="blue" onClick={() => setIsReportDialogOpen(true)}>
+            <PlusIcon className="h-4 w-4" />
             报告偏差
           </Button>
         </div>
 
-        {/* 标签页 */}
-        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'pending'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
+        {/* 筛选区域 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+          {/* 筛选标题栏 */}
+          <div 
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
           >
-            待处理
-          </button>
-          <button
-            onClick={() => setActiveTab('in_progress')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'in_progress'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            执行中
-          </button>
-          <button
-            onClick={() => setActiveTab('closed')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'closed'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            已关闭
-          </button>
-        </div>
-
-        {/* 偏差列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>偏差编号</TableHeader>
-                <TableHeader>标题</TableHeader>
-                <TableHeader>严重程度</TableHeader>
-                <TableHeader>类别</TableHeader>
-                <TableHeader>项目</TableHeader>
-                <TableHeader>报告人</TableHeader>
-                <TableHeader>报告时间</TableHeader>
-                <TableHeader>状态</TableHeader>
-                <TableHeader>操作</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>加载中...</Text>
-                  </TableCell>
-                </TableRow>
-              ) : deviations.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>暂无数据</Text>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                deviations.map((deviation) => (
-                  <TableRow key={deviation.id}>
-                    <TableCell className="font-medium">{deviation.deviation_code}</TableCell>
-                    <TableCell className="max-w-xs truncate">{deviation.title}</TableCell>
-                    <TableCell>{getSeverityBadge(deviation.severity)}</TableCell>
-                    <TableCell>{getCategoryLabel(deviation.category)}</TableCell>
-                    <TableCell>{deviation.project?.lab_project_code || '-'}</TableCell>
-                    <TableCell>{deviation.reported_by.full_name}</TableCell>
-                    <TableCell className="text-zinc-600">
-                      {new Date(deviation.created_at).toLocaleDateString('zh-CN')}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(deviation.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button 
-                          plain
-                          size="small"
-                          onClick={() => {
-                            fetchDeviationDetail(deviation.id);
-                            setIsDetailDialogOpen(true);
-                          }}
-                        >
-                          查看
-                        </Button>
-                        {deviation.status === 'reported' && (
-                          <Button
-                            plain
-                            size="small"
-                            onClick={() => handleApprove(deviation.id)}
-                          >
-                            批准
-                          </Button>
-                        )}
-                        {deviation.status === 'in_progress' && (
-                          <Button
-                            plain
-                            size="small"
-                            onClick={() => handleClose(deviation.id)}
-                          >
-                            关闭
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+            <div className="flex items-center gap-2">
+              <FunnelIcon className="h-5 w-5 text-gray-600" />
+              <span className="font-medium text-gray-900">筛选条件</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {activeFilterCount}
+                </span>
               )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+            </div>
+            <motion.div
+              animate={{ rotate: isFilterExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+            </motion.div>
+          </div>
 
-      {/* 报告偏差对话框 */}
-      <Dialog open={isReportDialogOpen} onClose={setIsReportDialogOpen} size="4xl">
-        <DialogTitle>报告偏差</DialogTitle>
-        <DialogDescription>
-          记录发现的偏差事件并进行初步评估
-        </DialogDescription>
-        <DialogBody>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          {/* 可折叠的筛选内容 */}
+          <AnimatePresence initial={false}>
+            {isFilterExpanded && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* 搜索框行 */}
+                  <div className="mb-4">
+                    <Input
+                      type="text"
+                      placeholder="搜索偏差编号或标题..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full max-w-md h-11"
+                    />
+                  </div>
+
+                  {/* 筛选器行 */}
+                  <div className="grid grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">项目</label>
+                      <Select
+                        value={filters.project_id}
+                        onChange={(e) => setFilters({...filters, project_id: e.target.value})}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部项目</option>
+                        {projects.map(project => (
+                          <option key={project.id} value={project.id}>
+                            {project.lab_project_code}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">严重程度</label>
+                      <Select
+                        value={filters.severity}
+                        onChange={(e) => setFilters({...filters, severity: e.target.value})}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部等级</option>
+                        <option value="minor">轻微</option>
+                        <option value="major">重大</option>
+                        <option value="critical">严重</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">分类</label>
+                      <Select
+                        value={filters.category}
+                        onChange={(e) => setFilters({...filters, category: e.target.value})}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部分类</option>
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">报告人</label>
+                      <Input
+                        type="text"
+                        value={filters.reporter}
+                        onChange={(e) => setFilters({...filters, reporter: e.target.value})}
+                        placeholder="输入报告人姓名"
+                        className="w-full h-11"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Tabs 和内容区域 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Tabs 栏 */}
+          <div className="border-b border-gray-200 px-4 py-3">
+            <Tabs
+              tabs={[
+                { key: 'pending', label: '待处理' },
+                { key: 'in_progress', label: '处理中' },
+                { key: 'completed', label: '已完成' },
+                { key: 'all', label: '全部' }
+              ]}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+            />
+          </div>
+
+          {/* 内容区域 */}
+          <div>
+            <Table bleed={true} striped>
+              <TableHead>
+                <TableRow>
+                  <TableHeader className="pl-6">偏差编号</TableHeader>
+                  <TableHeader>标题</TableHeader>
+                  <TableHeader>严重程度</TableHeader>
+                  <TableHeader>分类</TableHeader>
+                  <TableHeader>项目</TableHeader>
+                  <TableHeader>报告人</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>当前步骤</TableHeader>
+                  <TableHeader>报告时间</TableHeader>
+                  <TableHeader className="text-right pr-6">操作</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <AnimatedLoadingState colSpan={10} />
+                ) : filteredDeviations.length === 0 ? (
+                  <AnimatedEmptyState colSpan={10} text="暂无偏差记录" />
+                ) : (
+                  <AnimatePresence>
+                    {filteredDeviations.map((deviation, index) => (
+                      <AnimatedTableRow key={deviation.id} index={index}>
+                        <TableCell className="font-medium pl-6">{deviation.deviation_code}</TableCell>
+                        <TableCell>{deviation.title}</TableCell>
+                        <TableCell>{getSeverityBadge(deviation.severity)}</TableCell>
+                        <TableCell>{deviation.category}</TableCell>
+                        <TableCell>{deviation.project?.lab_project_code || '-'}</TableCell>
+                        <TableCell>{deviation.reporter.full_name}</TableCell>
+                        <TableCell>{getStatusBadge(deviation.status)}</TableCell>
+                        <TableCell>
+                          {deviation.current_step ? (
+                            <Text className="text-sm">
+                              {deviation.current_step.name}
+                              <br />
+                              <span className="text-zinc-500">({deviation.current_step.role})</span>
+                            </Text>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>{new Date(deviation.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Button plain onClick={() => handleViewDetail(deviation)}>
+                            查看详情
+                          </Button>
+                        </TableCell>
+                      </AnimatedTableRow>
+                    ))}
+                  </AnimatePresence>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* 报告偏差对话框 */}
+        <Dialog open={isReportDialogOpen} onClose={setIsReportDialogOpen} size="2xl">
+          <DialogTitle>报告偏差</DialogTitle>
+          <DialogBody>
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   偏差标题 <span className="text-red-500">*</span>
@@ -351,52 +476,50 @@ export default function DeviationPage() {
                 <Input
                   value={reportForm.title}
                   onChange={(e) => setReportForm({...reportForm, title: e.target.value})}
-                  placeholder="简要描述偏差"
+                  placeholder="简要描述偏差事件"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  严重程度 <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  value={reportForm.severity}
-                  onChange={(e) => setReportForm({...reportForm, severity: e.target.value})}
-                  required
-                >
-                  <option value="minor">轻微 - 不影响数据完整性</option>
-                  <option value="major">重大 - 可能影响数据质量</option>
-                  <option value="critical">严重 - 影响数据完整性或产品质量</option>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    严重程度 <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    value={reportForm.severity}
+                    onChange={(e) => setReportForm({...reportForm, severity: e.target.value as any})}
+                  >
+                    <option value="minor">轻微</option>
+                    <option value="major">重大</option>
+                    <option value="critical">严重</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    偏差类别 <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    value={reportForm.category}
+                    onChange={(e) => setReportForm({...reportForm, category: e.target.value})}
+                    required
+                  >
+                    <option value="">请选择</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </Select>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  偏差类别 <span className="text-red-500">*</span>
+                  关联项目
                 </label>
                 <Select
-                  value={reportForm.category}
-                  onChange={(e) => setReportForm({...reportForm, category: e.target.value})}
-                  required
-                >
-                  <option value="">请选择类别</option>
-                  <option value="temperature">温度偏差</option>
-                  <option value="operation">操作偏差</option>
-                  <option value="equipment">设备异常</option>
-                  <option value="sample">样本异常</option>
-                  <option value="process">流程偏差</option>
-                  <option value="other">其他</option>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  相关项目
-                </label>
-                <Select
-                  value={reportForm.project_id}
-                  onChange={(e) => setReportForm({...reportForm, project_id: e.target.value})}
+                  value={reportForm.project_id || ''}
+                  onChange={(e) => setReportForm({...reportForm, project_id: e.target.value ? Number(e.target.value) : null})}
                 >
                   <option value="">不涉及特定项目</option>
                   {projects.map((project) => (
@@ -406,197 +529,234 @@ export default function DeviationPage() {
                   ))}
                 </Select>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                偏差描述 <span className="text-red-500">*</span>
-              </label>
-              <Textarea
-                value={reportForm.description}
-                onChange={(e) => setReportForm({...reportForm, description: e.target.value})}
-                placeholder="详细描述偏差的具体情况、发现时间、地点等"
-                rows={4}
-                required
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  偏差描述 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={reportForm.description}
+                  onChange={(e) => setReportForm({...reportForm, description: e.target.value})}
+                  placeholder="详细描述偏差的具体情况、发现时间、地点等"
+                  rows={4}
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                影响评估 <span className="text-red-500">*</span>
-              </label>
-              <Textarea
-                value={reportForm.impact_assessment}
-                onChange={(e) => setReportForm({...reportForm, impact_assessment: e.target.value})}
-                placeholder="评估此偏差对样本、数据或流程的潜在影响"
-                rows={3}
-                required
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  影响评估 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={reportForm.impact_assessment}
+                  onChange={(e) => setReportForm({...reportForm, impact_assessment: e.target.value})}
+                  placeholder="评估此偏差对样本、数据或流程的潜在影响"
+                  rows={3}
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                立即采取的措施
-              </label>
-              <Textarea
-                value={reportForm.immediate_action}
-                onChange={(e) => setReportForm({...reportForm, immediate_action: e.target.value})}
-                placeholder="描述已经或即将采取的紧急措施"
-                rows={2}
-              />
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  立即采取的措施
+                </label>
+                <Textarea
+                  value={reportForm.immediate_action}
+                  onChange={(e) => setReportForm({...reportForm, immediate_action: e.target.value})}
+                  placeholder="描述已经或即将采取的紧急措施"
+                  rows={2}
+                />
+              </div>
             </div>
+          </DialogBody>
+          <DialogActions>
+            <Button plain onClick={() => setIsReportDialogOpen(false)}>
+              取消
+            </Button>
+            <Button color="blue" onClick={handleReportDeviation}>
+              提交报告
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                涉及样本（可选）
-              </label>
-              <Textarea
-                placeholder="输入受影响的样本编号，每行一个"
-                onChange={(e) => {
-                  const codes = e.target.value.split('\n').filter(code => code.trim());
-                  setReportForm({...reportForm, sample_codes: codes});
-                }}
-                rows={3}
-              />
-            </div>
-          </div>
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={() => {
-            setIsReportDialogOpen(false);
-            resetForm();
-          }}>
-            取消
-          </Button>
-          <Button 
-            onClick={handleReport}
-            disabled={!reportForm.title || !reportForm.category || !reportForm.description || !reportForm.impact_assessment}
-          >
-            提交报告
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 偏差详情对话框 */}
-      <Dialog open={isDetailDialogOpen} onClose={setIsDetailDialogOpen} size="4xl">
-        <DialogTitle>偏差详情</DialogTitle>
-        <DialogBody>
+        {/* 偏差详情对话框 */}
+        <Dialog open={isDetailDialogOpen} onClose={setIsDetailDialogOpen} size="3xl">
           {selectedDeviation && (
-            <div className="space-y-6">
-              {/* 基本信息 */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <Text className="font-medium text-lg">基本信息</Text>
-                  <div className="flex gap-2">
-                    {getSeverityBadge(selectedDeviation.severity)}
-                    {getStatusBadge(selectedDeviation.status)}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Text className="text-sm text-zinc-600">偏差编号</Text>
-                    <Text className="font-medium">{selectedDeviation.deviation_code}</Text>
-                  </div>
-                  <div>
-                    <Text className="text-sm text-zinc-600">类别</Text>
-                    <Text className="font-medium">{getCategoryLabel(selectedDeviation.category)}</Text>
-                  </div>
-                  <div>
-                    <Text className="text-sm text-zinc-600">报告人</Text>
-                    <Text className="font-medium">{selectedDeviation.reported_by?.full_name}</Text>
-                  </div>
-                  <div>
-                    <Text className="text-sm text-zinc-600">报告时间</Text>
-                    <Text className="font-medium">
-                      {new Date(selectedDeviation.created_at).toLocaleString('zh-CN')}
-                    </Text>
-                  </div>
-                </div>
-              </div>
-
-              {/* 偏差内容 */}
-              <div>
-                <Text className="font-medium mb-2">偏差描述</Text>
-                <div className="p-4 bg-zinc-50 rounded-lg">
-                  <Text>{selectedDeviation.description}</Text>
-                </div>
-              </div>
-
-              <div>
-                <Text className="font-medium mb-2">影响评估</Text>
-                <div className="p-4 bg-zinc-50 rounded-lg">
-                  <Text>{selectedDeviation.impact_assessment}</Text>
-                </div>
-              </div>
-
-              {selectedDeviation.immediate_action && (
-                <div>
-                  <Text className="font-medium mb-2">立即采取的措施</Text>
-                  <div className="p-4 bg-zinc-50 rounded-lg">
-                    <Text>{selectedDeviation.immediate_action}</Text>
-                  </div>
-                </div>
-              )}
-
-              {/* 处理方案 */}
-              {selectedDeviation.status !== 'reported' && (
-                <div className="border-t pt-4">
-                  <Text className="font-medium text-lg mb-4">处理方案</Text>
-                  <div className="space-y-3">
-                    {selectedDeviation.root_cause && (
+            <>
+              <DialogTitle>偏差详情 - {selectedDeviation.deviation_code}</DialogTitle>
+              <DialogBody>
+                <div className="space-y-6">
+                  {/* 基本信息 */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-medium mb-3">基本信息</h3>
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Text className="text-sm text-zinc-600">根本原因</Text>
-                        <Text className="mt-1">{selectedDeviation.root_cause}</Text>
+                        <span className="text-sm text-zinc-600">偏差标题：</span>
+                        <p className="font-medium">{selectedDeviation.title}</p>
                       </div>
-                    )}
-                    {selectedDeviation.corrective_action && (
                       <div>
-                        <Text className="text-sm text-zinc-600">纠正措施</Text>
-                        <Text className="mt-1">{selectedDeviation.corrective_action}</Text>
+                        <span className="text-sm text-zinc-600">严重程度：</span>
+                        <p>{getSeverityBadge(selectedDeviation.severity)}</p>
                       </div>
-                    )}
-                    {selectedDeviation.preventive_action && (
                       <div>
-                        <Text className="text-sm text-zinc-600">预防措施</Text>
-                        <Text className="mt-1">{selectedDeviation.preventive_action}</Text>
+                        <span className="text-sm text-zinc-600">分类：</span>
+                        <p className="font-medium">{selectedDeviation.category}</p>
                       </div>
-                    )}
+                      <div>
+                        <span className="text-sm text-zinc-600">状态：</span>
+                        <p>{getStatusBadge(selectedDeviation.status)}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-zinc-600">报告人：</span>
+                        <p className="font-medium">{selectedDeviation.reporter.full_name}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-zinc-600">报告时间：</span>
+                        <p className="font-medium">{new Date(selectedDeviation.created_at).toLocaleString('zh-CN')}</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* 执行跟踪 */}
-              {selectedDeviation.tracking_items && selectedDeviation.tracking_items.length > 0 && (
-                <div className="border-t pt-4">
-                  <Text className="font-medium text-lg mb-4">执行跟踪</Text>
-                  <div className="space-y-2">
-                    {selectedDeviation.tracking_items.map((item: any) => (
-                      <div key={item.id} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-lg">
-                        {item.completed ? (
-                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <ClockIcon className="h-5 w-5 text-zinc-400" />
-                        )}
-                        <div className="flex-1">
-                          <Text>{item.action}</Text>
-                          <Text className="text-sm text-zinc-600">
-                            负责人：{item.assignee} · 期限：{new Date(item.due_date).toLocaleDateString('zh-CN')}
-                          </Text>
+                  {/* 偏差描述 */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">偏差描述</h3>
+                    <p className="text-zinc-700">{selectedDeviation.description}</p>
+                  </div>
+
+                  {/* 影响评估 */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">影响评估</h3>
+                    <p className="text-zinc-700">{selectedDeviation.impact_assessment}</p>
+                  </div>
+
+                  {/* 立即措施 */}
+                  {selectedDeviation.immediate_action && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-2">立即采取的措施</h3>
+                      <p className="text-zinc-700">{selectedDeviation.immediate_action}</p>
+                    </div>
+                  )}
+
+                  {/* 审批流程 */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-3">审批流程</h3>
+                    <div className="space-y-3">
+                      {selectedDeviation.approvals.map((approval) => (
+                        <div key={approval.step} className="border rounded-lg p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium">{approval.step_name}</p>
+                              {approval.user && (
+                                <p className="text-sm text-zinc-600">处理人：{approval.user.full_name}</p>
+                              )}
+                            </div>
+                            {approval.action && (
+                              <Badge color={approval.action === 'approve' ? 'green' : 'red'}>
+                                {approval.action === 'approve' ? '已批准' : '已驳回'}
+                              </Badge>
+                            )}
+                          </div>
+                          {approval.comments && (
+                            <p className="mt-2 text-sm text-zinc-700">意见：{approval.comments}</p>
+                          )}
+                          {approval.processed_at && (
+                            <p className="mt-1 text-sm text-zinc-500">
+                              处理时间：{new Date(approval.processed_at).toLocaleString('zh-CN')}
+                            </p>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
+              </DialogBody>
+              <DialogActions>
+                <Button plain onClick={() => setIsDetailDialogOpen(false)}>
+                  关闭
+                </Button>
+                {canProcessDeviation(selectedDeviation) && (
+                  <Button color="blue" onClick={() => {
+                    setIsDetailDialogOpen(false);
+                    setIsApprovalDialogOpen(true);
+                  }}>
+                    处理偏差
+                  </Button>
+                )}
+              </DialogActions>
+            </>
+          )}
+        </Dialog>
+
+        {/* 处理偏差对话框 */}
+        <Dialog open={isApprovalDialogOpen} onClose={setIsApprovalDialogOpen} size="xl">
+          <DialogTitle>处理偏差</DialogTitle>
+          <DialogBody>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  处理意见 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={approvalForm.action}
+                  onChange={(e) => setApprovalForm({...approvalForm, action: e.target.value as any})}
+                >
+                  <option value="approve">批准</option>
+                  <option value="reject">驳回</option>
+                  <option value="execute">执行纠正措施</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  处理意见说明 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={approvalForm.comments}
+                  onChange={(e) => setApprovalForm({...approvalForm, comments: e.target.value})}
+                  placeholder="请输入您的处理意见"
+                  rows={3}
+                  required
+                />
+              </div>
+
+              {approvalForm.action === 'execute' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      执行的纠正措施
+                    </label>
+                    <Textarea
+                      value={approvalForm.executed_actions}
+                      onChange={(e) => setApprovalForm({...approvalForm, executed_actions: e.target.value})}
+                      placeholder="描述已执行的纠正措施"
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      根本原因分析
+                    </label>
+                    <Textarea
+                      value={approvalForm.root_cause}
+                      onChange={(e) => setApprovalForm({...approvalForm, root_cause: e.target.value})}
+                      placeholder="分析导致偏差的根本原因"
+                      rows={3}
+                    />
+                  </div>
+                </>
               )}
             </div>
-          )}
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={() => setIsDetailDialogOpen(false)}>
-            关闭
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogBody>
+          <DialogActions>
+            <Button plain onClick={() => setIsApprovalDialogOpen(false)}>
+              取消
+            </Button>
+            <Button color="blue" onClick={handleApprovalAction}>
+              确认处理
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </div>
     </AppLayout>
   );
 }
