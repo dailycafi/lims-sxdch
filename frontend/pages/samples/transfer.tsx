@@ -124,7 +124,7 @@ export default function SampleTransferPage() {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await api.get('/global_params/organizations');
+      const response = await api.get('/global-params/organizations');  // 修改为使用连字符
       setOrganizations(response.data);
     } catch (error) {
       console.error('Failed to fetch organizations:', error);

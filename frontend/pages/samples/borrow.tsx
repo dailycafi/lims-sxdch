@@ -25,6 +25,8 @@ import {
   ChevronUpIcon,
   XMarkIcon
 } from '@heroicons/react/20/solid';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { ProjectsService, GlobalParamsService, SamplesService } from '@/services';
 
 interface BorrowRequest {
   id: number;
@@ -82,7 +84,12 @@ export default function SampleBorrowPage() {
     purpose: '',
     target_location: '',
     target_date: '',
-    notes: ''
+    notes: '',
+    quantity: 1,
+    unit: 'mL',
+    expected_return_date: '',
+    borrower_name: '',
+    borrower_contact: ''
   });
 
   useEffect(() => {
@@ -93,7 +100,7 @@ export default function SampleBorrowPage() {
   const fetchRequests = async () => {
     try {
       const response = await api.get('/samples/borrow-requests', {
-        params: { status: viewMode } // 根据 viewMode 筛选
+        params: { status: viewMode !== 'all' ? viewMode : undefined }
       });
       setRequests(response.data);
     } catch (error) {
@@ -105,8 +112,8 @@ export default function SampleBorrowPage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects');
-      setProjects(response.data);
+      const projects = await ProjectsService.getProjects();
+      setProjects(projects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
@@ -162,7 +169,10 @@ export default function SampleBorrowPage() {
       await api.post('/samples/borrow-request', {
         project_id: selectedProject,
         sample_codes: selectedSamples,
-        ...borrowForm
+        purpose: borrowForm.purpose,
+        target_location: borrowForm.target_location,
+        target_date: borrowForm.target_date,
+        notes: borrowForm.notes
       });
       
       setIsRequestDialogOpen(false);
@@ -205,7 +215,12 @@ export default function SampleBorrowPage() {
       purpose: '',
       target_location: '',
       target_date: '',
-      notes: ''
+      notes: '',
+      quantity: 1,
+      unit: 'mL',
+      expected_return_date: '',
+      borrower_name: '',
+      borrower_contact: ''
     });
   };
 
@@ -500,14 +515,7 @@ export default function SampleBorrowPage() {
               </TableHead>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
-                        <Text className="text-zinc-500">加载中...</Text>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <AnimatedLoadingState colSpan={9} variant="skeleton" />
                 ) : filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-12">

@@ -180,8 +180,8 @@ async def read_samples(
     return samples
 
 
-@router.get("/{sample_code}", response_model=SampleResponse)
-async def read_sample(
+@router.get("/by-code/{sample_code}", response_model=SampleResponse)
+async def read_sample_by_code(
     sample_code: str,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
@@ -613,7 +613,7 @@ async def get_borrow_request(
         .options(
             selectinload(SampleBorrowRequest.project),
             selectinload(SampleBorrowRequest.requester),
-            selectinload(SampleBorrowRequest.samples).selectinload(SampleBorrowItem.sample)
+            selectinload(SampleBorrowItem.sample)
         )
         .where(SampleBorrowRequest.id == request_id)
     )

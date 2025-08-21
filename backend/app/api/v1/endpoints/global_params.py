@@ -39,6 +39,38 @@ class SampleTypeCreate(BaseModel):
 class SampleTypeUpdate(SampleTypeCreate):
     audit_reason: str  # 修改理由
 
+class OrganizationResponse(BaseModel):
+    id: int
+    name: str
+    org_type: str
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[EmailStr] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True  # 允许从 ORM 对象创建
+
+class SampleTypeResponse(BaseModel):
+    id: int
+    cycle_group: Optional[str] = None
+    test_type: Optional[str] = None
+    primary_count: int
+    backup_count: int
+    purpose: Optional[str] = None
+    transport_method: Optional[str] = None
+    status: Optional[str] = None
+    special_notes: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
 
 def check_global_params_permission(user: User) -> bool:
     """检查全局参数管理权限"""
@@ -69,7 +101,7 @@ async def create_audit_log(
     await db.commit()
 
 
-@router.post("/organizations", response_model=dict)
+@router.post("/organizations", response_model=OrganizationResponse)
 async def create_organization(
     org_data: OrganizationCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -107,7 +139,7 @@ async def create_organization(
         )
 
 
-@router.get("/organizations", response_model=List[dict])
+@router.get("/organizations", response_model=List[OrganizationResponse])
 async def read_organizations(
     org_type: Optional[str] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -121,10 +153,10 @@ async def read_organizations(
     
     result = await db.execute(query.order_by(Organization.name))
     orgs = result.scalars().all()
-    return orgs
+    return orgs  # Pydantic 会自动转换
 
 
-@router.put("/organizations/{org_id}", response_model=dict)
+@router.put("/organizations/{org_id}", response_model=OrganizationResponse)
 async def update_organization(
     org_id: int,
     org_data: OrganizationUpdate,
@@ -231,7 +263,7 @@ async def delete_organization(
     return {"message": "组织删除成功"}
 
 
-@router.post("/sample-types", response_model=dict)
+@router.post("/sample-types", response_model=SampleTypeResponse)
 async def create_sample_type(
     sample_type_data: SampleTypeCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -262,7 +294,7 @@ async def create_sample_type(
     return db_sample_type
 
 
-@router.get("/sample-types", response_model=List[dict])
+@router.get("/sample-types", response_model=List[SampleTypeResponse])
 async def read_sample_types(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
@@ -275,7 +307,7 @@ async def read_sample_types(
     return sample_types
 
 
-@router.put("/sample-types/{sample_type_id}", response_model=dict)
+@router.put("/sample-types/{sample_type_id}", response_model=SampleTypeResponse)
 async def update_sample_type(
     sample_type_id: int,
     sample_type_data: SampleTypeUpdate,

@@ -25,8 +25,10 @@ import {
 } from '@heroicons/react/20/solid';
 import { Tabs } from '@/components/tabs';
 import { SearchInput } from '@/components/search-input';
+import { AnimatedLoadingState } from '@/components/animated-table';
 import clsx from 'clsx'
 import React from 'react'
+import { ProjectsService, GlobalParamsService, SamplesService } from '@/services';
 
 interface ReceiveTask {
   id: number;
@@ -109,8 +111,8 @@ export default function SampleReceivePage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects/');  // 添加尾部斜杠
-      setProjects(response.data);
+      const projects = await ProjectsService.getProjects();
+      setProjects(projects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
@@ -118,8 +120,8 @@ export default function SampleReceivePage() {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await api.get('/global-params/organizations');  // 修改为 global-params（连字符）
-      setOrganizations(response.data);
+      const organizations = await GlobalParamsService.getOrganizations();
+      setOrganizations(organizations);
     } catch (error) {
       console.error('Failed to fetch organizations:', error);
     }
@@ -142,10 +144,10 @@ export default function SampleReceivePage() {
       }
       
       expressPhotos.forEach((photo, index) => {
-        formDataToSend.append(`express_photos_${index}`, photo);
+        formDataToSend.append(`express_photos[${index}]`, photo);
       });
 
-      await api.post('/samples/receive', formDataToSend, {
+      const response = await api.post('/samples/receive-task', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -590,19 +592,7 @@ export default function SampleReceivePage() {
               <TableBody>
                 <AnimatePresence mode="wait">
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12">
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex flex-col items-center gap-3"
-                        >
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
-                          <Text className="text-zinc-500">加载中...</Text>
-                        </motion.div>
-                      </TableCell>
-                    </TableRow>
+                    <AnimatedLoadingState colSpan={9} variant="skeleton" />
                   ) : filteredAndSortedTasks.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-12">

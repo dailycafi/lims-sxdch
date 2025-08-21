@@ -11,6 +11,8 @@ import { Text } from '@/components/text';
 import { Textarea } from '@/components/textarea';
 import { api } from '@/lib/api';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon } from '@heroicons/react/20/solid';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { AnimatePresence } from 'framer-motion';
 
 interface Organization {
   id: number;
@@ -93,8 +95,8 @@ export default function GlobalParamsPage() {
     setLoading(true);
     try {
       const [orgsRes, sampleTypesRes] = await Promise.all([
-        api.get('/global_params/organizations'),
-        api.get('/global_params/sample-types'),
+        api.get('/global-params/organizations'),
+        api.get('/global-params/sample-types'),
       ]);
       setOrganizations(orgsRes.data);
       setSampleTypes(sampleTypesRes.data);
@@ -108,7 +110,7 @@ export default function GlobalParamsPage() {
   // 组织管理
   const handleCreateOrg = async () => {
     try {
-      await api.post('/global_params/organizations', orgForm);
+      await api.post('/global-params/organizations', orgForm);
       setIsOrgDialogOpen(false);
       resetOrgForm();
       fetchData();
@@ -120,7 +122,7 @@ export default function GlobalParamsPage() {
   const handleUpdateOrg = async () => {
     if (!editingOrg) return;
     try {
-      await api.put(`/global_params/organizations/${editingOrg.id}`, {
+      await api.put(`/global-params/organizations/${editingOrg.id}`, {
         ...orgForm,
         audit_reason: auditReason,
       });
@@ -135,7 +137,7 @@ export default function GlobalParamsPage() {
   const handleDeleteOrg = async (id: number) => {
     if (!confirm('确定要删除此组织吗？')) return;
     try {
-      await api.delete(`/global_params/organizations/${id}`);
+      await api.delete(`/global-params/organizations/${id}`);
       fetchData();
     } catch (error) {
       console.error('Failed to delete organization:', error);
@@ -175,7 +177,7 @@ export default function GlobalParamsPage() {
   // 样本类型管理
   const handleCreateSampleType = async () => {
     try {
-      await api.post('/global_params/sample-types', sampleTypeForm);
+      await api.post('/global-params/sample-types', sampleTypeForm);
       setIsSampleTypeDialogOpen(false);
       resetSampleTypeForm();
       fetchData();
@@ -187,7 +189,7 @@ export default function GlobalParamsPage() {
   const handleUpdateSampleType = async () => {
     if (!editingSampleType) return;
     try {
-      await api.put(`/global_params/sample-types/${editingSampleType.id}`, {
+      await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
         ...sampleTypeForm,
         audit_reason: auditReason,
       });
@@ -202,7 +204,7 @@ export default function GlobalParamsPage() {
   const handleDeleteSampleType = async (id: number) => {
     if (!confirm('确定要删除此样本类型配置吗？')) return;
     try {
-      await api.delete(`/global_params/sample-types/${id}`);
+      await api.delete(`/global-params/sample-types/${id}`);
       fetchData();
     } catch (error) {
       console.error('Failed to delete sample type:', error);
@@ -338,11 +340,7 @@ export default function GlobalParamsPage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        <Text>加载中...</Text>
-                      </TableCell>
-                    </TableRow>
+                    <AnimatedLoadingState colSpan={7} variant="skeleton" />
                   ) : filteredOrganizations.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8">
@@ -409,11 +407,7 @@ export default function GlobalParamsPage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
-                        <Text>加载中...</Text>
-                      </TableCell>
-                    </TableRow>
+                    <AnimatedLoadingState colSpan={9} variant="skeleton" />
                   ) : sampleTypes.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8">

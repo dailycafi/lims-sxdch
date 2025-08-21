@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authAPI } from '@/lib/api';
+import { tokenManager } from '@/lib/token-manager';
 
 interface User {
   id: number;
@@ -26,19 +27,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   
   login: async (username: string, password: string) => {
-    await authAPI.login(username, password);
+    const loginResponse = await authAPI.login(username, password);
+    
+    // 确保 token 已经保存
+    if (!loginResponse.access_token) {
+      throw new Error('登录失败：未收到访问令牌');
+    }
+    
+    // token 已经通过 tokenManager 保存，并自动更新到 axios
+    // 直接获取用户信息
     const user = await authAPI.getCurrentUser();
     set({ user, isAuthenticated: true });
   },
   
   logout: () => {
-    localStorage.removeItem('access_token');
+    tokenManager.removeToken();
     set({ user: null, isAuthenticated: false });
   },
   
   checkAuth: async () => {
     try {
-      const token = localStorage.getItem('access_token');
+      const token = tokenManager.getToken();
       if (!token) {
         set({ user: null, isAuthenticated: false, isLoading: false });
         return;

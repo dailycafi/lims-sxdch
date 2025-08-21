@@ -71,23 +71,26 @@ export default function NewProjectPage() {
               <Label>申办者项目编号</Label>
               <Input
                 {...register('sponsor_project_code', { required: '请输入申办者项目编号' })}
-                error={errors.sponsor_project_code?.message}
               />
+              {errors.sponsor_project_code && (
+                <p className="text-sm text-red-600 mt-1">{errors.sponsor_project_code.message}</p>
+              )}
             </Field>
 
             <Field>
               <Label>实验室项目编号</Label>
               <Input
                 {...register('lab_project_code', { required: '请输入实验室项目编号' })}
-                error={errors.lab_project_code?.message}
               />
+              {errors.lab_project_code && (
+                <p className="text-sm text-red-600 mt-1">{errors.lab_project_code.message}</p>
+              )}
             </Field>
 
             <Field>
               <Label>申办者</Label>
               <Select
                 {...register('sponsor_id', { required: '请选择申办者' })}
-                error={errors.sponsor_id?.message}
               >
                 <option value="">请选择</option>
                 {sponsors.map((org: any) => (
@@ -96,13 +99,15 @@ export default function NewProjectPage() {
                   </option>
                 ))}
               </Select>
+              {errors.sponsor_id && (
+                <p className="text-sm text-red-600 mt-1">{errors.sponsor_id.message}</p>
+              )}
             </Field>
 
             <Field>
               <Label>临床机构</Label>
               <Select
                 {...register('clinical_org_id', { required: '请选择临床机构' })}
-                error={errors.clinical_org_id?.message}
               >
                 <option value="">请选择</option>
                 {clinicalOrgs.map((org: any) => (
@@ -111,6 +116,9 @@ export default function NewProjectPage() {
                   </option>
                 ))}
               </Select>
+              {errors.clinical_org_id && (
+                <p className="text-sm text-red-600 mt-1">{errors.clinical_org_id.message}</p>
+              )}
             </Field>
           </Fieldset>
 
@@ -118,7 +126,7 @@ export default function NewProjectPage() {
             <Button type="submit" disabled={isLoading}>
               {isLoading ? '创建中...' : '创建项目'}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => router.back()}>
+            <Button type="button" plain onClick={() => router.back()}>
               取消
             </Button>
           </div>

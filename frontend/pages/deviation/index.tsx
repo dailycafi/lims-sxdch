@@ -27,12 +27,12 @@ import {
   ChevronUpIcon,
   ChevronDownIcon
 } from '@heroicons/react/20/solid';
+import { DeviationsService, ProjectsService, SamplesService } from '@/services';
+import type { Deviation as APIDeviation } from '@/types/api';
 
-interface Deviation {
-  id: number;
+// Extend the API type to include the additional fields your UI needs
+interface Deviation extends APIDeviation {
   deviation_code: string;
-  title: string;
-  severity: 'minor' | 'major' | 'critical';
   category: string;
   reporter: {
     full_name: string;
@@ -41,13 +41,11 @@ interface Deviation {
     id: number;
     lab_project_code: string;
   };
-  status: string;
   current_step?: {
     step: number;
     name: string;
     role: string;
   };
-  created_at: string;
 }
 
 interface DeviationDetail extends Deviation {
@@ -88,13 +86,17 @@ export default function DeviationManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
   
+  // Update the filters interface to match what's actually being used
   const [filters, setFilters] = useState({
     project_id: 'all',
     severity: 'all',
     category: 'all',
-    reporter: ''
+    reporter: '',
+    status: 'all',  // Add this
+    type: 'all'     // Add this
   });
   
+  // Update the reportForm to match DeviationCreate type
   const [reportForm, setReportForm] = useState({
     title: '',
     severity: 'minor' as 'minor' | 'major' | 'critical',
@@ -103,8 +105,24 @@ export default function DeviationManagement() {
     impact_assessment: '',
     immediate_action: '',
     project_id: null as number | null,
-    sample_ids: [] as number[]
+    sample_ids: [] as number[],
+    type: ''  // Add this required field
   });
+
+  // Add the missing resetReportForm function
+  const resetReportForm = () => {
+    setReportForm({
+      title: '',
+      severity: 'minor',
+      category: '',
+      description: '',
+      impact_assessment: '',
+      immediate_action: '',
+      project_id: null,
+      sample_ids: [],
+      type: ''
+    });
+  };
 
   const [approvalForm, setApprovalForm] = useState({
     action: 'approve' as 'approve' | 'reject' | 'execute',
@@ -125,17 +143,27 @@ export default function DeviationManagement() {
   const fetchDeviations = async () => {
     setLoading(true);
     try {
-      const params: any = {};
-      if (activeTab === 'pending') {
-        params.status = 'pending_action';
-      } else if (activeTab === 'in_progress') {
-        params.status = 'in_progress';
-      } else if (activeTab === 'completed') {
-        params.status = 'completed';
-      }
-      
-      const response = await api.get('/deviations/', { params });
-      setDeviations(response.data);
+      const params = {
+        status: filters.status !== 'all' ? filters.status : undefined,
+        severity: filters.severity !== 'all' ? 
+          (filters.severity === 'minor' ? 'low' : 
+           filters.severity === 'major' ? 'medium' : 
+           'high') as 'low' | 'medium' | 'high' : undefined,
+        type: filters.type !== 'all' ? filters.type : undefined,
+      };
+      const deviations = await DeviationsService.getDeviations(params);
+      // Transform API response to match local Deviation type
+      const transformedDeviations = deviations.map(d => ({
+        ...d,
+        deviation_code: d.code, // API uses 'code' instead of 'deviation_code'
+        category: d.type || '', // API uses 'type' instead of 'category'
+        reporter: {
+          full_name: (d.created_by as any)?.full_name || 'Unknown' // Adjust based on actual API response
+        },
+        project: undefined, // Add if needed
+        current_step: undefined // Add if needed
+      }));
+      setDeviations(transformedDeviations);
     } catch (error) {
       console.error('Failed to fetch deviations:', error);
     } finally {
@@ -145,8 +173,8 @@ export default function DeviationManagement() {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects/');
-      setProjects(response.data);
+      const projects = await ProjectsService.getProjects();
+      setProjects(projects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
@@ -154,30 +182,25 @@ export default function DeviationManagement() {
 
   const fetchSamples = async () => {
     try {
-      const response = await api.get('/samples/');
-      setSamples(response.data);
+      const samples = await SamplesService.getSamples();
+      setSamples(samples);
     } catch (error) {
       console.error('Failed to fetch samples:', error);
     }
   };
 
-  const handleReportDeviation = async () => {
+  const handleCreateDeviation = async () => {
     try {
-      const response = await api.post('/deviations/', reportForm);
-      setDeviations([response.data, ...deviations]);
-      setIsReportDialogOpen(false);
-      setReportForm({
-        title: '',
-        severity: 'minor',
-        category: '',
-        description: '',
-        impact_assessment: '',
-        immediate_action: '',
-        project_id: null,
-        sample_ids: []
+      await DeviationsService.createDeviation({
+        ...reportForm,
+        severity: reportForm.severity === 'minor' ? 'low' : 
+                  reportForm.severity === 'major' ? 'medium' : 'high'
       });
+      setIsReportDialogOpen(false);
+      resetReportForm();
+      fetchDeviations();
     } catch (error) {
-      console.error('Failed to report deviation:', error);
+      console.error('Failed to create deviation:', error);
     }
   };
 
@@ -426,7 +449,7 @@ export default function DeviationManagement() {
               </TableHead>
               <TableBody>
                 {loading ? (
-                  <AnimatedLoadingState colSpan={10} />
+                  <AnimatedLoadingState colSpan={10} variant="skeleton" />
                 ) : filteredDeviations.length === 0 ? (
                   <AnimatedEmptyState colSpan={10} text="暂无偏差记录" />
                 ) : (
@@ -573,7 +596,7 @@ export default function DeviationManagement() {
             <Button plain onClick={() => setIsReportDialogOpen(false)}>
               取消
             </Button>
-            <Button color="blue" onClick={handleReportDeviation}>
+            <Button color="blue" onClick={handleCreateDeviation}>
               提交报告
             </Button>
           </DialogActions>

@@ -1,7 +1,27 @@
 import axios, { AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
+import { tokenManager } from './token-manager';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// 添加全局调试标志
+if (typeof window !== 'undefined') {
+  (window as any).__DEBUG_API__ = true;
+}
+
+// 根据环境自动选择 URL
+const getApiUrl = () => {
+  // 生产环境：使用相对路径（通过 nginx 或其他反向代理）
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+  }
+  
+  // 开发环境：直接调用后端（绕过有问题的 rewrites）
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+};
+
+const API_URL = getApiUrl();
+
+console.log('[API Module] Environment:', process.env.NODE_ENV);
+console.log('[API Module] API URL:', API_URL);
 
 // 创建axios实例
 export const api = axios.create({
@@ -11,19 +31,56 @@ export const api = axios.create({
   },
 });
 
-// 请求拦截器
+// 初始化时设置已存在的 token（仅在客户端）
+if (typeof window !== 'undefined') {
+  const existingToken = tokenManager.getToken();
+  if (existingToken) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
+    console.log('[API Init] Token set on module load');
+  }
+}
+
+// 请求拦截器 - 确保每次请求都有最新的 token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // 强制从 localStorage 获取最新 token
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      
+      if ((window as any).__DEBUG_API__) {
+        console.log('[API Debug] Request to:', config.url);
+        console.log('[API Debug] Token from localStorage:', token ? token.substring(0, 20) + '...' : 'null');
+        console.log('[API Debug] Headers before:', {...config.headers});
+      }
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      
+      if ((window as any).__DEBUG_API__) {
+        console.log('[API Debug] Headers after:', {...config.headers});
+      }
     }
+    
     return config;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
+
+// 监听 token 变化，自动更新请求头
+if (typeof window !== 'undefined') {
+  tokenManager.addListener((token) => {
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      console.log('[API] Token updated via listener');
+    } else {
+      delete api.defaults.headers.common['Authorization'];
+      console.log('[API] Token removed via listener');
+    }
+  });
+}
 
 // 响应拦截器
 let isRedirecting = false; // 防止多次重定向
@@ -39,7 +96,7 @@ api.interceptors.response.use(
     // 处理 401 错误 - 只显示一次提示
     if (error.response?.status === 401 && !isRedirecting) {
       isRedirecting = true;
-      localStorage.removeItem('access_token');
+      tokenManager.removeToken();
       toast.error('登录已过期，请重新登录');
       setTimeout(() => {
         window.location.href = '/login';
@@ -96,7 +153,7 @@ export const authAPI = {
     });
     
     if (response.data.access_token) {
-      localStorage.setItem('access_token', response.data.access_token);
+      tokenManager.setToken(response.data.access_token);
     }
     
     return response.data;

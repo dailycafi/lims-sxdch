@@ -17,6 +17,8 @@ import {
   LockClosedIcon,
   ArrowDownTrayIcon
 } from '@heroicons/react/20/solid';
+import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { AnimatePresence } from 'framer-motion';
 
 interface AuditLog {
   id: number;
@@ -286,11 +288,7 @@ export default function AuditPage() {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <Text>加载中...</Text>
-                  </TableCell>
-                </TableRow>
+                <AnimatedLoadingState colSpan={9} variant="skeleton" />
               ) : logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8">

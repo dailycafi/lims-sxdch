@@ -19,6 +19,7 @@ import {
   XMarkIcon 
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { SamplesService, ProjectsService } from '@/services';
 
 
 const statusColors: Record<string, any> = {
@@ -70,8 +71,8 @@ export default function SamplesPage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects/');
-      setProjects(response.data);
+      const projects = await ProjectsService.getProjects();
+      setProjects(projects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
@@ -80,32 +81,12 @@ export default function SamplesPage() {
   const fetchSamples = async () => {
     setIsLoading(true);
     try {
-      const params: any = {};
-      
-      // 只有当不是 'all' 时才添加参数
-      if (filters.project && filters.project !== 'all') {
-        params.project_id = filters.project;
-      }
-      if (filters.status && filters.status !== 'all') {
-        params.status = filters.status;
-      }
-      
-      // 添加其他筛选参数
-      if (filters.sampleCode) {
-        params.sample_code = filters.sampleCode;
-      }
-      if (filters.storageLocation && filters.storageLocation !== 'all') {
-        params.storage_location = filters.storageLocation;
-      }
-      if (filters.dateFrom) {
-        params.date_from = filters.dateFrom;
-      }
-      if (filters.dateTo) {
-        params.date_to = filters.dateTo;
-      }
-      
-      const response = await api.get('/samples/', { params });
-      setSamples(response.data);
+      const params = {
+        project_id: filters.project !== 'all' ? parseInt(filters.project) : undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
+      };
+      const samples = await SamplesService.getSamples(params);
+      setSamples(samples);
     } catch (error) {
       console.error('Failed to fetch samples:', error);
     } finally {
@@ -349,7 +330,7 @@ export default function SamplesPage() {
                     <AnimatedLoadingState 
                       key="loading"
                       colSpan={8} 
-                      variant="dots"
+                      variant="skeleton"
                     />
                   ) : filteredSamples.length === 0 ? (
                     <AnimatedEmptyState

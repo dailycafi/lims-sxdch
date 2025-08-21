@@ -344,7 +344,7 @@ export default function StatisticsPage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <AnimatedLoadingState colSpan={6} />
+                    <AnimatedLoadingState colSpan={6} variant="skeleton" />
                   ) : filteredRecords.length === 0 ? (
                     <AnimatedEmptyState colSpan={6} text="暂无数据" />
                   ) : (
@@ -381,7 +381,7 @@ export default function StatisticsPage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <AnimatedLoadingState colSpan={6} />
+                    <AnimatedLoadingState colSpan={6} variant="skeleton" />
                   ) : exposureRecords.length === 0 ? (
                     <AnimatedEmptyState colSpan={6} text="暂无数据" />
                   ) : (
@@ -415,7 +415,7 @@ export default function StatisticsPage() {
             <div className="p-6">
               {loading ? (
                 <div className="flex justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <AnimatedLoadingState colSpan={1} variant="skeleton" />
                 </div>
               ) : statistics ? (
                 <div className="grid grid-cols-2 gap-6">

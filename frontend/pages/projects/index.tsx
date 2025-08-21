@@ -10,7 +10,6 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
-import { api } from '@/lib/api';
 import { 
   PlusIcon, 
   FolderIcon,
@@ -19,15 +18,19 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { ProjectsService } from '@/services';
 
 interface Project {
   id: number;
-  lab_project_code: string;
-  sponsor_project_code: string;
-  sponsor: string;
-  status: string;
+  code: string; // This is lab_project_code
+  name: string; // This is sponsor_project_code  
+  lab_project_code: string; // Add for compatibility
+  sponsor_project_code: string; // Add for compatibility
+  sponsor: string; // Add for compatibility
+  status: 'active' | 'completed' | 'cancelled';
   created_at: string;
   sample_count?: number;
+  applicant_org?: any;
 }
 
 export default function ProjectsPage() {
@@ -52,8 +55,15 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/projects/');
-      setProjects(response.data);
+      const projects = await ProjectsService.getProjects();
+      const transformedProjects = projects.map(p => ({
+        ...p,
+        lab_project_code: p.code, // API uses 'code' instead of 'lab_project_code'
+        sponsor_project_code: p.name, // Map to appropriate field
+        sponsor: p.applicant_org?.name || '', // Use the organization name
+        sample_count: 0 // Add default if not provided
+      }));
+      setProjects(transformedProjects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     } finally {
@@ -265,7 +275,7 @@ export default function ProjectsPage() {
             </TableHead>
             <TableBody>
               {loading ? (
-                <AnimatedLoadingState colSpan={7} />
+                <AnimatedLoadingState colSpan={7} variant="skeleton" />
               ) : filteredProjects.length === 0 ? (
                 <AnimatedEmptyState colSpan={7} text="暂无项目数据" />
               ) : (

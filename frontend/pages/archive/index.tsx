@@ -369,7 +369,7 @@ export default function ArchivePage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <AnimatedLoadingState colSpan={7} />
+                    <AnimatedLoadingState colSpan={7} variant="skeleton" />
                   ) : filteredProjects.length === 0 ? (
                     <AnimatedEmptyState colSpan={7} text="暂无进行中的项目" />
                   ) : (
@@ -412,7 +412,7 @@ export default function ArchivePage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <AnimatedLoadingState colSpan={7} />
+                    <AnimatedLoadingState colSpan={7} variant="skeleton" />
                   ) : filteredRequests.length === 0 ? (
                     <AnimatedEmptyState colSpan={7} text="暂无待归档申请" />
                   ) : (
@@ -460,7 +460,7 @@ export default function ArchivePage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    <AnimatedLoadingState colSpan={7} />
+                    <AnimatedLoadingState colSpan={7} variant="skeleton" />
                   ) : filteredProjects.length === 0 ? (
                     <AnimatedEmptyState colSpan={7} text="暂无已归档项目" />
                   ) : (

@@ -115,7 +115,7 @@ export function AnimatedSkeletonRows({ colSpan, rowCount = 5 }: { colSpan: numbe
 // 增强的加载状态组件
 export function AnimatedLoadingState({ 
   colSpan, 
-  variant = 'spinner',
+  variant = 'skeleton',
   text = '加载中...'
 }: { 
   colSpan: number;
@@ -199,7 +199,7 @@ export function AnimatedTableData({
   emptyIcon,
   emptyText = '暂无数据',
   colSpan,
-  loadingVariant = 'spinner'
+  loadingVariant = 'skeleton'
 }: {
   data: any[];
   renderRow: (item: any, index: number) => React.ReactNode;

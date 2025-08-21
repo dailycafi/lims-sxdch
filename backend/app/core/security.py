@@ -33,6 +33,8 @@ def decode_token(token: str) -> dict:
     """解码令牌"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        print(f"[DEBUG] Token decoded successfully: {payload}")
         return payload
-    except JWTError:
+    except JWTError as e:
+        print(f"[DEBUG] Token decode error: {type(e).__name__}: {str(e)}")
         return None
