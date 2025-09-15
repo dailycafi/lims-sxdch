@@ -159,6 +159,37 @@ async def get_exposure_records(
     return exposure_records
 
 
+class AlertThresholds(BaseModel):
+    max_temperature_c: Optional[float] = 8.0
+    max_exposure_minutes: Optional[int] = 30
+
+
+@router.post("/alerts/check")
+async def check_alerts(
+    project_id: Optional[int] = None,
+    thresholds: AlertThresholds = AlertThresholds(),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """基于阈值检查暴露记录是否预警，返回命中列表。温度暂用占位字段。"""
+    records = await get_exposure_records(project_id, None, None, current_user, db)
+    alerts = []
+    for r in records:
+        temp = r.get('max_temperature', -20)
+        duration = r.get('duration', 0)
+        hit = False
+        reasons = []
+        if thresholds.max_temperature_c is not None and temp > thresholds.max_temperature_c:
+            hit = True
+            reasons.append(f"温度 {temp}°C 超过阈值 {thresholds.max_temperature_c}°C")
+        if thresholds.max_exposure_minutes is not None and duration > thresholds.max_exposure_minutes:
+            hit = True
+            reasons.append(f"暴露 {duration} 分钟超过阈值 {thresholds.max_exposure_minutes} 分钟")
+        if hit:
+            alerts.append({**r, 'reasons': reasons})
+    return {"alerts": alerts, "count": len(alerts)}
+
+
 @router.get("/summary")
 async def get_statistics_summary(
     project_id: Optional[int] = None,

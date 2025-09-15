@@ -453,7 +453,17 @@ export default function SampleInventoryPage() {
         </div>
 
         {/* 操作按钮 */}
-        <div className="flex justify-end gap-4">
+        <div className="flex justify-between gap-4">
+          <div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.open(`/api/v1/samples/receive-records/${id}/export`, '_blank');
+              }}
+            >
+              导出清单表（Excel）
+            </Button>
+          </div>
           <Button variant="secondary" onClick={() => router.back()}>
             取消
           </Button>

@@ -64,6 +64,8 @@ export default function StatisticsPage() {
   });
   const [projects, setProjects] = useState<any[]>([]);
   const [exposureRecords, setExposureRecords] = useState<any[]>([]);
+  const [alertThresholds, setAlertThresholds] = useState({ max_temperature_c: 8, max_exposure_minutes: 30 });
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     fetchProjects();
@@ -117,6 +119,18 @@ export default function StatisticsPage() {
       console.error('Failed to fetch exposure records:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAlerts = async () => {
+    try {
+      const response = await api.post('/statistics/alerts/check', {
+        project_id: filters.project_id !== 'all' ? parseInt(filters.project_id) : undefined,
+        thresholds: alertThresholds
+      });
+      setAlerts(response.data.alerts || []);
+    } catch (e) {
+      console.error('Failed to fetch alerts:', e);
     }
   };
 
@@ -368,6 +382,22 @@ export default function StatisticsPage() {
 
           {activeTab === 'exposure' && (
             <div>
+              <div className="px-4 py-3 border-b bg-gray-50 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Text className="text-sm">温度报警线(°C)</Text>
+                  <Input type="number" className="h-9 w-24" value={alertThresholds.max_temperature_c}
+                    onChange={(e)=> setAlertThresholds({...alertThresholds, max_temperature_c: parseFloat(e.target.value)})}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Text className="text-sm">暴露时长报警线(分钟)</Text>
+                  <Input type="number" className="h-9 w-28" value={alertThresholds.max_exposure_minutes}
+                    onChange={(e)=> setAlertThresholds({...alertThresholds, max_exposure_minutes: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+                <Button onClick={fetchAlerts}>检查报警</Button>
+                <Text className="text-sm text-zinc-600">命中 {alerts.length} 条</Text>
+              </div>
               <Table bleed={true} striped>
                 <TableHead>
                   <TableRow>
@@ -392,12 +422,12 @@ export default function StatisticsPage() {
                           <TableCell>{record.project}</TableCell>
                           <TableCell>{record.location}</TableCell>
                           <TableCell>
-                            <Badge color={record.temperature > 8 ? 'red' : 'green'}>
+                            <Badge color={record.temperature > (alertThresholds.max_temperature_c ?? 8) ? 'red' : 'green'}>
                               {record.temperature}°C
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge color={record.exposure_duration > 30 ? 'red' : 'yellow'}>
+                            <Badge color={record.exposure_duration > (alertThresholds.max_exposure_minutes ?? 30) ? 'red' : 'yellow'}>
                               {record.exposure_duration} 分钟
                             </Badge>
                           </TableCell>
@@ -408,6 +438,21 @@ export default function StatisticsPage() {
                   )}
                 </TableBody>
               </Table>
+              {alerts.length > 0 && (
+                <div className="p-4">
+                  <Heading level={3} className="mb-3">报警命中</Heading>
+                  <div className="space-y-2">
+                    {alerts.map((a, i) => (
+                      <div key={i} className="p-3 bg-rose-50 border border-rose-200 rounded">
+                        <Text className="font-mono text-sm">{a.sample_code}</Text>
+                        <div className="text-sm text-rose-700 mt-1">
+                          {(a.reasons || []).join('；')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

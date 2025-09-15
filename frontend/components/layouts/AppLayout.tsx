@@ -11,7 +11,8 @@ import {
   SidebarItem,
   SidebarHeading,
   SidebarSpacer,
-  SidebarLabel
+  SidebarLabel,
+  SidebarFooter  // 添加 SidebarFooter
 } from '@/components/sidebar';
 import { Navbar } from '@/components/navbar';
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown';
@@ -212,6 +213,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             <SidebarSpacer />
           </SidebarBody>
+
+          {/* 添加底部登出按钮 */}
+          <SidebarFooter>
+            <SidebarSection>
+              <SidebarItem onClick={handleLogout}>
+                <ArrowRightOnRectangleIcon data-slot="icon" className="!w-4 !h-4" />
+                <SidebarLabel>退出登录</SidebarLabel>
+              </SidebarItem>
+            </SidebarSection>
+          </SidebarFooter>
         </Sidebar>
       }
     >

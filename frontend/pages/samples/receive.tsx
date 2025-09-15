@@ -357,7 +357,7 @@ export default function SampleReceivePage() {
   // 创建可排序的表头组件
   const SortableHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
     <TableHeader 
-      className={`cursor-pointer hover:bg-zinc-50 select-none ${field === 'id' ? 'pl-6' : ''} ${field === 'operation' ? 'pr-6' : ''}`}
+      className={`${field !== 'operation' ? 'cursor-pointer hover:bg-zinc-50 select-none' : ''} ${field === 'id' ? 'pl-6' : ''} ${field === 'operation' ? 'pr-6' : ''}`}
       onClick={() => field !== 'operation' && handleSort(field)}
     >
       <div className="flex items-center gap-1">
@@ -656,6 +656,40 @@ export default function SampleReceivePage() {
                                 开始清点
                               </Button>
                             </motion.div>
+                          )}
+                          {task.status === 'in_progress' && (
+                            <motion.div
+                              className="flex items-center gap-2"
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              <Button 
+                                color="blue" 
+                                onClick={() => handleStartInventory(task.id)}
+                                className="gap-1.5"
+                              >
+                                <CheckIcon className="h-4 w-4" />
+                                继续清点
+                              </Button>
+                            </motion.div>
+                          )}
+                          {task.status === 'completed' && (
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                outline
+                                onClick={() => window.location.href = `/samples/inventory/${task.id}`}
+                                className="gap-1.5"
+                              >
+                                查看详情
+                              </Button>
+                              <Button 
+                                plain
+                                onClick={() => window.open(`${api.defaults.baseURL}/samples/receive-records/${task.id}/export`, '_blank')}
+                                className="gap-1.5"
+                              >
+                                导出清单
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                       </motion.tr>

@@ -14,6 +14,7 @@ class SampleStatus(str, enum.Enum):
     TRANSFERRED = "transferred"  # 已转移
     DESTROYED = "destroyed"  # 已销毁
     RETURNED = "returned"  # 已归还
+    ARCHIVED = "archived"  # 已归档（样本归档）
 
 
 class SamplePurpose(str, enum.Enum):
@@ -237,4 +238,47 @@ class SampleDestroyItem(Base):
     
     # 关系
     request = relationship("SampleDestroyRequest", back_populates="samples")
+    sample = relationship("Sample")
+
+
+class SampleArchiveRequest(Base):
+    """样本归档申请"""
+    __tablename__ = "sample_archive_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_code = Column(String, unique=True, nullable=False)  # 申请编号
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    requested_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    reason = Column(Text, nullable=True)  # 归档理由
+    notes = Column(Text, nullable=True)
+
+    status = Column(String, default="pending")  # pending, ready, completed, rejected
+
+    # 执行记录
+    executed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 关系
+    project = relationship("Project")
+    requester = relationship("User", foreign_keys=[requested_by])
+    executor = relationship("User", foreign_keys=[executed_by])
+    samples = relationship("SampleArchiveItem", back_populates="request")
+
+
+class SampleArchiveItem(Base):
+    """样本归档明细"""
+    __tablename__ = "sample_archive_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(Integer, ForeignKey("sample_archive_requests.id"), nullable=False)
+    sample_id = Column(Integer, ForeignKey("samples.id"), nullable=False)
+
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+
+    # 关系
+    request = relationship("SampleArchiveRequest", back_populates="samples")
     sample = relationship("Sample")

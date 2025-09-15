@@ -6,13 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from pydantic import BaseModel
 import json
+from io import BytesIO
 
 from app.core.database import get_db
-from app.models.sample import Sample, SampleStatus, SampleReceiveRecord, SampleBorrowRequest, SampleBorrowItem, SampleTransferRecord, SampleTransferItem, SampleDestroyRequest, SampleDestroyItem
+from app.models.sample import Sample, SampleStatus, SampleReceiveRecord, SampleBorrowRequest, SampleBorrowItem, SampleTransferRecord, SampleTransferItem, SampleDestroyRequest, SampleDestroyItem, SampleArchiveRequest, SampleArchiveItem
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.schemas.sample import SampleCreate, SampleUpdate, SampleResponse
 from app.api.v1.endpoints.auth import get_current_user
+from fastapi.responses import StreamingResponse
+import pandas as pd
 
 router = APIRouter()
 
@@ -156,6 +159,16 @@ async def get_receive_tasks(
         })
     
     return tasks
+
+
+@router.get("/receive-records", response_model=List[dict])
+async def list_receive_records(
+    status: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """接收记录列表（与 /receive-tasks 等价，作为别名便于前端接入）"""
+    return await get_receive_tasks(status=status, current_user=current_user, db=db)  # type: ignore
 
 
 @router.get("/", response_model=List[SampleResponse])
@@ -427,6 +440,75 @@ async def complete_inventory(
     await db.commit()
     
     return {"message": "清点完成"}
+
+
+@router.get("/receive-records/{record_id}/export")
+async def export_receive_record_checklist(
+    record_id: int,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """导出临床样本清单表（Excel）"""
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(SampleReceiveRecord).options(
+            selectinload(SampleReceiveRecord.project),
+            selectinload(SampleReceiveRecord.clinical_org),
+            selectinload(SampleReceiveRecord.transport_org),
+            selectinload(SampleReceiveRecord.receiver)
+        ).where(SampleReceiveRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="接收记录不存在")
+
+    # 明细：如果已创建样本，导出样本编号；否则导出预计样本编号
+    result = await db.execute(select(Sample).where(Sample.project_id == record.project_id))
+    samples = result.scalars().all()
+    detail_rows = []
+    if samples:
+        for s in samples:
+            detail_rows.append({
+                "样本编号": s.sample_code,
+                "特殊事项": getattr(s, "special_notes", "")
+            })
+    else:
+        expected = await get_expected_samples(record_id, current_user, db)  # type: ignore
+        for code in expected:
+            detail_rows.append({
+                "样本编号": code,
+                "特殊事项": ""
+            })
+
+    # 头部信息
+    header_rows = [
+        {"字段": "申办者", "值": record.project.sponsor.name if getattr(record.project, "sponsor", None) else ""},
+        {"字段": "申办者项目编号", "值": record.project.sponsor_project_code if record.project else ""},
+        {"字段": "临床机构/分中心", "值": record.clinical_org.name if record.clinical_org else ""},
+        {"字段": "检测单位/部门", "值": record.project.testing_org.name if getattr(record.project, "testing_org", None) else ""},
+        {"字段": "临床试验研究室项目编号", "值": record.project.lab_project_code if record.project else ""},
+        {"字段": "运输单位/运输方式", "值": f"{record.transport_org.name if record.transport_org else ''}/{record.transport_method}"},
+        {"字段": "样本数量", "值": record.sample_count},
+        {"字段": "样本状态", "值": record.sample_status},
+        {"字段": "接收人/接收时间", "值": f"{record.receiver.full_name if record.receiver else ''} / {record.received_at.isoformat()}"},
+    ]
+
+    # 生成Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        pd.DataFrame(header_rows).to_excel(writer, index=False, sheet_name="Header")
+        pd.DataFrame(detail_rows).to_excel(writer, index=False, sheet_name="Details")
+        writer.close()
+
+    output.seek(0)
+    filename = f"receive_checklist_{record_id}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
 
 
 @router.post("/storage/assign")
@@ -856,8 +938,16 @@ async def create_external_transfer(
     # 保存审批文件
     approval_file_path = None
     if approval_file:
-        # TODO: 实现文件保存逻辑
-        approval_file_path = f"uploads/approvals/transfer_{datetime.now().timestamp()}"
+        import os
+        os.makedirs("uploads/approvals", exist_ok=True)
+        file_extension = os.path.splitext(approval_file.filename or "")[1]
+        safe_ext = file_extension if len(file_extension) <= 10 else ""
+        file_name = f"transfer_{datetime.now().strftime('%Y%m%d_%H%M%S')}{safe_ext}"
+        file_path = os.path.join("uploads/approvals", file_name)
+        content = await approval_file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        approval_file_path = file_path
     
     # 生成转移编号
     count = await db.execute(
@@ -1150,8 +1240,16 @@ async def create_destroy_request(
     # 保存审批文件
     approval_file_path = None
     if approval_file:
-        # TODO: 实现文件保存逻辑
-        approval_file_path = f"uploads/approvals/destroy_{datetime.now().timestamp()}"
+        import os
+        os.makedirs("uploads/approvals", exist_ok=True)
+        file_extension = os.path.splitext(approval_file.filename or "")[1]
+        safe_ext = file_extension if len(file_extension) <= 10 else ""
+        file_name = f"destroy_{datetime.now().strftime('%Y%m%d_%H%M%S')}{safe_ext}"
+        file_path = os.path.join("uploads/approvals", file_name)
+        content = await approval_file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        approval_file_path = file_path
     
     # 生成申请编号
     count = await db.execute(
@@ -1463,3 +1561,126 @@ async def execute_destroy(
     await db.commit()
     
     return {"message": f"成功销毁 {len(items)} 个样本"}
+
+
+# 样本归档相关API（简化流）
+@router.post("/archive-request")
+async def create_sample_archive_request(
+    project_id: int = Form(...),
+    sample_codes: str = Form(...),  # JSON数组字符串
+    reason: str = Form(""),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """创建样本归档申请"""
+    if not check_sample_permission(current_user, "request"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限申请归档")
+
+    try:
+        codes = json.loads(sample_codes)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="样本编号格式错误")
+
+    # 生成申请编号
+    count = await db.execute(select(func.count()).select_from(SampleArchiveRequest))
+    count_value = count.scalar() or 0
+    request_code = f"SAR-{datetime.now().strftime('%Y%m%d')}-{count_value + 1:04d}"
+
+    archive_request = SampleArchiveRequest(
+        request_code=request_code,
+        project_id=project_id,
+        requested_by=current_user.id,
+        reason=reason,
+        status="pending"
+    )
+    db.add(archive_request)
+    await db.commit()
+    await db.refresh(archive_request)
+
+    # 添加明细
+    for code in codes:
+        result = await db.execute(select(Sample).where(Sample.sample_code == code))
+        sample = result.scalar_one_or_none()
+        if sample:
+            item = SampleArchiveItem(request_id=archive_request.id, sample_id=sample.id)
+            db.add(item)
+    await db.commit()
+
+    # 审计
+    db.add(AuditLog(
+        user_id=current_user.id,
+        entity_type="sample_archive",
+        entity_id=archive_request.id,
+        action="create",
+        details={"project_id": project_id, "count": len(codes)},
+        timestamp=datetime.utcnow()
+    ))
+    await db.commit()
+
+    return {"message": "样本归档申请创建成功", "request_code": request_code}
+
+
+@router.get("/archive-requests")
+async def get_sample_archive_requests(
+    status: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(SampleArchiveRequest)
+    if status:
+        query = query.where(SampleArchiveRequest.status == status)
+    result = await db.execute(query.order_by(SampleArchiveRequest.created_at.desc()))
+    reqs = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "request_code": r.request_code,
+            "project_id": r.project_id,
+            "requested_by": r.requested_by,
+            "status": r.status,
+            "created_at": r.created_at.isoformat()
+        } for r in reqs
+    ]
+
+
+@router.post("/archive-request/{request_id}/execute")
+async def execute_sample_archive(
+    request_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """执行样本归档，将样本状态置为 archived"""
+    if current_user.role not in [UserRole.SAMPLE_ADMIN, UserRole.SYSTEM_ADMIN]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限执行归档")
+
+    result = await db.execute(select(SampleArchiveRequest).where(SampleArchiveRequest.id == request_id))
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="归档申请不存在")
+
+    result = await db.execute(select(SampleArchiveItem).where(SampleArchiveItem.request_id == request_id))
+    items = result.scalars().all()
+
+    for item in items:
+        sres = await db.execute(select(Sample).where(Sample.id == item.sample_id))
+        sample = sres.scalar_one_or_none()
+        if sample:
+            sample.status = SampleStatus.ARCHIVED
+            item.archived_at = datetime.utcnow()
+
+    req.status = "completed"
+    req.executed_by = current_user.id
+    req.executed_at = datetime.utcnow()
+    await db.commit()
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        entity_type="sample_archive",
+        entity_id=request_id,
+        action="execute",
+        details={"archived": len(items)},
+        timestamp=datetime.utcnow()
+    ))
+    await db.commit()
+
+    return {"message": f"成功归档 {len(items)} 个样本"}

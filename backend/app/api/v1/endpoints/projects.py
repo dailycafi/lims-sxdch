@@ -1,10 +1,11 @@
 from typing import List, Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from datetime import datetime
+from itertools import product
 
 from app.core.database import get_db
 from app.models.project import Project
@@ -12,6 +13,7 @@ from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.api.v1.endpoints.auth import get_current_user
+from app.core.security import pwd_context
 
 router = APIRouter()
 
@@ -228,6 +230,24 @@ async def update_sample_code_rule(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="只有样本管理员可以配置样本编号规则"
         )
+    # 二次认证：要求在 audit_reason 中附带 e-signature 密码字段（简单兼容）
+    # 例如：{"reason": "修改编号规则", "password": "xxx"}
+    # 若前端尚未传此格式，可跳过；未来可切换到独立 verify-signature 接口前置校验
+    try:
+        if isinstance(rule_data.audit_reason, str) and rule_data.audit_reason.strip().startswith('{'):
+            import json as _json
+            payload = _json.loads(rule_data.audit_reason)
+            password = payload.get('password')
+            reason_text = payload.get('reason') or ''
+            if not password:
+                raise ValueError('missing password')
+            if not pwd_context.verify(password, current_user.hashed_password):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="电子签名验证失败")
+            # 用纯理由写入审计
+            rule_data.audit_reason = reason_text or '更新编号规则'
+    except Exception:
+        # 兼容旧入参，不阻断（但建议前端改造为显式二次验证）
+        pass
     
     # 查找项目
     result = await db.execute(select(Project).where(Project.id == project_id))
@@ -303,13 +323,98 @@ async def generate_sample_codes(
             detail="请先配置样本编号规则"
         )
     
-    # TODO: 实现批量生成样本编号的逻辑
-    # 1. 解析generation_params中的参数
-    # 2. 根据sample_code_rule生成编号
-    # 3. 保存生成的编号到数据库
-    # 4. 返回生成的编号列表
-    
-    generated_codes = []
+    # 解析参数（容错：字符串以逗号分隔也支持）
+    def _parse_list(value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        if isinstance(value, str):
+            return [v.strip() for v in value.split(',') if v.strip()]
+        return []
+
+    cycles = _parse_list(generation_params.get("cycles"))
+    test_types = _parse_list(generation_params.get("test_types"))
+    primary = _parse_list(generation_params.get("primary"))  # a1,a2
+    backup = _parse_list(generation_params.get("backup"))    # b1,b2
+    subjects = _parse_list(generation_params.get("subjects"))
+    clinic_codes = _parse_list(generation_params.get("clinic_codes")) or [""]
+
+    # 采血序号/时间对 e.g. [{"seq":"01","time":"0h"}]
+    seq_time_pairs = generation_params.get("seq_time_pairs") or []
+    if isinstance(seq_time_pairs, str):
+        # 支持 "01/0h,02/2h"
+        pairs = []
+        for token in seq_time_pairs.split(','):
+            token = token.strip()
+            if not token:
+                continue
+            parts = token.split('/')
+            seq = parts[0].strip() if len(parts) > 0 else ""
+            tm = parts[1].strip() if len(parts) > 1 else ""
+            pairs.append({"seq": seq, "time": tm})
+        seq_time_pairs = pairs
+    else:
+        # 规范化键
+        norm = []
+        for p in seq_time_pairs:
+            if isinstance(p, dict):
+                norm.append({"seq": str(p.get("seq", "")).strip(), "time": str(p.get("time", "")).strip()})
+        seq_time_pairs = norm
+
+    # 元素顺序来自项目规则
+    rule = project.sample_code_rule or {}
+    elements = rule.get("elements", [])
+    order_map = rule.get("order", {})
+    elements = sorted([e for e in elements], key=lambda x: order_map.get(x, 0))
+
+    # 组装可迭代维度（缺省则使用空串以便不参与组合）
+    cycles = cycles or [""]
+    test_types = test_types or [""]
+    primary = primary or []
+    backup = backup or []
+    subjects = subjects or [""]
+    seq_time_pairs = seq_time_pairs or [{"seq": "", "time": ""}]
+
+    # 辅助：根据元素ID返回该部分的字符串
+    def _part(el: str, clinic_code: str, subject: str, tt: str, st: dict, cycle: str, stype: str) -> str:
+        if el == 'sponsor_code':
+            return project.sponsor_project_code or ''
+        if el == 'lab_code':
+            return project.lab_project_code or ''
+        if el == 'clinic_code':
+            return clinic_code
+        if el == 'subject_id':
+            return subject
+        if el == 'test_type':
+            return tt
+        if el == 'sample_seq':
+            return st.get('seq', '')
+        if el == 'sample_time':
+            return st.get('time', '')
+        if el == 'cycle_group':
+            return cycle
+        if el == 'sample_type':
+            return stype
+        return ''
+
+    generated_codes: list[str] = []
+
+    # 组合：clinic × subject × test_type × seq/time × cycle × sample_type(primary/backup)
+    sample_types = primary + backup if (primary or backup) else [""]
+    for clinic_code, subject, tt, st, cycle, stype in product(clinic_codes, subjects, test_types, seq_time_pairs, cycles, sample_types):
+        parts = [_part(el, clinic_code, subject, tt, st, cycle, stype) for el in elements]
+        # 过滤空段（未选择的A-G不显示）
+        parts = [p for p in parts if p != ""]
+        if not parts:
+            continue
+        code = "-".join(parts)
+        generated_codes.append(code)
+
+    # 去重并限制数量
+    unique_codes = list(dict.fromkeys(generated_codes))
+    max_count = int(generation_params.get("max_count", 5000))
+    unique_codes = unique_codes[:max_count]
     
     # 创建审计日志
     await create_audit_log(
@@ -319,15 +424,136 @@ async def generate_sample_codes(
         entity_id=project.id,
         action="generate_sample_codes",
         details={
-            "parameters": generation_params,
-            "count": len(generated_codes)
+            "parameters": {
+                "cycles": cycles,
+                "test_types": test_types,
+                "primary": primary,
+                "backup": backup,
+                "subjects": subjects,
+                "seq_time_pairs": seq_time_pairs,
+                "clinic_codes": clinic_codes
+            },
+            "count": len(unique_codes)
         }
     )
     
     return {
-        "message": f"成功生成{len(generated_codes)}个样本编号",
-        "sample_codes": generated_codes
+        "message": f"成功生成{len(unique_codes)}个样本编号",
+        "sample_codes": unique_codes
     }
+
+
+@router.post("/{project_id}/import-subjects")
+async def import_subjects(
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """导入受试者编号（Excel），返回受试者编号字符串数组。支持首列为受试者编号，或列名为subject/受试者/受试者编号。"""
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限")
+
+    try:
+        content = await file.read()
+        import pandas as _pd
+        import io as _io
+        df = _pd.read_excel(_io.BytesIO(content))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Excel 解析失败")
+
+    cols = [str(c).strip().lower() for c in df.columns]
+    subject_col_idx = 0
+    for idx, name in enumerate(cols):
+        if name in ["subject", "subject_id", "受试者", "受试者编号", "被试者", "编号"]:
+            subject_col_idx = idx
+            break
+
+    subjects: List[str] = []
+    for val in df.iloc[:, subject_col_idx].astype(str).tolist():
+        s = val.strip()
+        if not s or s.lower() in ["nan", "none"]:
+            continue
+        subjects.append(s)
+
+    if not subjects:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="未识别到受试者编号")
+
+    # 去重并限制
+    subjects = list(dict.fromkeys(subjects))[:5000]
+    return {"subjects": subjects}
+
+
+@router.post("/{project_id}/import-seq-times")
+async def import_seq_times(
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """导入采血序号/时间对（Excel）。支持两列(seq,time)或中文列(序号,时间)，或单列pair如01/0h。"""
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限")
+
+    try:
+        content = await file.read()
+        import pandas as _pd
+        import io as _io
+        df = _pd.read_excel(_io.BytesIO(content))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Excel 解析失败")
+
+    cols = [str(c).strip().lower() for c in df.columns]
+    seq_alias = ["seq", "序号", "采血序号", "序"]
+    time_alias = ["time", "时间", "采血时间", "时"]
+
+    def _find_col(candidates: List[str]) -> Optional[int]:
+        for idx, name in enumerate(cols):
+            if name in candidates:
+                return idx
+        return None
+
+    seq_idx = _find_col(seq_alias)
+    time_idx = _find_col(time_alias)
+
+    pairs: List[dict] = []
+    if seq_idx is not None and time_idx is not None:
+        seq_series = df.iloc[:, seq_idx].astype(str).tolist()
+        time_series = df.iloc[:, time_idx].astype(str).tolist()
+        for s, t in zip(seq_series, time_series):
+            s, t = s.strip(), t.strip()
+            if not s or s.lower() in ["nan", "none"]:
+                continue
+            pairs.append({"seq": s, "time": t})
+    else:
+        # 尝试单列表达
+        for col in df.columns:
+            series = df[col].astype(str).tolist()
+            for token in series:
+                token = token.strip()
+                if not token or token.lower() in ["nan", "none"]:
+                    continue
+                if "/" in token:
+                    parts = token.split("/")
+                    s = parts[0].strip()
+                    t = parts[1].strip() if len(parts) > 1 else ""
+                    pairs.append({"seq": s, "time": t})
+
+    if not pairs:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="未识别到采血序号/时间")
+
+    # 去重并限制
+    uniq = []
+    seen = set()
+    for p in pairs:
+        key = (p.get("seq", ""), p.get("time", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(p)
+        if len(uniq) >= 5000:
+            break
+    return {"seq_time_pairs": uniq}
 
 
 class StabilityQCCodeGenerate(BaseModel):

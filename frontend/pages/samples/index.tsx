@@ -325,7 +325,7 @@ export default function SamplesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <AnimatePresence mode="wait">
+                <AnimatePresence>
                   {isLoading ? (
                     <AnimatedLoadingState 
                       key="loading"
@@ -342,31 +342,33 @@ export default function SamplesPage() {
                         : '暂无样本数据'}
                     />
                   ) : (
-                    filteredSamples.map((sample, index) => (
-                      <AnimatedTableRow key={sample.id} index={index}>
-                        <TableCell className="font-medium pl-6">{sample.sample_code}</TableCell>
-                        <TableCell>{sample.project?.lab_project_code || '-'}</TableCell>
-                        <TableCell>{sample.subject_code || '-'}</TableCell>
-                        <TableCell>{sample.test_type || '-'}</TableCell>
-                        <TableCell>{sample.collection_time || '-'}</TableCell>
-                        <TableCell>
-                          <Badge color={statusColors[sample.status] || 'zinc'}>
-                            {statusLabels[sample.status] || sample.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{sample.freezer_id ? `${sample.freezer_id}-${sample.shelf_level}-${sample.rack_position}` : '-'}</TableCell>
-                        <TableCell className="pr-6">
-                          <motion.div
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            <Button color="zinc">
-                              查看详情
-                            </Button>
-                          </motion.div>
-                        </TableCell>
-                      </AnimatedTableRow>
-                    ))
+                    <>
+                      {filteredSamples.map((sample, index) => (
+                        <AnimatedTableRow key={sample.id} index={index}>
+                          <TableCell className="font-medium pl-6">{sample.sample_code}</TableCell>
+                          <TableCell>{sample.project?.lab_project_code || '-'}</TableCell>
+                          <TableCell>{sample.subject_code || '-'}</TableCell>
+                          <TableCell>{sample.test_type || '-'}</TableCell>
+                          <TableCell>{sample.collection_time || '-'}</TableCell>
+                          <TableCell>
+                            <Badge color={statusColors[sample.status] || 'zinc'}>
+                              {statusLabels[sample.status] || sample.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{sample.freezer_id ? `${sample.freezer_id}-${sample.shelf_level}-${sample.rack_position}` : '-'}</TableCell>
+                          <TableCell className="pr-6">
+                            <motion.div
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              <Button color="zinc">
+                                查看详情
+                              </Button>
+                            </motion.div>
+                          </TableCell>
+                        </AnimatedTableRow>
+                      ))}
+                    </>
                   )}
                 </AnimatePresence>
               </TableBody>

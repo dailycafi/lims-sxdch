@@ -13,6 +13,7 @@ import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { api } from '@/lib/api';
+import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { 
   CogIcon, 
   DocumentTextIcon, 
@@ -65,15 +66,18 @@ export default function ProjectDetailPage() {
   const [isBatchGenerateDialogOpen, setIsBatchGenerateDialogOpen] = useState(false);
   const [selectedElements, setSelectedElements] = useState<SampleCodeElement[]>([]);
   const [auditReason, setAuditReason] = useState('');
+  const [isESignatureOpen, setIsESignatureOpen] = useState(false);
+  const [pendingSaveRule, setPendingSaveRule] = useState<any | null>(null);
   
   // 批量生成表单
   const [batchForm, setBatchForm] = useState({
-    cycles: [],
-    testTypes: [],
-    primaryCounts: [],
-    backupCounts: [],
-    subjects: '',
-    sampleSeqs: '',
+    cycles: [] as string[],
+    testTypes: [] as string[],
+    primary: [] as string[],
+    backup: [] as string[],
+    subjects: '' as string,
+    sampleSeqs: '' as string,
+    clinicCodes: '' as string,
   });
 
   // 稳定性及质控样本
@@ -119,26 +123,41 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveCodeRule = async () => {
-    try {
-      const enabledElements = selectedElements.filter(el => el.enabled);
-      const rule = {
-        elements: enabledElements.map(el => el.id),
-        order: enabledElements.reduce((acc, el, index) => ({
-          ...acc,
-          [el.id]: index,
-        }), {}),
-      };
+    const enabledElements = selectedElements.filter(el => el.enabled);
+    const rule = {
+      elements: enabledElements.map(el => el.id),
+      order: enabledElements.reduce((acc, el, index) => ({
+        ...acc,
+        [el.id]: index,
+      }), {}),
+    };
+    setPendingSaveRule(rule);
+    setIsESignatureOpen(true);
+  };
 
-      await api.put(`/projects/${id}/sample-code-rule`, {
-        sample_code_rule: rule,
-        audit_reason: auditReason,
-      });
+  const handleESignatureConfirm = async (password: string, reasonText: string) => {
+    if (!pendingSaveRule) return;
+    try {
+      // 先验证电子签名
+      await api.post('/auth/verify-signature', { password, purpose: 'update_sample_code_rule' });
+
+      // 提交规则，携带密码（后端做兼容校验）
+      const payload = {
+        sample_code_rule: pendingSaveRule,
+        audit_reason: JSON.stringify({ reason: auditReason || reasonText, password })
+      };
+      await api.put(`/projects/${id}/sample-code-rule`, payload);
 
       setIsConfigDialogOpen(false);
       setAuditReason('');
+      setPendingSaveRule(null);
+      setIsESignatureOpen(false);
       fetchProject();
-    } catch (error) {
-      console.error('Failed to save sample code rule:', error);
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw new Error('密码错误，请重试');
+      }
+      throw new Error('保存失败，请重试');
     }
   };
 
@@ -441,6 +460,17 @@ export default function ProjectDetailPage() {
         </DialogActions>
       </Dialog>
 
+      {/* 电子签名对话框 */}
+      <ESignatureDialog
+        open={isESignatureOpen}
+        onClose={setIsESignatureOpen}
+        onConfirm={handleESignatureConfirm}
+        title="保存样本编号规则"
+        description="该操作较为敏感，需要进行电子签名验证。"
+        requireReason={false}
+        actionType="approve"
+      />
+
       {/* 批量生成样本编号对话框 */}
       <Dialog open={isBatchGenerateDialogOpen} onClose={setIsBatchGenerateDialogOpen} size="xl">
         <DialogTitle>批量生成样本编号</DialogTitle>
@@ -457,25 +487,51 @@ export default function ProjectDetailPage() {
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     周期/组别（可多选）
                   </label>
-                  <Input placeholder="如：A,B,C 或 第1期,第2期" />
+                  <Input 
+                    placeholder="如：A,B,C 或 第1期,第2期"
+                    value={batchForm.cycles.join(',')}
+                    onChange={(e) => setBatchForm({...batchForm, cycles: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     检测类型（可多选）
                   </label>
-                  <Input placeholder="如：PK,PD 或 血清,血浆" />
+                  <Input 
+                    placeholder="如：PK,PD 或 血清,血浆"
+                    value={batchForm.testTypes.join(',')}
+                    onChange={(e) => setBatchForm({...batchForm, testTypes: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     正份（可多选）
                   </label>
-                  <Input placeholder="如：a1,a2" />
+                  <Input 
+                    placeholder="如：a1,a2"
+                    value={batchForm.primary.join(',')}
+                    onChange={(e) => setBatchForm({...batchForm, primary: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     备份（可多选）
                   </label>
-                  <Input placeholder="如：b1,b2" />
+                  <Input 
+                    placeholder="如：b1,b2"
+                    value={batchForm.backup.join(',')}
+                    onChange={(e) => setBatchForm({...batchForm, backup: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    临床机构编号（可选，逗号分隔）
+                  </label>
+                  <Input 
+                    placeholder="如：01,02,03"
+                    value={batchForm.clinicCodes}
+                    onChange={(e) => setBatchForm({...batchForm, clinicCodes: e.target.value})}
+                  />
                 </div>
               </div>
               
@@ -491,10 +547,21 @@ export default function ProjectDetailPage() {
                       value={batchForm.subjects}
                       onChange={(e) => setBatchForm({...batchForm, subjects: e.target.value})}
                     />
-                    <Button plain>
+                    <Button plain onClick={() => document.getElementById('subjects-file')?.click()}>
                       <ArrowUpTrayIcon />
                       导入Excel
                     </Button>
+                    <input id="subjects-file" type="file" accept=".xlsx,.xls" className="hidden" 
+                      onChange={async (e) => {
+                        if (!e.target.files || !e.target.files[0]) return;
+                        const form = new FormData();
+                        form.append('file', e.target.files[0]);
+                        const res = await api.post(`/projects/${id}/import-subjects`, form, { headers: { 'Content-Type': 'multipart/form-data' }});
+                        const arr: string[] = res.data.subjects || [];
+                        setBatchForm({...batchForm, subjects: arr.join(',')});
+                        e.currentTarget.value = '';
+                      }}
+                    />
                   </div>
                   <Text className="text-sm text-zinc-600 mt-1">
                     格式：001,002,003 或从Excel导入
@@ -512,10 +579,21 @@ export default function ProjectDetailPage() {
                       value={batchForm.sampleSeqs}
                       onChange={(e) => setBatchForm({...batchForm, sampleSeqs: e.target.value})}
                     />
-                    <Button plain>
+                    <Button plain onClick={() => document.getElementById('seqtime-file')?.click()}>
                       <ArrowUpTrayIcon />
                       导入Excel
                     </Button>
+                    <input id="seqtime-file" type="file" accept=".xlsx,.xls" className="hidden" 
+                      onChange={async (e) => {
+                        if (!e.target.files || !e.target.files[0]) return;
+                        const form = new FormData();
+                        form.append('file', e.target.files[0]);
+                        const res = await api.post(`/projects/${id}/import-seq-times`, form, { headers: { 'Content-Type': 'multipart/form-data' }});
+                        const arr: {seq:string,time:string}[] = res.data.seq_time_pairs || [];
+                        setBatchForm({...batchForm, sampleSeqs: arr.map(p=>`${p.seq}/${p.time}`).join(',')});
+                        e.currentTarget.value = '';
+                      }}
+                    />
                   </div>
                   <Text className="text-sm text-zinc-600 mt-1">
                     格式：01/0h,02/2h,03/4h 或从Excel导入

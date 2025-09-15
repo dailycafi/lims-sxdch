@@ -83,7 +83,8 @@ if (typeof window !== 'undefined') {
 }
 
 // 响应拦截器
-let isRedirecting = false; // 防止多次重定向
+let isRedirecting = false; // 防止多次重定向（兼容保留）
+let hasShownAuthExpiredToast = false; // 防止重复弹出
 
 // 添加一个防止重复错误提示的机制
 let lastErrorTime = 0;
@@ -93,15 +94,20 @@ const ERROR_THROTTLE_TIME = 2000; // 2秒内相同错误不重复提示
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<any>) => {
-    // 处理 401 错误 - 只显示一次提示
-    if (error.response?.status === 401 && !isRedirecting) {
-      isRedirecting = true;
-      tokenManager.removeToken();
-      toast.error('登录已过期，请重新登录');
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 100);
-      // 返回一个不会触发额外错误处理的 rejected promise
+    // 处理 401 错误 - 显示“登录已过期”，点击后登出并回登录页
+    if (error.response?.status === 401) {
+      const url = error.config?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/me');
+
+      if (!isAuthEndpoint && !hasShownAuthExpiredToast && !isRedirecting) {
+        hasShownAuthExpiredToast = true;
+        // 动态引入，避免潜在循环依赖
+        import('@/components/auth-expired-toast')
+          .then((m) => m.showAuthExpiredToast())
+          .catch(() => {});
+      }
+
+      // 不向下传播该错误，避免页面出现“程序错误”或重复提示
       return new Promise(() => {});
     }
     
