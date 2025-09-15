@@ -107,8 +107,8 @@ api.interceptors.response.use(
           .catch(() => {});
       }
 
-      // 不向下传播该错误，避免页面出现“程序错误”或重复提示
-      return new Promise(() => {});
+      // 向下抛出，让调用方能感知 401 并结束 loading
+      return Promise.reject(error);
     }
     
     // 处理其他错误 - 但避免重复提示
