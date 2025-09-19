@@ -159,12 +159,12 @@ export function Switch({
         // Unchecked
         'bg-zinc-200 ring-1 ring-black/5 ring-inset dark:bg-white/5 dark:ring-white/15',
         // Checked
-        'data-checked:bg-(--switch-bg) data-checked:ring-(--switch-bg-ring) dark:data-checked:bg-(--switch-bg) dark:data-checked:ring-(--switch-bg-ring)',
+        'data-checked:bg-[var(--switch-bg)] data-checked:ring-[var(--switch-bg-ring)] dark:data-checked:bg-[var(--switch-bg)] dark:data-checked:ring-[var(--switch-bg-ring)]',
         // Focus
         'focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-blue-500',
         // Hover
-        'data-hover:ring-black/15 data-hover:data-checked:ring-(--switch-bg-ring)',
-        'dark:data-hover:ring-white/25 dark:data-hover:data-checked:ring-(--switch-bg-ring)',
+        'data-hover:ring-black/15 data-hover:data-checked:ring-[var(--switch-bg-ring)]',
+        'dark:data-hover:ring-white/25 dark:data-hover:data-checked:ring-[var(--switch-bg-ring)]',
         // Disabled
         'data-disabled:bg-zinc-200 data-disabled:opacity-50 data-disabled:data-checked:bg-zinc-200 data-disabled:data-checked:ring-black/5',
         'dark:data-disabled:bg-white/15 dark:data-disabled:data-checked:bg-white/15 dark:data-disabled:data-checked:ring-white/15',
@@ -184,7 +184,7 @@ export function Switch({
           // Unchecked
           'bg-white shadow-sm ring-1 ring-black/5',
           // Checked
-          'group-data-checked:bg-(--switch) group-data-checked:shadow-(--switch-shadow) group-data-checked:ring-(--switch-ring)',
+          'group-data-checked:bg-[var(--switch)] group-data-checked:shadow-[var(--switch-shadow)] group-data-checked:ring-[var(--switch-ring)]',
           'group-data-checked:translate-x-4 sm:group-data-checked:translate-x-3',
           // Disabled
           'group-data-checked:group-data-disabled:bg-white group-data-checked:group-data-disabled:shadow-sm group-data-checked:group-data-disabled:ring-black/5'

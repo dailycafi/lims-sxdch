@@ -245,13 +245,13 @@ export default function SampleReturnPage() {
           <Text className="font-medium mb-4">归还模式</Text>
           <div className="flex gap-4">
             <Button
-              variant={returnMode === 'full' ? 'primary' : 'secondary'}
+              {...(returnMode === 'full' ? {} : { outline: true })}
               onClick={() => handleReturnModeChange('full')}
             >
               全部归还
             </Button>
             <Button
-              variant={returnMode === 'partial' ? 'primary' : 'secondary'}
+              {...(returnMode === 'partial' ? {} : { outline: true })}
               onClick={() => handleReturnModeChange('partial')}
             >
               部分归还
@@ -288,15 +288,13 @@ export default function SampleReturnPage() {
                 <Text className="font-medium">扫码模式：</Text>
                 <div className="flex gap-2">
                   <Button
-                    size="small"
-                    variant={scanMode === 'sample' ? 'primary' : 'secondary'}
+                    {...(scanMode === 'sample' ? {} : { outline: true })}
                     onClick={() => setScanMode('sample')}
                   >
                     扫描样本
                   </Button>
                   <Button
-                    size="small"
-                    variant={scanMode === 'box' ? 'primary' : 'secondary'}
+                    {...(scanMode === 'box' ? {} : { outline: true })}
                     onClick={() => setScanMode('box')}
                   >
                     扫描盒子
@@ -428,7 +426,7 @@ export default function SampleReturnPage() {
 
         {/* 操作按钮 */}
         <div className="flex justify-end gap-4">
-          <Button variant="secondary" onClick={() => router.back()}>
+          <Button outline onClick={() => router.back()}>
             取消
           </Button>
           <Button 

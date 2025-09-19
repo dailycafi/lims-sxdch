@@ -25,6 +25,16 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+    --radius-lg: 0.5rem;
+
+    /* Catalyst color token fallbacks (for components using var(--color-*) ) */
+    --color-white: #ffffff;
+    /* Blue */
+    --color-blue-600: rgb(37 99 235);
+    --color-blue-700: rgb(29 78 216);
+    /* Zinc */
+    --color-zinc-600: rgb(82 82 91);
+    --color-zinc-700: rgb(63 63 70);
   }
   
   * {

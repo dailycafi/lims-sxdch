@@ -330,16 +330,14 @@ export default function SampleInventoryPage() {
                 <Text className="font-medium">当前扫码模式：</Text>
                 <div className="flex gap-2">
                   <Button
-                    size="small"
-                    variant={scanMode === 'sample' ? 'primary' : 'secondary'}
+                    {...(scanMode === 'sample' ? {} : { outline: true })}
                     onClick={() => setScanMode('sample')}
                   >
                     <BeakerIcon className="h-4 w-4" />
                     扫描样本
                   </Button>
                   <Button
-                    size="small"
-                    variant={scanMode === 'box' ? 'primary' : 'secondary'}
+                    {...(scanMode === 'box' ? {} : { outline: true })}
                     onClick={() => setScanMode('box')}
                   >
                     <ArchiveBoxIcon className="h-4 w-4" />
@@ -456,7 +454,7 @@ export default function SampleInventoryPage() {
         <div className="flex justify-between gap-4">
           <div>
             <Button
-              variant="secondary"
+              outline
               onClick={() => {
                 window.open(`/api/v1/samples/receive-records/${id}/export`, '_blank');
               }}
@@ -464,7 +462,7 @@ export default function SampleInventoryPage() {
               导出清单表（Excel）
             </Button>
           </div>
-          <Button variant="secondary" onClick={() => router.back()}>
+          <Button outline onClick={() => router.back()}>
             取消
           </Button>
           <Button 

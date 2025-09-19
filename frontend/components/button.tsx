@@ -14,15 +14,15 @@ const styles = {
     // Disabled
     'data-disabled:opacity-50',
     // Icon
-    '*:data-[slot=icon]:-mx-0.5 *:data-[slot=icon]:my-0.5 *:data-[slot=icon]:size-5 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:self-center *:data-[slot=icon]:text-(--btn-icon) sm:*:data-[slot=icon]:my-1 sm:*:data-[slot=icon]:size-4 forced-colors:[--btn-icon:ButtonText] forced-colors:data-hover:[--btn-icon:ButtonText]',
+    '*:data-[slot=icon]:-mx-0.5 *:data-[slot=icon]:my-0.5 *:data-[slot=icon]:size-5 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:self-center *:data-[slot=icon]:text-[var(--btn-icon)] sm:*:data-[slot=icon]:my-1 sm:*:data-[slot=icon]:size-4 forced-colors:[--btn-icon:ButtonText] forced-colors:data-hover:[--btn-icon:ButtonText]',
   ],
   solid: [
     // Optical border, implemented as the button background to avoid corner artifacts
-    'border-transparent bg-(--btn-border)',
+    'border-transparent bg-[var(--btn-border,#0f172a)]',
     // Dark mode: border is rendered on `after` so background is set to button background
-    'dark:bg-(--btn-bg)',
+    'dark:bg-[var(--btn-bg,#111827)]',
     // Button background, implemented as foreground layer to stack on top of pseudo-border layer
-    'before:absolute before:inset-0 before:-z-10 before:rounded-[calc(var(--radius-lg)-1px)] before:bg-(--btn-bg)',
+    'before:absolute before:inset-0 before:-z-10 before:rounded-[calc(var(--radius-lg)-1px)] before:bg-[var(--btn-bg,#111827)]',
     // Drop shadow, applied to the inset `before` layer so it blends with the border
     'before:shadow-sm',
     // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
@@ -34,7 +34,7 @@ const styles = {
     // Inner highlight shadow
     'after:shadow-[inset_0_1px_--theme(--color-white/15%)]',
     // White overlay on hover
-    'data-active:after:bg-(--btn-hover-overlay) data-hover:after:bg-(--btn-hover-overlay)',
+    'data-active:after:bg-[var(--btn-hover-overlay,rgba(255,255,255,0.1))] data-hover:after:bg-[var(--btn-hover-overlay,rgba(255,255,255,0.1))]',
     // Dark mode: `after` layer expands to cover entire button
     'dark:after:-inset-px dark:after:rounded-lg',
     // Disabled

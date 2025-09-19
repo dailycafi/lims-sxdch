@@ -50,7 +50,7 @@ export default function HomePage() {
               </div>
               <div className="mt-4">
                 <Link href={action.href}>
-                  <Button variant="secondary">进入</Button>
+                  <Button outline>进入</Button>
                 </Link>
               </div>
             </div>

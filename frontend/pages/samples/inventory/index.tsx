@@ -109,7 +109,7 @@ export default function PendingInventoryListPage() {
                     </TableCell>
                     <TableCell className="pr-6">
                       <Link href={`/samples/inventory/${task.id}`}>
-                        <Button size="small">开始清点</Button>
+                        <Button>开始清点</Button>
                       </Link>
                     </TableCell>
                   </TableRow>

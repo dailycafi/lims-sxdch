@@ -51,13 +51,13 @@ const base = [
   // Background color + shadow applied to inset pseudo element, so shadow blends with border in light mode
   'before:absolute before:inset-0 before:-z-10 before:rounded-full before:bg-white before:shadow-sm',
   // Background color when checked
-  'group-data-checked:before:bg-(--radio-checked-bg)',
+  'group-data-checked:before:bg-[var(--radio-checked-bg)]',
   // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
   'dark:before:hidden',
   // Background color applied to control in dark mode
-  'dark:bg-white/5 dark:group-data-checked:bg-(--radio-checked-bg)',
+  'dark:bg-white/5 dark:group-data-checked:bg-[var(--radio-checked-bg)]',
   // Border
-  'border border-zinc-950/15 group-data-checked:border-transparent group-data-hover:group-data-checked:border-transparent group-data-hover:border-zinc-950/30 group-data-checked:bg-(--radio-checked-border)',
+  'border border-zinc-950/15 group-data-checked:border-transparent group-data-hover:group-data-checked:border-transparent group-data-hover:border-zinc-950/30 group-data-checked:bg-[var(--radio-checked-border)]',
   'dark:border-white/15 dark:group-data-checked:border-white/5 dark:group-data-hover:group-data-checked:border-white/5 dark:group-data-hover:border-white/30',
   // Inner highlight shadow
   'after:absolute after:inset-0 after:rounded-full after:shadow-[inset_0_1px_--theme(--color-white/15%)]',
@@ -131,7 +131,7 @@ export function Radio({
       <span className={clsx([base, colors[color]])}>
         <span
           className={clsx(
-            'size-full rounded-full border-[4.5px] border-transparent bg-(--radio-indicator) bg-clip-padding',
+            'size-full rounded-full border-[4.5px] border-transparent bg-[var(--radio-indicator)] bg-clip-padding',
             // Forced colors mode
             'forced-colors:border-[Canvas] forced-colors:group-data-checked:border-[Highlight]'
           )}

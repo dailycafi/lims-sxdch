@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -42,10 +42,46 @@ const statusLabels: Record<string, string> = {
   returned: '已归还',
 };
 
+const purposeLabels: Record<string, string> = {
+  first_test: '首次检测',
+  retest: '重测',
+  isr: 'ISR',
+  stability: '稳定性',
+  qc: '质控',
+};
+
+const aliquotLabels: Record<'primary' | 'backup', string> = {
+  primary: '正份',
+  backup: '备份',
+};
+
+const formatStorageLocation = (sample: any) => {
+  if (!sample) {
+    return '-';
+  }
+
+  if (sample.freezer_id) {
+    const parts = [
+      sample.freezer_id,
+      sample.shelf_level,
+      sample.rack_position,
+      sample.box_code,
+      sample.position_in_box,
+    ].filter(Boolean);
+
+    if (parts.length) {
+      return parts.join(' / ');
+    }
+  }
+
+  if (sample.storage_location) {
+    return sample.storage_location;
+  }
+
+  return '-';
+};
+
 export default function SamplesPage() {
-  const [searchCode, setSearchCode] = useState('');
-  const [selectedProject, setSelectedProject] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
   const [projects, setProjects] = useState<any[]>([]);
   const [samples, setSamples] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,12 +93,45 @@ export default function SamplesPage() {
     project: 'all',
     status: 'all',
     storageLocation: 'all',
+    cycleGroup: 'all',
+    testType: 'all',
+    aliquotType: 'all',
+    collectionSeq: 'all',
+    subjectCode: '',
+    purpose: 'all',
+    transportCondition: 'all',
+    specialNotes: '',
     dateFrom: '',
     dateTo: ''
   });
   
   // 新增视图模式
   const [viewMode, setViewMode] = useState<'all' | 'in_storage' | 'checked_out' | 'transferred'>('all');
+
+  const cycleGroups = useMemo(
+    () => Array.from(new Set(samples.map(sample => sample.cycle_group).filter(Boolean))).sort(),
+    [samples]
+  );
+
+  const testTypes = useMemo(
+    () => Array.from(new Set(samples.map(sample => sample.test_type).filter(Boolean))).sort(),
+    [samples]
+  );
+
+  const collectionSeqs = useMemo(
+    () => Array.from(new Set(samples.map(sample => sample.collection_seq).filter(Boolean))).sort(),
+    [samples]
+  );
+
+  const transportConditions = useMemo(
+    () => Array.from(new Set(samples.map(sample => sample.transport_condition).filter(Boolean))).sort(),
+    [samples]
+  );
+
+  const storageLocations = useMemo(
+    () => Array.from(new Set(samples.map(sample => formatStorageLocation(sample)).filter(location => location && location !== '-'))).sort(),
+    [samples]
+  );
 
   useEffect(() => {
     fetchProjects();
@@ -84,6 +153,7 @@ export default function SamplesPage() {
       const params = {
         project_id: filters.project !== 'all' ? parseInt(filters.project) : undefined,
         status: filters.status !== 'all' ? filters.status : undefined,
+        limit: 500,
       };
       const samples = await SamplesService.getSamples(params);
       setSamples(samples);
@@ -92,10 +162,6 @@ export default function SamplesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSearch = () => {
-    fetchSamples();
   };
 
   // 应用视图模式过滤
@@ -111,8 +177,76 @@ export default function SamplesPage() {
   const applyFilters = (samples: any[]) => {
     return samples.filter(sample => {
       // 样本编号筛选（前端过滤）
-      if (filters.sampleCode && !sample.sample_code.toLowerCase().includes(filters.sampleCode.toLowerCase())) {
+      if (filters.sampleCode && !(sample.sample_code || '').toLowerCase().includes(filters.sampleCode.toLowerCase())) {
         return false;
+      }
+
+      if (filters.storageLocation !== 'all' && formatStorageLocation(sample) !== filters.storageLocation) {
+        return false;
+      }
+
+      if (filters.cycleGroup !== 'all' && (sample.cycle_group || '') !== filters.cycleGroup) {
+        return false;
+      }
+
+      if (filters.testType !== 'all' && (sample.test_type || '') !== filters.testType) {
+        return false;
+      }
+
+      if (filters.aliquotType !== 'all') {
+        const isPrimary = sample.is_primary !== false;
+        if (filters.aliquotType === 'primary' && !isPrimary) {
+          return false;
+        }
+        if (filters.aliquotType === 'backup' && isPrimary) {
+          return false;
+        }
+      }
+
+      if (filters.collectionSeq !== 'all' && (sample.collection_seq || '') !== filters.collectionSeq) {
+        return false;
+      }
+
+      if (filters.subjectCode && !(sample.subject_code || '').toLowerCase().includes(filters.subjectCode.toLowerCase())) {
+        return false;
+      }
+
+      if (filters.purpose !== 'all' && (sample.purpose || '') !== filters.purpose) {
+        return false;
+      }
+
+      if (filters.transportCondition !== 'all' && (sample.transport_condition || '') !== filters.transportCondition) {
+        return false;
+      }
+
+      if (filters.specialNotes && !(sample.special_notes || '').includes(filters.specialNotes)) {
+        return false;
+      }
+
+      if (filters.dateFrom) {
+        const filterDateFrom = new Date(filters.dateFrom);
+        if (!Number.isNaN(filterDateFrom.getTime())) {
+          filterDateFrom.setHours(0, 0, 0, 0);
+        }
+        if (!Number.isNaN(filterDateFrom.getTime())) {
+          const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
+          if (!sampleDate || sampleDate < filterDateFrom) {
+            return false;
+          }
+        }
+      }
+
+      if (filters.dateTo) {
+        const filterDateTo = new Date(filters.dateTo);
+        if (!Number.isNaN(filterDateTo.getTime())) {
+          filterDateTo.setHours(23, 59, 59, 999);
+        }
+        if (!Number.isNaN(filterDateTo.getTime())) {
+          const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
+          if (!sampleDate || sampleDate > filterDateTo) {
+            return false;
+          }
+        }
       }
       
       return true;
@@ -133,6 +267,14 @@ export default function SamplesPage() {
       project: 'all',
       status: 'all',
       storageLocation: 'all',
+      cycleGroup: 'all',
+      testType: 'all',
+      aliquotType: 'all',
+      collectionSeq: 'all',
+      subjectCode: '',
+      purpose: 'all',
+      transportCondition: 'all',
+      specialNotes: '',
       dateFrom: '',
       dateTo: ''
     });
@@ -194,7 +336,7 @@ export default function SamplesPage() {
                   </div>
 
                   {/* 筛选器行 */}
-                  <div className="grid grid-cols-4 gap-4 items-end">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">项目</label>
                       <Select
@@ -226,21 +368,126 @@ export default function SamplesPage() {
                     </div>
 
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">周期/组别</label>
+                      <Select
+                        value={filters.cycleGroup}
+                        onChange={(e) => setFilters({ ...filters, cycleGroup: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        {cycleGroups.map((group) => (
+                          <option key={group} value={group}>{group}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">检测类型</label>
+                      <Select
+                        value={filters.testType}
+                        onChange={(e) => setFilters({ ...filters, testType: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        {testTypes.map((type) => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">正份/备份</label>
+                      <Select
+                        value={filters.aliquotType}
+                        onChange={(e) => setFilters({ ...filters, aliquotType: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        <option value="primary">正份</option>
+                        <option value="backup">备份</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">用途</label>
+                      <Select
+                        value={filters.purpose}
+                        onChange={(e) => setFilters({ ...filters, purpose: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        {Object.entries(purposeLabels).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">采血序号</label>
+                      <Select
+                        value={filters.collectionSeq}
+                        onChange={(e) => setFilters({ ...filters, collectionSeq: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        {collectionSeqs.map((seq) => (
+                          <option key={seq} value={seq}>{seq}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">运输条件</label>
+                      <Select
+                        value={filters.transportCondition}
+                        onChange={(e) => setFilters({ ...filters, transportCondition: e.target.value })}
+                        className="w-full h-11 custom-select"
+                      >
+                        <option value="all">全部</option>
+                        {transportConditions.map((condition) => (
+                          <option key={condition} value={condition}>{condition}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">存储位置</label>
                       <Select
                         value={filters.storageLocation}
                         onChange={(e) => setFilters({ ...filters, storageLocation: e.target.value })}
                         className="w-full h-11 custom-select"
                       >
-                        <option value="all">全部位置</option>
-                        <option value="freezer_a">冰箱A</option>
-                        <option value="freezer_b">冰箱B</option>
-                        <option value="room_temp">常温储存</option>
+                        <option value="all">全部</option>
+                        {storageLocations.map((location) => (
+                          <option key={location} value={location}>{location}</option>
+                        ))}
                       </Select>
                     </div>
 
-                    <div className="flex gap-2">
-                      {activeFilterCount > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">受试者编号</label>
+                      <Input
+                        type="text"
+                        value={filters.subjectCode}
+                        onChange={(e) => setFilters({ ...filters, subjectCode: e.target.value })}
+                        placeholder="如：001"
+                        className="w-full h-11"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">特殊事项</label>
+                      <Input
+                        type="text"
+                        value={filters.specialNotes}
+                        onChange={(e) => setFilters({ ...filters, specialNotes: e.target.value })}
+                        placeholder="如：溶血"
+                        className="w-full h-11"
+                      />
+                    </div>
+
+                    {activeFilterCount > 0 && (
+                      <div className="flex justify-end md:col-span-2 lg:col-span-1 xl:col-span-1">
                         <Button
                           color="white"
                           onClick={resetFilters}
@@ -249,8 +496,8 @@ export default function SamplesPage() {
                           <XMarkIcon className="h-4 w-4" />
                           清除筛选
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* 日期范围筛选 */}
@@ -304,23 +551,28 @@ export default function SamplesPage() {
           {/* 结果统计 */}
           <div className="px-6 py-3 bg-gray-50/50">
             <Text className="text-sm text-zinc-600">
-              共 {samples.length} 条记录
-              {activeFilterCount > 0 && ` (已应用 ${activeFilterCount} 个筛选条件)`}
+              当前显示 {filteredSamples.length} 条记录
+              {samples.length !== filteredSamples.length && ` / 总计 ${samples.length} 条`}
+              {activeFilterCount > 0 && `（已应用 ${activeFilterCount} 个筛选条件）`}
             </Text>
           </div>
           
           {/* 表格内容 */}
-          <div>
+          <div className="overflow-x-auto">
             <Table bleed={true} striped>
               <TableHead>
                 <TableRow>
                   <TableHeader className="pl-6">样本编号</TableHeader>
                   <TableHeader>项目编号</TableHeader>
-                  <TableHeader>受试者编号</TableHeader>
+                  <TableHeader>周期/组别</TableHeader>
                   <TableHeader>检测类型</TableHeader>
-                  <TableHeader>采集时间</TableHeader>
+                  <TableHeader>正/备份</TableHeader>
+                  <TableHeader>用途</TableHeader>
+                  <TableHeader>受试者</TableHeader>
+                  <TableHeader>采血信息</TableHeader>
                   <TableHeader>状态</TableHeader>
                   <TableHeader>存储位置</TableHeader>
+                  <TableHeader>特殊事项</TableHeader>
                   <TableHeader className="pr-6">操作</TableHeader>
                 </TableRow>
               </TableHead>
@@ -329,13 +581,13 @@ export default function SamplesPage() {
                   {isLoading ? (
                     <AnimatedLoadingState 
                       key="loading"
-                      colSpan={8} 
+                      colSpan={12} 
                       variant="skeleton"
                     />
                   ) : filteredSamples.length === 0 ? (
                     <AnimatedEmptyState
                       key="empty"
-                      colSpan={8}
+                      colSpan={12}
                       icon={BeakerIcon}
                       text={activeFilterCount > 0 
                         ? '没有符合筛选条件的样本' 
@@ -347,15 +599,26 @@ export default function SamplesPage() {
                         <AnimatedTableRow key={sample.id} index={index}>
                           <TableCell className="font-medium pl-6">{sample.sample_code}</TableCell>
                           <TableCell>{sample.project?.lab_project_code || '-'}</TableCell>
-                          <TableCell>{sample.subject_code || '-'}</TableCell>
+                          <TableCell>{sample.cycle_group || '-'}</TableCell>
                           <TableCell>{sample.test_type || '-'}</TableCell>
-                          <TableCell>{sample.collection_time || '-'}</TableCell>
+                          <TableCell>{sample.is_primary === false ? aliquotLabels.backup : aliquotLabels.primary}</TableCell>
+                          <TableCell>{sample.purpose ? (purposeLabels[sample.purpose] || sample.purpose) : '-'}</TableCell>
+                          <TableCell>{sample.subject_code || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              {sample.collection_seq && (
+                                <span className="text-xs text-zinc-500">{sample.collection_seq}</span>
+                              )}
+                              <span>{sample.collection_time || '-'}</span>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge color={statusColors[sample.status] || 'zinc'}>
                               {statusLabels[sample.status] || sample.status}
                             </Badge>
                           </TableCell>
-                          <TableCell>{sample.freezer_id ? `${sample.freezer_id}-${sample.shelf_level}-${sample.rack_position}` : '-'}</TableCell>
+                          <TableCell>{formatStorageLocation(sample)}</TableCell>
+                          <TableCell>{sample.special_notes || '-'}</TableCell>
                           <TableCell className="pr-6">
                             <motion.div
                               whileHover={{ scale: 1.02 }}

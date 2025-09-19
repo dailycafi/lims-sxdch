@@ -312,7 +312,7 @@ export default function BorrowExecutePage() {
 
         {/* 操作按钮 */}
         <div className="flex justify-end gap-4">
-          <Button variant="secondary" onClick={() => router.back()}>
+          <Button outline onClick={() => router.back()}>
             取消
           </Button>
           <Button 

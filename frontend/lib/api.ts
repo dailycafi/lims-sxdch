@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, CanceledError } from 'axios';
 import { toast } from 'react-hot-toast';
 import { tokenManager } from './token-manager';
 
@@ -31,6 +31,31 @@ export const api = axios.create({
   },
 });
 
+// 统一的认证状态标记（请求/响应拦截器都要用）
+let isRedirecting = false;
+let hasShownAuthExpiredToast = false;
+
+// 提取后端返回的可读错误信息（兼容 FastAPI/通用后端返回格式）
+const extractDetailMessage = (data: any): string | null => {
+  if (!data) return null;
+  if (typeof data === 'string') return data;
+  if (typeof data.detail === 'string') return data.detail;
+  if (Array.isArray(data.detail) && data.detail.length > 0) {
+    const first = data.detail[0];
+    if (typeof first === 'string') return first;
+    if (first?.msg) return first.msg;
+    if (first?.message) return first.message;
+    if (Array.isArray(first?.loc)) {
+      const locStr = first.loc.join('.')
+      const text = first.msg || first.message || '';
+      return text ? `${locStr}: ${text}` : locStr;
+    }
+  }
+  if (data.message) return data.message;
+  if (data.error) return data.error;
+  return null;
+};
+
 // 初始化时设置已存在的 token（仅在客户端）
 if (typeof window !== 'undefined') {
   const existingToken = tokenManager.getToken();
@@ -46,6 +71,8 @@ api.interceptors.request.use(
     // 强制从 localStorage 获取最新 token
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token');
+      const url = config.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/me');
       
       if ((window as any).__DEBUG_API__) {
         console.log('[API Debug] Request to:', config.url);
@@ -55,6 +82,16 @@ api.interceptors.request.use(
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else if (!isAuthEndpoint) {
+        // 无 token 的情况下，直接触发登录过期提示并取消请求，避免 401 错误弹出
+        if (!hasShownAuthExpiredToast && !isRedirecting) {
+          hasShownAuthExpiredToast = true;
+          import('@/components/auth-expired-toast')
+            .then((m) => m.showAuthExpiredToast())
+            .catch(() => {});
+        }
+        ;(config as any)._suppressErrorToast = true;
+        return Promise.reject(new CanceledError('AUTH_REQUIRED'));
       }
       
       if ((window as any).__DEBUG_API__) {
@@ -83,8 +120,6 @@ if (typeof window !== 'undefined') {
 }
 
 // 响应拦截器
-let isRedirecting = false; // 防止多次重定向（兼容保留）
-let hasShownAuthExpiredToast = false; // 防止重复弹出
 
 // 添加一个防止重复错误提示的机制
 let lastErrorTime = 0;
@@ -94,6 +129,11 @@ const ERROR_THROTTLE_TIME = 2000; // 2秒内相同错误不重复提示
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<any>) => {
+    // 取消的请求不提示错误
+    if (axios.isCancel && axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     // 处理 401 错误 - 显示“登录已过期”，点击后登出并回登录页
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
@@ -107,7 +147,8 @@ api.interceptors.response.use(
           .catch(() => {});
       }
 
-      // 向下抛出，让调用方能感知 401 并结束 loading
+      // 若请求标记为 _suppressErrorToast，则静默处理（不再 toast.error），避免“先报401再弹登录”
+      ;(error as any)._suppressErrorToast = true;
       return Promise.reject(error);
     }
     
@@ -116,24 +157,34 @@ api.interceptors.response.use(
       const now = Date.now();
       let errorMessage = '';
       
-      if (error.response?.status === 403) {
+      const status = error.response?.status;
+      if (status === 403) {
         errorMessage = '没有权限执行此操作';
-      } else if (error.response?.status === 500) {
-        errorMessage = '服务器错误，请稍后重试';
-      } else if (error.response?.status === 422) {
-        // 处理验证错误
-        const validationErrors = (error.response?.data as any)?.detail;
-        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
-          // 只显示第一个验证错误
-          errorMessage = validationErrors[0]?.msg || '数据验证失败';
-        } else if (typeof validationErrors === 'string') {
-          errorMessage = validationErrors;
-        } else {
-          errorMessage = '数据验证失败';
-        }
+      } else if (status === 404) {
+        errorMessage = '资源不存在或已删除';
+      } else if (status === 429) {
+        errorMessage = '请求过于频繁，请稍后再试';
+      } else if (status === 500) {
+        // 优先展示后端返回的具体信息
+        errorMessage = extractDetailMessage(error.response?.data) || '服务器错误，请稍后重试';
+      } else if (status === 400 || status === 422) {
+        // 处理参数/验证错误
+        errorMessage = extractDetailMessage(error.response?.data) || '数据验证失败';
+      } else if (!error.response) {
+        // 网络异常或超时
+        errorMessage = '网络异常，请检查网络连接或稍后重试';
+      }
+
+      // 若仍无明确文案，尝试兜底提取
+      if (!errorMessage) {
+        errorMessage = extractDetailMessage(error.response?.data) || error.message || '请求失败，请稍后重试';
       }
       
       // 防止重复显示相同的错误
+      // 若请求或错误被标记为需要静默（例如未登录触发），则不提示错误
+      if ((error as any)?._suppressErrorToast || (error.config as any)?._suppressErrorToast) {
+        return Promise.reject(error);
+      }
       if (errorMessage && (errorMessage !== lastErrorMessage || now - lastErrorTime > ERROR_THROTTLE_TIME)) {
         toast.error(errorMessage);
         lastErrorMessage = errorMessage;

@@ -34,6 +34,7 @@ import {
   ArrowsRightLeftIcon,
   TrashIcon,
   MagnifyingGlassIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -51,7 +52,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // 判断当前路径是否匹配
   const isCurrentPath = (href: string) => {
-    return router.pathname === href;
+    if (href === '/') {
+      return router.pathname === '/';
+    }
+    return router.pathname === href || router.pathname.startsWith(`${href}/`);
   };
 
   // 根据用户角色判断是否显示菜单项
@@ -123,6 +127,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <BeakerIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本接收</SidebarLabel>
                     <Badge className="ml-auto bg-gradient-to-r from-green-400 to-green-500 text-zinc-900 text-[10px] font-semibold">NEW</Badge>
+                  </SidebarItem>
+                  <SidebarItem href="/samples/inventory" current={isCurrentPath('/samples/inventory')}>
+                    <ClipboardDocumentListIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>清点入库</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
                     <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
