@@ -21,7 +21,10 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   XMarkIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ClipboardDocumentListIcon,
+  EyeIcon,                    // 眼睛图标 - 用于"查看详情"
+  DocumentArrowDownIcon       // 下载图标 - 用于"导出清单"
 } from '@heroicons/react/20/solid';
 import { Tabs } from '@/components/tabs';
 import { SearchInput } from '@/components/search-input';
@@ -397,7 +400,7 @@ export default function SampleReceivePage() {
             <Heading>样本接收</Heading>
             <Text className="mt-1 text-zinc-600">接收和记录新的样本信息</Text>
           </div>
-          <Button color="blue" onClick={() => setIsReceiveDialogOpen(true)}>
+          <Button onClick={() => setIsReceiveDialogOpen(true)}>
             <PlusIcon className="h-4 w-4" />
             新建接收任务
           </Button>
@@ -658,49 +661,71 @@ export default function SampleReceivePage() {
                             <motion.div
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
+                              className="relative group"
                             >
-                              <Button 
-                                color="blue" 
+                              <button 
                                 onClick={() => handleStartInventory(task.id)}
-                                className="gap-1.5"
+                                className="inline-flex items-center justify-center px-2 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors duration-200"
+                                title="开始清点"
                               >
-                                <CheckIcon className="h-4 w-4" />
+                                <ClipboardDocumentListIcon className="h-4 w-4" />
+                              </button>
+                              {/* 小巧的悬浮提示 */}
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                                 开始清点
-                              </Button>
+                              </div>
                             </motion.div>
                           )}
                           {task.status === 'in_progress' && (
                             <motion.div
-                              className="flex items-center gap-2"
+                              className="flex items-center gap-2 relative group"
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
                             >
-                              <Button 
-                                color="blue" 
+                              <button 
                                 onClick={() => handleStartInventory(task.id)}
-                                className="gap-1.5"
+                                className="inline-flex items-center justify-center px-2 py-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-200"
+                                title="继续清点"
                               >
-                                <CheckIcon className="h-4 w-4" />
+                                <ClipboardDocumentListIcon className="h-4 w-4" />
+                              </button>
+                              {/* 小巧的悬浮提示 */}
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                                 继续清点
-                              </Button>
+                              </div>
                             </motion.div>
                           )}
                           {task.status === 'completed' && (
                             <div className="flex items-center gap-2">
-                              <Button 
-                                outline
-                                onClick={() => window.location.href = `/samples/inventory/${task.id}`}
-                                className="gap-1.5"
-                              >
-                                查看详情
-                              </Button>
-                              <Button 
-                                plain
-                                onClick={() => window.open(`${api.defaults.baseURL}/samples/receive-records/${task.id}/export`, '_blank')}
-                                className="gap-1.5"
-                              >
-                                导出清单
-                              </Button>
+                              {/* 查看详情按钮 */}
+                              <div className="relative group">
+                                <button 
+                                  onClick={() => window.location.href = `/samples/inventory/${task.id}`}
+                                  className="inline-flex items-center justify-center px-2 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors duration-200"
+                                  title="查看详情"
+                                >
+                                  <EyeIcon className="h-4 w-4" />
+                                </button>
+                                {/* 悬浮提示 */}
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                  查看详情
+                                </div>
+                              </div>
+                              
+                              {/* 导出清单按钮 */}
+                              <div className="relative group">
+                                <button 
+                                  onClick={() => window.open(`${api.defaults.baseURL}/samples/receive-records/${task.id}/export`, '_blank')}
+                                  className="inline-flex items-center justify-center px-2 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors duration-200"
+                                  title="导出清单"
+                                >
+                                  <DocumentArrowDownIcon className="h-4 w-4" />
+                                </button>
+                                {/* 悬浮提示 */}
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                  导出清单
+                                </div>
+                              </div>
                             </div>
                           )}
                         </TableCell>

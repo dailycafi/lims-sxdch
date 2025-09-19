@@ -340,14 +340,12 @@ export default function SampleTransferPage() {
           </div>
           <div className="flex gap-2">
             <Button 
-              color="white" 
               onClick={() => setIsInternalTransferOpen(true)}
             >
               <BuildingOfficeIcon className="h-4 w-4" />
               内部转移
             </Button>
             <Button 
-              color="blue" 
               onClick={() => setIsTransferDialogOpen(true)}
             >
               <TruckIcon className="h-4 w-4" />

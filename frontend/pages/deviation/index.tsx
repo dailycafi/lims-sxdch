@@ -299,7 +299,7 @@ export default function DeviationManagement() {
             <Heading>偏差管理</Heading>
             <Text className="mt-1 text-zinc-600">管理和跟踪实验室偏差事件</Text>
           </div>
-          <Button color="blue" onClick={() => setIsReportDialogOpen(true)}>
+          <Button onClick={() => setIsReportDialogOpen(true)}>
             <PlusIcon className="h-4 w-4" />
             报告偏差
           </Button>

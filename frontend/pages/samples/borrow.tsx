@@ -330,7 +330,7 @@ export default function SampleBorrowPage() {
             <Heading>样本领用</Heading>
             <Text className="mt-1 text-zinc-600">管理样本领用申请和记录</Text>
           </div>
-          <Button color="blue" onClick={() => setIsRequestDialogOpen(true)}>
+          <Button onClick={() => setIsRequestDialogOpen(true)}>
             <PlusIcon className="h-4 w-4" />
             新建领用申请
           </Button>

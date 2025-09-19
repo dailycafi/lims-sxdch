@@ -363,7 +363,7 @@ export default function SampleDestroyPage() {
             <Heading>样本销毁</Heading>
             <Text className="mt-1 text-zinc-600">管理样本销毁申请和审批流程</Text>
           </div>
-          <Button color="blue" onClick={() => setIsRequestDialogOpen(true)}>
+          <Button onClick={() => setIsRequestDialogOpen(true)}>
             <TrashIcon className="h-4 w-4" />
             申请销毁
           </Button>
@@ -464,7 +464,6 @@ export default function SampleDestroyPage() {
                     <div className="flex gap-2">
                       {activeFilterCount > 0 && (
                         <Button
-                          color="white"
                           onClick={resetFilters}
                           className="h-11"
                         >
@@ -585,7 +584,6 @@ export default function SampleDestroyPage() {
                         </TableCell>
                         <TableCell>
                           <Button
-                            color="white"
                             onClick={() => handleViewDetails(request)}
                           >
                             查看
@@ -750,7 +748,6 @@ export default function SampleDestroyPage() {
             取消
           </Button>
           <Button 
-            color="red"
             onClick={handleSubmitRequest}
             disabled={!selectedProject || selectedSamples.length === 0 || !destroyForm.reason || !destroyForm.approval_file}
           >

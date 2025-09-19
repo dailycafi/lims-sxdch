@@ -227,7 +227,7 @@ export default function ArchivePage() {
             <Text className="mt-1 text-zinc-600">管理项目完成后的归档流程</Text>
           </div>
           {activeTab === 'active' && (
-            <Button color="blue" onClick={() => setIsRequestDialogOpen(true)}>
+            <Button onClick={() => setIsRequestDialogOpen(true)}>
               <ArchiveBoxIcon className="h-4 w-4" />
               申请归档
             </Button>

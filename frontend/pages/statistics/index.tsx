@@ -204,7 +204,7 @@ export default function StatisticsPage() {
             <Heading>统计查询</Heading>
             <Text className="mt-1 text-zinc-600">查看样本操作记录和统计数据</Text>
           </div>
-          <Button color="blue" onClick={handleExportData}>
+          <Button onClick={handleExportData}>
             <ArrowDownTrayIcon className="h-4 w-4" />
             导出数据
           </Button>
