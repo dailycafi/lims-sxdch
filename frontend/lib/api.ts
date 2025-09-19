@@ -134,7 +134,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 处理 401 错误 - 显示“登录已过期”，点击后登出并回登录页
+    // 处理 401 错误 - 只显示"登录已过期"浮框，完全静默处理
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
       const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/me');
@@ -147,9 +147,22 @@ api.interceptors.response.use(
           .catch(() => {});
       }
 
-      // 若请求标记为 _suppressErrorToast，则静默处理（不再 toast.error），避免“先报401再弹登录”
-      ;(error as any)._suppressErrorToast = true;
-      return Promise.reject(error);
+      // 创建一个非Error类型的静默对象，避免Next.js显示运行时错误
+      const silentError = {
+        name: 'AuthenticationExpired',
+        message: 'Authentication expired',
+        isAuthError: true,
+        response: error.response,
+        config: error.config,
+        _suppressErrorToast: true,
+        _isSilent: true,
+        // 保持axios错误的必要属性
+        code: error.code,
+        request: error.request,
+      };
+      
+      // 静默处理，不在控制台显示错误
+      return Promise.reject(silentError);
     }
     
     // 处理其他错误 - 但避免重复提示
@@ -182,7 +195,7 @@ api.interceptors.response.use(
       
       // 防止重复显示相同的错误
       // 若请求或错误被标记为需要静默（例如未登录触发），则不提示错误
-      if ((error as any)?._suppressErrorToast || (error.config as any)?._suppressErrorToast) {
+      if ((error as any)?._suppressErrorToast || (error.config as any)?._suppressErrorToast || (error as any)?._isSilent) {
         return Promise.reject(error);
       }
       if (errorMessage && (errorMessage !== lastErrorMessage || now - lastErrorTime > ERROR_THROTTLE_TIME)) {

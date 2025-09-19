@@ -62,13 +62,19 @@ export default function PendingInventoryListPage() {
             <Text className="mt-1 text-zinc-600">显示所有项目的接收记录，可进入清点流程</Text>
           </div>
           <div className="flex gap-3">
-            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="h-11 min-w-[11rem]"
+            >
               <option value="pending">待清点</option>
               <option value="in_progress">清点中</option>
               <option value="completed">已完成</option>
               <option value="all">全部</option>
             </Select>
-            <Button onClick={fetchTasks}>刷新</Button>
+            <Button onClick={fetchTasks} className="h-11 px-6">
+              刷新
+            </Button>
           </div>
         </div>
 
@@ -122,5 +128,4 @@ export default function PendingInventoryListPage() {
     </AppLayout>
   );
 }
-
 

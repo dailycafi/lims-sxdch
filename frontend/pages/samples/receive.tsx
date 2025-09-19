@@ -102,8 +102,11 @@ export default function SampleReceivePage() {
     try {
       const response = await api.get('/samples/receive-tasks');
       setTasks(response.data);
-    } catch (error) {
-      console.error('Failed to fetch receive tasks:', error);
+    } catch (error: any) {
+      // 401错误已经被api拦截器静默处理，这里只处理其他错误
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to fetch receive tasks:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -113,8 +116,11 @@ export default function SampleReceivePage() {
     try {
       const projects = await ProjectsService.getProjects();
       setProjects(projects);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
+    } catch (error: any) {
+      // 401错误已经被api拦截器静默处理，这里只处理其他错误
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to fetch projects:', error);
+      }
     }
   };
 
@@ -122,8 +128,11 @@ export default function SampleReceivePage() {
     try {
       const organizations = await GlobalParamsService.getOrganizations();
       setOrganizations(organizations);
-    } catch (error) {
-      console.error('Failed to fetch organizations:', error);
+    } catch (error: any) {
+      // 401错误已经被api拦截器静默处理，这里只处理其他错误
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to fetch organizations:', error);
+      }
     }
   };
 
@@ -156,8 +165,11 @@ export default function SampleReceivePage() {
       setIsReceiveDialogOpen(false);
       resetForm();
       fetchReceiveTasks();
-    } catch (error) {
-      console.error('Failed to receive samples:', error);
+    } catch (error: any) {
+      // 401错误已经被api拦截器静默处理，这里只处理其他错误
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to receive samples:', error);
+      }
     }
   };
 

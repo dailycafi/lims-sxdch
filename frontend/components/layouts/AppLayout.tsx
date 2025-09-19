@@ -55,7 +55,17 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (href === '/') {
       return router.pathname === '/';
     }
-    return router.pathname === href || router.pathname.startsWith(`${href}/`);
+
+    if (router.pathname === href) {
+      return true;
+    }
+
+    if (router.pathname.startsWith(`${href}/`)) {
+      const remainder = router.pathname.slice(href.length + 1);
+      return remainder.startsWith('[');
+    }
+
+    return false;
   };
 
   // 根据用户角色判断是否显示菜单项
@@ -67,20 +77,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <SidebarLayout
       navbar={
-        <Navbar>
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/logo.png"
-                alt="徐汇区中心医院"
-                width={40}
-                height={40}
-                className="rounded-lg"
-              />
-              <div className="text-lg font-semibold text-zinc-800 dark:text-white">
-                徐汇区中心医院 LIMS系统
-              </div>
+        <Navbar className="flex-wrap gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Image
+              src="/logo.png"
+              alt="徐汇区中心医院"
+              width={40}
+              height={40}
+              className="h-9 w-9 rounded-lg sm:h-10 sm:w-10"
+            />
+            <div className="truncate text-base font-semibold text-zinc-800 dark:text-white sm:text-lg">
+              徐汇区中心医院 LIMS系统
             </div>
+          </div>
+          <div className="flex w-full justify-end sm:w-auto">
             <Dropdown>
               <DropdownButton as={Avatar} src={undefined} initials={user?.full_name?.charAt(0)} />
               <DropdownMenu>
@@ -235,7 +245,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
     >
       <main className="flex-1 overflow-y-auto bg-white">
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </main>
     </SidebarLayout>
   );
