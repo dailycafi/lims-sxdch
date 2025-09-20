@@ -15,3 +15,4 @@ from app.models.sample import (
 from app.models.audit import AuditLog
 from app.models.global_params import Organization, SampleType
 from app.models.deviation import Deviation
+from app.models.auth import RefreshToken

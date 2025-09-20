@@ -33,3 +33,9 @@ class User(Base):
     
     # 关系
     audit_logs = relationship("AuditLog", back_populates="user")
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )

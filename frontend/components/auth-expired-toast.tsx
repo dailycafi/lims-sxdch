@@ -7,9 +7,9 @@ function AuthExpiredToast({ t }: { t: any }) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
 
-  const onConfirm = () => {
+  const onConfirm = async () => {
     toast.dismiss(t.id);
-    logout();
+    await logout();
     router.push('/login');
   };
 

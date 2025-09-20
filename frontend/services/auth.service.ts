@@ -18,7 +18,7 @@ export class AuthService {
     });
     
     if (response.data.access_token) {
-      tokenManager.setToken(response.data.access_token);
+      tokenManager.setTokens(response.data.access_token, response.data.refresh_token);
     }
     
     return response.data;
@@ -36,6 +36,12 @@ export class AuthService {
    * 退出登录
    */
   static logout(): void {
-    tokenManager.removeToken();
+    const refreshToken = tokenManager.getRefreshToken();
+    if (refreshToken) {
+      api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {
+        // 无需处理失败，继续清理本地状态
+      });
+    }
+    tokenManager.clearTokens();
   }
 }

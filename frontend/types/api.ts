@@ -34,8 +34,11 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
-  user: User;
+  expires_in?: number;
+  refresh_expires_in?: number;
+  user?: User;
 }
 
 // 项目相关类型

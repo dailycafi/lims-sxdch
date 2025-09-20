@@ -35,6 +35,96 @@ export const api = axios.create({
 let isRedirecting = false;
 let hasShownAuthExpiredToast = false;
 
+type PendingRequest = {
+  resolve: (value: any) => void;
+  reject: (error: any) => void;
+  config: any;
+};
+
+let isRefreshing = false;
+const pendingRequests: PendingRequest[] = [];
+
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/me', '/auth/refresh'];
+
+const triggerAuthExpired = () => {
+  if (!hasShownAuthExpiredToast && !isRedirecting) {
+    hasShownAuthExpiredToast = true;
+    import('@/components/auth-expired-toast')
+      .then((m) => m.showAuthExpiredToast())
+      .catch(() => {});
+  }
+};
+
+const addPendingRequest = (config: any, resolve: (value: any) => void, reject: (error: any) => void) => {
+  config._retry = true;
+  pendingRequests.push({ config, resolve, reject });
+};
+
+const resolvePendingRequests = (token: string | null) => {
+  while (pendingRequests.length) {
+    const { config, resolve } = pendingRequests.shift()!;
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    resolve(api(config));
+  }
+};
+
+const rejectPendingRequests = (error: any) => {
+  while (pendingRequests.length) {
+    const { reject } = pendingRequests.shift()!;
+    reject(error);
+  }
+};
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const refreshToken = tokenManager.getRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const response = await api.post(
+      '/auth/refresh',
+      { refresh_token: refreshToken },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // 自定义标记，避免拦截器重复处理
+        _skipAuth: true,
+      } as any
+    );
+
+    const { access_token, refresh_token } = response.data || {};
+    if (access_token) {
+      tokenManager.setTokens(access_token, refresh_token);
+      return access_token;
+    }
+    return null;
+  } catch (error) {
+    tokenManager.clearTokens();
+    return null;
+  }
+};
+
+const createSilentAuthError = (error: AxiosError<any>) => ({
+  name: 'AuthenticationExpired',
+  message: 'Authentication expired',
+  isAuthError: true,
+  response: error.response,
+  config: error.config,
+  _suppressErrorToast: true,
+  _isSilent: true,
+  code: error.code,
+  request: error.request,
+});
+
 // 提取后端返回的可读错误信息（兼容 FastAPI/通用后端返回格式）
 const extractDetailMessage = (data: any): string | null => {
   if (!data) return null;
@@ -70,9 +160,10 @@ api.interceptors.request.use(
   (config) => {
     // 强制从 localStorage 获取最新 token
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token');
       const url = config.url || '';
-      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/me');
+      const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+      const skipAuth = (config as any)?._skipAuth;
+      const token = tokenManager.getToken();
       
       if ((window as any).__DEBUG_API__) {
         console.log('[API Debug] Request to:', config.url);
@@ -80,16 +171,15 @@ api.interceptors.request.use(
         console.log('[API Debug] Headers before:', {...config.headers});
       }
       
-      if (token) {
+      if (skipAuth) {
+        if (config.headers?.Authorization) {
+          delete config.headers.Authorization;
+        }
+      } else if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       } else if (!isAuthEndpoint) {
         // 无 token 的情况下，直接触发登录过期提示并取消请求，避免 401 错误弹出
-        if (!hasShownAuthExpiredToast && !isRedirecting) {
-          hasShownAuthExpiredToast = true;
-          import('@/components/auth-expired-toast')
-            .then((m) => m.showAuthExpiredToast())
-            .catch(() => {});
-        }
+        triggerAuthExpired();
         ;(config as any)._suppressErrorToast = true;
         return Promise.reject(new CanceledError('AUTH_REQUIRED'));
       }
@@ -112,6 +202,7 @@ if (typeof window !== 'undefined') {
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       console.log('[API] Token updated via listener');
+      hasShownAuthExpiredToast = false;
     } else {
       delete api.defaults.headers.common['Authorization'];
       console.log('[API] Token removed via listener');
@@ -134,35 +225,51 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 处理 401 错误 - 只显示"登录已过期"浮框，完全静默处理
+    // 处理 401 错误 - 优先尝试 refresh token
     if (error.response?.status === 401) {
-      const url = error.config?.url || '';
-      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/me');
+      const originalRequest: any = error.config || {};
+      const url: string = originalRequest.url || '';
+      const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+      const skipAuth = Boolean(originalRequest._skipAuth);
+      const refreshToken = typeof window !== 'undefined' ? tokenManager.getRefreshToken() : null;
 
-      if (!isAuthEndpoint && !hasShownAuthExpiredToast && !isRedirecting) {
-        hasShownAuthExpiredToast = true;
-        // 动态引入，避免潜在循环依赖
-        import('@/components/auth-expired-toast')
-          .then((m) => m.showAuthExpiredToast())
-          .catch(() => {});
+      if (!skipAuth && refreshToken && !isAuthEndpoint && !originalRequest._retry) {
+        if (isRefreshing) {
+          return new Promise((resolve, reject) => {
+            addPendingRequest(originalRequest, resolve, reject);
+          });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        return new Promise((resolve, reject) => {
+          refreshAccessToken()
+            .then((newAccessToken) => {
+              if (!newAccessToken) {
+                throw new Error('REFRESH_FAILED');
+              }
+
+              originalRequest.headers = originalRequest.headers || {};
+              originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+              resolvePendingRequests(newAccessToken);
+              resolve(api(originalRequest));
+            })
+            .catch(() => {
+              tokenManager.clearTokens();
+              const silentError = createSilentAuthError(error);
+              rejectPendingRequests(silentError);
+              triggerAuthExpired();
+              reject(silentError);
+            })
+            .finally(() => {
+              isRefreshing = false;
+            });
+        });
       }
 
-      // 创建一个非Error类型的静默对象，避免Next.js显示运行时错误
-      const silentError = {
-        name: 'AuthenticationExpired',
-        message: 'Authentication expired',
-        isAuthError: true,
-        response: error.response,
-        config: error.config,
-        _suppressErrorToast: true,
-        _isSilent: true,
-        // 保持axios错误的必要属性
-        code: error.code,
-        request: error.request,
-      };
-      
-      // 静默处理，不在控制台显示错误
-      return Promise.reject(silentError);
+      triggerAuthExpired();
+      return Promise.reject(createSilentAuthError(error));
     }
     
     // 处理其他错误 - 但避免重复提示
@@ -223,15 +330,42 @@ export const authAPI = {
     });
     
     if (response.data.access_token) {
-      tokenManager.setToken(response.data.access_token);
+      tokenManager.setTokens(response.data.access_token, response.data.refresh_token);
     }
     
+    return response.data;
+  },
+
+  refresh: async (refreshToken: string) => {
+    const response = await api.post('/auth/refresh', { refresh_token: refreshToken }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      _skipAuth: true,
+    } as any);
+
+    if (response.data.access_token) {
+      tokenManager.setTokens(response.data.access_token, response.data.refresh_token);
+    }
+
     return response.data;
   },
   
   getCurrentUser: async () => {
     const response = await api.get('/auth/me');
     return response.data;
+  },
+
+  logout: async () => {
+    const refreshToken = tokenManager.getRefreshToken();
+    if (refreshToken) {
+      try {
+        await api.post('/auth/logout', { refresh_token: refreshToken });
+      } catch (error) {
+        // 静默处理，确保本地凭据被清理
+      }
+    }
+    tokenManager.clearTokens();
   },
 };
 
