@@ -16,7 +16,8 @@ import {
   XCircleIcon,
   ArchiveBoxIcon,
   BeakerIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CheckIcon
 } from '@heroicons/react/20/solid';
 
 interface ReceiveRecord {
@@ -403,7 +404,7 @@ export default function SampleInventoryPage() {
                   className="flex-shrink-0 px-4"
                   outline
                 >
-                  <QrCodeIcon className="h-4 w-4" />
+                  <CheckIcon className="h-4 w-4" />
                   确认
                 </Button>
               </div>
