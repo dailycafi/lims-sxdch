@@ -279,6 +279,23 @@ export default function SampleInventoryPage() {
   }
 
   const progress = getProgress();
+  const currentBoxFillPercent = currentBox && currentBox.capacity > 0
+    ? Math.round((currentBox.samples.length / currentBox.capacity) * 100)
+    : 0;
+  const currentBoxStatusColor = currentBox
+    ? currentBox.samples.length >= currentBox.capacity
+      ? 'red'
+      : currentBox.samples.length >= currentBox.capacity * 0.9
+        ? 'amber'
+        : 'blue'
+    : 'blue';
+  const currentBoxStatusLabel = currentBox
+    ? currentBox.samples.length >= currentBox.capacity
+      ? '已满'
+      : currentBox.samples.length >= currentBox.capacity * 0.9
+        ? '即将满'
+        : '使用中'
+    : '';
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentScanCode(e.target.value);
@@ -358,117 +375,111 @@ export default function SampleInventoryPage() {
           </div>
         </div>
 
-        {/* 扫码区域 - 重新设计为两栏布局 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 左侧：扫码操作 */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <Text className="text-lg font-semibold">扫码操作</Text>
+        {/* 扫码区域 - 顶部满行 */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Text className="text-lg font-semibold">扫码操作</Text>
+            <div className={clsx(
+              "flex items-center gap-2 px-3 py-1 rounded-full text-sm",
+              scannerActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+            )}>
               <div className={clsx(
-                "flex items-center gap-2 px-3 py-1 rounded-full text-sm",
-                scannerActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
-              )}>
-                <div className={clsx(
-                  "w-2 h-2 rounded-full",
-                  scannerActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
-                )}></div>
-                {scannerActive ? '扫码枪激活' : '扫码枪未激活'}
-              </div>
+                "w-2 h-2 rounded-full",
+                scannerActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+              )}></div>
+              {scannerActive ? '扫码枪激活' : '扫码枪未激活'}
             </div>
+          </div>
 
-            {/* 扫码模式切换 */}
-            <div className="mb-4">
-              <Text className="text-sm font-medium mb-2">扫码模式：</Text>
-              <div className="flex gap-2">
-                <Button 
-                  onClick={() => setScanMode('box')}
-                  className={scanMode === 'box' ? 'bg-blue-600' : 'bg-gray-100 text-gray-700'}
-                >
-                  <ArchiveBoxIcon className="h-4 w-4" />
-                  扫描盒子
-                </Button>
-                <Button 
-                  onClick={() => {
-                    if (currentBox) {
-                      setScanMode('sample');
-                    } else {
-                      alert('请先扫描样本盒！');
-                    }
-                  }}
-                  disabled={!currentBox}
-                  className={clsx(
-                    scanMode === 'sample' && currentBox ? 'bg-blue-600' : 'bg-gray-100 text-gray-700',
-                    !currentBox && 'opacity-50 cursor-not-allowed'
-                  )}
-                >
-                  <BeakerIcon className="h-4 w-4" />
-                  扫描样本
-                </Button>
-              </div>
-            </div>
-
-            {/* 扫码输入框 */}
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  value={currentScanCode}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    scanMode === 'sample' 
-                      ? (currentBox ? '扫描样本条码' : '请先扫描样本盒') 
-                      : '扫描样本盒条码'
+          {/* 扫码模式切换 */}
+          <div className="mb-4">
+            <Text className="text-sm font-medium mb-2">扫码模式：</Text>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => setScanMode('box')}
+                className={scanMode === 'box' ? 'bg-blue-600' : 'bg-gray-100 text-gray-700'}
+              >
+                <ArchiveBoxIcon className="h-4 w-4" />
+                扫描盒子
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (currentBox) {
+                    setScanMode('sample');
+                  } else {
+                    alert('请先扫描样本盒！');
                   }
-                  disabled={scanMode === 'sample' && !currentBox}
-                  autoFocus={!(scanMode === 'sample' && !currentBox)}
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={handleManualScan}
-                  outline
-                  disabled={scanMode === 'sample' && !currentBox}
-                >
-                  <CheckIcon className="h-4 w-4" />
-                  确认
-                </Button>
-              </div>
-              
-              <Text className="text-sm text-zinc-600">
-                {scanMode === 'sample' 
-                  ? (currentBox ? '扫描后按回车或点击确认' : '请先扫描样本盒') 
-                  : '扫描样本盒条码后自动切换到样本扫描模式'
-                }
-              </Text>
+                }}
+                disabled={!currentBox}
+                className={clsx(
+                  scanMode === 'sample' && currentBox ? 'bg-blue-600' : 'bg-gray-100 text-gray-700',
+                  !currentBox && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                <BeakerIcon className="h-4 w-4" />
+                扫描样本
+              </Button>
             </div>
+          </div>
 
-            {/* 当前样本盒信息 */}
+          {/* 扫码输入框 */}
+          <div className="space-y-3">
+            <div className="flex gap-2 max-w-2xl">
+              <Input
+                value={currentScanCode}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  scanMode === 'sample' 
+                    ? (currentBox ? '扫描样本条码' : '请先扫描样本盒') 
+                    : '扫描样本盒条码'
+                }
+                disabled={scanMode === 'sample' && !currentBox}
+                autoFocus={!(scanMode === 'sample' && !currentBox)}
+                className="flex-1"
+              />
+              <Button 
+                onClick={handleManualScan}
+                outline
+                disabled={scanMode === 'sample' && !currentBox}
+              >
+                <CheckIcon className="h-4 w-4" />
+                确认
+              </Button>
+            </div>
+            
+            <Text className="text-sm text-zinc-600">
+              {scanMode === 'sample' 
+                ? (currentBox ? '扫描后按回车或点击确认' : '请先扫描样本盒') 
+                : '扫描样本盒条码后自动切换到样本扫描模式'
+              }
+            </Text>
+          </div>
+        </div>
+
+        {/* 状态区域 - 两栏布局 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* 左侧：当前样本盒状态 */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <Text className="text-lg font-semibold mb-4">当前样本盒状态</Text>
+            
             {currentBox ? (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <Text className="font-semibold text-blue-900">📦 当前样本盒</Text>
-                  <Badge color={
-                    currentBox.samples.length >= currentBox.capacity ? 'red' :
-                    currentBox.samples.length >= currentBox.capacity * 0.9 ? 'amber' : 
-                    'blue'
-                  }>
-                    {currentBox.samples.length >= currentBox.capacity ? '已满' :
-                     currentBox.samples.length >= currentBox.capacity * 0.9 ? '即将满' : 
-                     '使用中'}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Text className="font-mono font-bold text-blue-900 text-lg">
+                      {currentBox.code}
+                    </Text>
+                    <Badge color="blue">当前使用</Badge>
+                    <Badge color={currentBoxStatusColor}>{currentBoxStatusLabel}</Badge>
+                  </div>
+                  <Badge color={currentBoxStatusColor}>
+                    {currentBox.samples.length} / {currentBox.capacity}
                   </Badge>
                 </div>
-                <Text className="text-lg font-mono font-bold text-blue-800 mb-2">
-                  {currentBox.code}
-                </Text>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Text className="text-sm text-blue-700">
-                      容量：{currentBox.samples.length} / {currentBox.capacity}
-                    </Text>
-                    <Text className="text-xs text-blue-600">
-                      {Math.round((currentBox.samples.length / currentBox.capacity) * 100)}%
-                    </Text>
-                  </div>
-                  {/* 容量进度条 */}
+
+                {/* 当前样本盒进度条（保留，因为有容量限制） */}
+                <div>
                   <div className="w-full bg-blue-200 rounded-full h-2">
                     <div
                       className={clsx(
@@ -477,34 +488,33 @@ export default function SampleInventoryPage() {
                         currentBox.samples.length >= currentBox.capacity * 0.9 ? "bg-amber-500" :
                         "bg-blue-500"
                       )}
-                      style={{ width: `${Math.min((currentBox.samples.length / currentBox.capacity) * 100, 100)}%` }}
+                      style={{ width: `${Math.min(currentBoxFillPercent, 100)}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Text className="text-xs text-blue-600">
-                      剩余空间：{currentBox.capacity - currentBox.samples.length} 个
-                    </Text>
-                    <Button 
-                      onClick={() => {
-                        setScanMode('box');
-                        setCurrentBox(null);
-                      }}
-                      outline
-                      className="text-xs px-2 py-1"
-                      disabled={currentBox.samples.length === 0}
-                    >
-                      切换盒子
-                    </Button>
-                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Text className="text-sm text-blue-700">
+                    已有：{currentBox.samples.length} 个
+                  </Text>
+                  <Button 
+                    onClick={() => {
+                      setScanMode('box');
+                      setCurrentBox(null);
+                    }}
+                    outline
+                    className="text-xs px-2 py-1"
+                    disabled={currentBox.samples.length === 0}
+                  >
+                    切换盒子
+                  </Button>
                 </div>
               </div>
             ) : (
-              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-amber-600" />
-                  <Text className="font-semibold text-amber-800">请先扫描样本盒</Text>
-                </div>
-                <Text className="text-sm text-amber-700 mb-3">
+              <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                <ExclamationTriangleIcon className="h-12 w-12 mx-auto mb-3 text-amber-500" />
+                <Text className="font-semibold text-amber-800 mb-2">请先扫描样本盒</Text>
+                <Text className="text-sm text-amber-700 mb-4">
                   扫描样本盒后才能开始扫描样本
                 </Text>
                 <Button 
@@ -518,82 +528,40 @@ export default function SampleInventoryPage() {
             )}
           </div>
 
-          {/* 右侧：样本盒列表 */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <Text className="text-lg font-semibold">已使用样本盒</Text>
-              <Badge color="zinc">共 {boxes.length} 个</Badge>
+          {/* 右侧：样本清点进度 */}
+          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 self-stretch">
+            <div className="mb-4">
+              <Text className="text-lg font-semibold text-gray-900">待清点样本</Text>
             </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {boxes.length === 0 ? (
-                <div className="text-center py-8 text-zinc-500">
-                  <ArchiveBoxIcon className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                  <Text>暂无样本盒</Text>
-                  <Text className="text-sm">请先扫描样本盒</Text>
+            {/* 样本统计和进度条 */}
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <Text className="font-medium text-gray-900">样本清点进度</Text>
+                <div className="flex gap-2">
+                  <Badge color="zinc">待扫描: {samples.filter(s => s.status === 'pending').length}</Badge>
+                  <Badge color="green">已扫描: {samples.filter(s => s.status === 'scanned').length}</Badge>
+                  <Badge color="red">异常: {samples.filter(s => s.status === 'error').length}</Badge>
                 </div>
-              ) : (
-                boxes.map((box) => (
-                  <div key={box.id} className={clsx(
-                    "p-4 rounded-lg border-2 transition-colors",
-                    box.id === currentBox?.id 
-                      ? "bg-blue-50 border-blue-300" 
-                      : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                  )}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Text className="font-mono font-bold">{box.code}</Text>
-                        {box.id === currentBox?.id && (
-                          <Badge color="blue">当前使用</Badge>
-                        )}
-                      </div>
-                      <Badge color={
-                        box.samples.length >= box.capacity ? 'red' :
-                        box.samples.length >= box.capacity * 0.9 ? 'amber' : 
-                        'green'
-                      }>
-                        {box.samples.length} / {box.capacity}
-                      </Badge>
-                    </div>
-                    
-                    {/* 样本盒容量进度条 */}
-                    <div className="mb-3">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={clsx(
-                            "h-2 rounded-full transition-all duration-300",
-                            box.samples.length >= box.capacity ? "bg-red-500" :
-                            box.samples.length >= box.capacity * 0.9 ? "bg-amber-500" :
-                            "bg-green-500"
-                          )}
-                          style={{ width: `${Math.min((box.samples.length / box.capacity) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <Text className="text-sm text-gray-600">
-                        剩余：{box.capacity - box.samples.length} 个
-                      </Text>
-                      <Button
-                        onClick={() => setCurrentBox(box)}
-                        outline
-                        className="text-xs px-2 py-1"
-                        disabled={box.id === currentBox?.id || box.samples.length >= box.capacity}
-                      >
-                        {box.id === currentBox?.id ? '使用中' : 
-                         box.samples.length >= box.capacity ? '已满' : '切换到此盒'}
-                      </Button>
-                    </div>
-                    
-                    {box.samples.length > 0 && (
-                      <Text className="text-xs text-gray-500 mt-1">
-                        最新样本：{box.samples[box.samples.length - 1]}
-                      </Text>
-                    )}
-                  </div>
-                ))
-              )}
+              </div>
+              
+              {/* 进度条 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <Text className="text-gray-600">
+                    {progress.scanned} / {progress.total} 已完成
+                  </Text>
+                  <Text className="text-gray-600 font-medium">
+                    {progress.percentage.toFixed(0)}%
+                  </Text>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progress.percentage}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -601,14 +569,7 @@ export default function SampleInventoryPage() {
         {/* 样本列表 */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-4 border-b border-zinc-200">
-            <div className="flex items-center justify-between">
-              <Text className="text-lg font-semibold">样本清单</Text>
-              <div className="flex gap-2">
-                <Badge color="zinc">待扫描: {samples.filter(s => s.status === 'pending').length}</Badge>
-                <Badge color="green">已扫描: {samples.filter(s => s.status === 'scanned').length}</Badge>
-                <Badge color="red">异常: {samples.filter(s => s.status === 'error').length}</Badge>
-              </div>
-            </div>
+            <Text className="text-lg font-semibold">样本清单</Text>
           </div>
           <div className="max-h-96 overflow-y-auto">
             <Table>
