@@ -70,11 +70,14 @@ export default function SampleInventoryPage() {
     rack: '',
     position: ''
   });
+  const [scannerActive, setScannerActive] = useState(true);
 
   useEffect(() => {
     if (id) {
       fetchReceiveRecord();
       fetchSampleCodes();
+      // 页面加载完成，激活扫码枪
+      setScannerActive(true);
     }
   }, [id]);
 
@@ -268,6 +271,27 @@ export default function SampleInventoryPage() {
 
   const progress = getProgress();
 
+  // 简化输入处理
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentScanCode(e.target.value);
+  };
+
+  // 扫码枪扫描完成会自动发送Enter，直接执行清点
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleScan(currentScanCode);
+      setCurrentScanCode('');
+    }
+  };
+
+  // 手动确认按钮（备用）
+  const handleManualScan = () => {
+    if (currentScanCode.trim()) {
+      handleScan(currentScanCode);
+      setCurrentScanCode('');
+    }
+  };
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
@@ -321,49 +345,66 @@ export default function SampleInventoryPage() {
           </div>
         </div>
 
+        {/* 扫码状态提示 */}
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <Text className="text-green-800 font-medium">扫码枪已激活</Text>
+          </div>
+          <Text className="text-sm text-green-700 mt-1">
+            请使用扫码枪扫描{scanMode === 'sample' ? '样本' : '样本盒'}条码，扫描后将自动清点
+          </Text>
+        </div>
+
         {/* 扫码区域 */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             {/* 扫码输入 */}
-            <div>
+            <div className="col-span-2">
               <div className="flex items-center gap-4 mb-4">
                 <Text className="font-medium">当前扫码模式：</Text>
                 <div className="flex gap-2">
-                  <Button
-                    {...(scanMode === 'sample' ? {} : { outline: true })}
-                    onClick={() => setScanMode('sample')}
-                  >
-                    <BeakerIcon className="h-4 w-4" />
-                    扫描样本
-                  </Button>
-                  <Button
-                    {...(scanMode === 'box' ? {} : { outline: true })}
-                    onClick={() => setScanMode('box')}
-                  >
-                    <ArchiveBoxIcon className="h-4 w-4" />
-                    扫描盒子
-                  </Button>
+                  {scanMode === 'sample' ? (
+                    <Button onClick={() => setScanMode('sample')}>
+                      <BeakerIcon className="h-4 w-4" />
+                      扫描样本
+                    </Button>
+                  ) : (
+                    <Button outline onClick={() => setScanMode('sample')}>
+                      <BeakerIcon className="h-4 w-4" />
+                      扫描样本
+                    </Button>
+                  )}
+                  {scanMode === 'box' ? (
+                    <Button onClick={() => setScanMode('box')}>
+                      <ArchiveBoxIcon className="h-4 w-4" />
+                      扫描盒子
+                    </Button>
+                  ) : (
+                    <Button outline onClick={() => setScanMode('box')}>
+                      <ArchiveBoxIcon className="h-4 w-4" />
+                      扫描盒子
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 max-w-md">
                 <Input
                   value={currentScanCode}
-                  onChange={(e) => setCurrentScanCode(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleScan(currentScanCode);
-                      setCurrentScanCode('');
-                    }
-                  }}
-                  placeholder={scanMode === 'sample' ? '扫描样本条码' : '扫描样本盒条码'}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={scanMode === 'sample' ? '扫描样本条码（自动）' : '扫描样本盒条码（自动）'}
                   autoFocus
+                  className="flex-1"
                 />
-                <Button onClick={() => {
-                  handleScan(currentScanCode);
-                  setCurrentScanCode('');
-                }}>
-                  <QrCodeIcon />
+                <Button 
+                  onClick={handleManualScan}
+                  className="flex-shrink-0 px-4"
+                  outline
+                >
+                  <QrCodeIcon className="h-4 w-4" />
+                  确认
                 </Button>
               </div>
 
@@ -476,23 +517,25 @@ export default function SampleInventoryPage() {
 
       {/* 错误处理对话框 */}
       <Dialog open={isErrorDialogOpen} onClose={setIsErrorDialogOpen}>
-        <DialogTitle>
+        <DialogTitle className="px-6 pt-6">
           <div className="flex items-center gap-2">
             <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />
             样本异常
           </div>
         </DialogTitle>
-        <DialogDescription>
+        <DialogDescription className="px-6 pt-1">
           样本 {errorSample?.code} 不在接收清单中，请输入原因
         </DialogDescription>
-        <DialogBody>
-          <Input
+        <DialogBody className="px-6 py-2">
+          <input
+            type="text"
             value={errorReason}
             onChange={(e) => setErrorReason(e.target.value)}
             placeholder="请输入异常原因"
+            className="w-full px-4 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </DialogBody>
-        <DialogActions>
+        <DialogActions className="px-6 pb-6">
           <Button plain onClick={() => {
             setIsErrorDialogOpen(false);
             setErrorSample(null);
