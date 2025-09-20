@@ -10,6 +10,8 @@ interface User {
   role: string;
   is_active: boolean;
   is_superuser: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuthState {
@@ -19,6 +21,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -58,5 +61,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error) {
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
+  },
+  
+  setUser: (user: User | null) => {
+    set({ user, isAuthenticated: Boolean(user) });
   },
 }));

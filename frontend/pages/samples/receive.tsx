@@ -741,12 +741,12 @@ export default function SampleReceivePage() {
 
       {/* 接收样本对话框 */}
       <Dialog open={isReceiveDialogOpen} onClose={setIsReceiveDialogOpen} size="4xl">
-        <DialogTitle>接收样本</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="px-6 pt-6">接收样本</DialogTitle>
+        <DialogDescription className="px-6 pt-2">
           录入样本接收信息，生成清点任务
         </DialogDescription>
         <DialogBody>
-          <div className="space-y-4">
+          <div className="space-y-6 px-6 py-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
@@ -835,26 +835,25 @@ export default function SampleReceivePage() {
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   温度数据文件
                 </label>
-                <div className="mt-1 flex items-center gap-3">
-                  <Input
-                    type="file"
-                    accept=".csv,.xlsx,.xls,.txt,.pdf"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setFormData({ ...formData, temperature_file: file });
-                      }
-                    }}
-                  />
-                  {formData.temperature_file && (
-                    <Text className="text-sm text-zinc-600">
-                      已选择: {formData.temperature_file.name}
-                    </Text>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls,.txt,.pdf"
+                      onChange={handleTemperatureFileChange}
+                      className="hidden"
+                    />
+                    <div className="inline-flex items-baseline justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
+                      <CloudArrowUpIcon className="w-4 h-4" />
+                      上传温度数据
+                    </div>
+                  </label>
+                  {temperatureFile ? (
+                    <Text className="text-sm text-green-600">已选择: {temperatureFile.name}</Text>
+                  ) : (
+                    <Text className="text-sm text-zinc-500">支持 CSV, Excel, TXT, PDF</Text>
                   )}
                 </div>
-                <Text className="text-xs text-zinc-500 mt-1">
-                  支持格式：CSV, Excel, TXT, PDF
-                </Text>
               </div>
 
               <div>
@@ -886,7 +885,9 @@ export default function SampleReceivePage() {
                   <option value="other">其他异常</option>
                 </Select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   暂存位置
@@ -900,33 +901,6 @@ export default function SampleReceivePage() {
                   <Button plain>
                     <QrCodeIcon />
                   </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  温度数据文件
-                </label>
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer">
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={handleTemperatureFileChange}
-                      className="hidden"
-                    />
-                    <div className="inline-flex items-baseline justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
-                      <CloudArrowUpIcon className="w-4 h-4" />
-                      上传温度数据
-                    </div>
-                  </label>
-                  {temperatureFile ? (
-                    <Text className="text-sm text-green-600">已选择: {temperatureFile.name}</Text>
-                  ) : (
-                    <Text className="text-sm text-zinc-500">支持 CSV, Excel 格式</Text>
-                  )}
                 </div>
               </div>
 
@@ -958,7 +932,7 @@ export default function SampleReceivePage() {
             </div>
           </div>
         </DialogBody>
-        <DialogActions>
+        <DialogActions className="px-6 pb-6">
           <Button plain onClick={() => {
             setIsReceiveDialogOpen(false);
             resetForm();

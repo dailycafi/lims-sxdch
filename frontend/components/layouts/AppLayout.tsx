@@ -104,6 +104,9 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
     { label: '系统管理', href: '/settings' },
     { label: '系统设置', current: true }
   ],
+  '/profile': [
+    { label: '个人信息', current: true }
+  ],
 };
 
 export function AppLayout({ children }: AppLayoutProps) {

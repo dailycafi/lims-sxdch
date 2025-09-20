@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -11,14 +12,12 @@ import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/componen
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
-import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { api } from '@/lib/api';
 import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { 
   CogIcon, 
   DocumentTextIcon, 
   PrinterIcon, 
-  PlusIcon,
   ArrowUpTrayIcon,
   CheckCircleIcon 
 } from '@heroicons/react/20/solid';
@@ -68,6 +67,8 @@ export default function ProjectDetailPage() {
   const [auditReason, setAuditReason] = useState('');
   const [isESignatureOpen, setIsESignatureOpen] = useState(false);
   const [pendingSaveRule, setPendingSaveRule] = useState<any | null>(null);
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
   
   // 批量生成表单
   const [batchForm, setBatchForm] = useState({
@@ -93,6 +94,12 @@ export default function ProjectDetailPage() {
       fetchProject();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!isBatchGenerateDialogOpen) {
+      setGeneratedCodes([]);
+    }
+  }, [isBatchGenerateDialogOpen]);
 
   const fetchProject = async () => {
     try {
@@ -190,14 +197,120 @@ export default function ProjectDetailPage() {
     setSelectedElements(newElements);
   };
 
+  const parseCommaSeparatedList = (value: string) =>
+    value
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+
+  const parseSeqTimePairs = (input: string) => {
+    return input
+      .split(',')
+      .map(segment => segment.trim())
+      .filter(Boolean)
+      .map(pair => {
+        const [seq = '', time = ''] = pair.split('/');
+        return {
+          seq: seq.trim(),
+          time: time.trim(),
+        };
+      })
+      .filter(item => item.seq || item.time);
+  };
+
+  const triggerPrint = (codes: string[]) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (!printWindow) {
+      toast.error('浏览器阻止了打印窗口，请允许弹窗后重试');
+      return;
+    }
+
+    const generatedAt = new Date().toLocaleString('zh-CN');
+    const projectLabel = project?.lab_project_code || project?.sponsor_project_code || '项目';
+
+    printWindow.document.write(`<!DOCTYPE html>
+      <html lang="zh-CN">
+        <head>
+          <meta charSet="utf-8" />
+          <title>样本编号打印</title>
+          <style>
+            body { font-family: 'SF Pro SC', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif; padding: 24px; }
+            h1 { margin-bottom: 8px; }
+            p { margin-bottom: 16px; color: #4b5563; }
+            ul { columns: 2; column-gap: 32px; padding: 0; list-style: none; }
+            li { margin-bottom: 8px; font-size: 14px; }
+            @media print {
+              body { padding: 0; }
+              ul { columns: 3; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>样本编号列表</h1>
+          <p>项目：${projectLabel} | 生成时间：${generatedAt}</p>
+          <ul>
+            ${codes.map(code => `<li>${code}</li>`).join('')}
+          </ul>
+        </body>
+      </html>`);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 100);
+  };
+
+  const handleGenerateSampleCodes = async (mode: 'preview' | 'print' = 'preview') => {
+    if (!project) {
+      toast.error('项目信息尚未加载完成');
+      return;
+    }
+
+    const subjects = parseCommaSeparatedList(batchForm.subjects);
+    const clinicCodes = parseCommaSeparatedList(batchForm.clinicCodes);
+    const seqTimePairs = parseSeqTimePairs(batchForm.sampleSeqs);
+
+    const payload: Record<string, any> = {
+      cycles: batchForm.cycles.length ? batchForm.cycles : undefined,
+      test_types: batchForm.testTypes.length ? batchForm.testTypes : undefined,
+      primary: batchForm.primary.length ? batchForm.primary : undefined,
+      backup: batchForm.backup.length ? batchForm.backup : undefined,
+      subjects: subjects.length ? subjects : undefined,
+      clinic_codes: clinicCodes.length ? clinicCodes : undefined,
+      seq_time_pairs: seqTimePairs.length ? seqTimePairs : undefined,
+    };
+
+    setIsGeneratingCodes(true);
+    try {
+      const response = await api.post(`/projects/${id}/generate-sample-codes`, payload);
+      const codes: string[] = response.data?.sample_codes || [];
+      setGeneratedCodes(codes);
+
+      const successMessage = response.data?.message || `成功生成 ${codes.length} 个样本编号`;
+      toast.success(successMessage);
+
+      if (mode === 'print' && codes.length > 0) {
+        triggerPrint(codes);
+      }
+    } catch (error) {
+      console.error('生成样本编号失败:', error);
+      toast.error('生成样本编号失败，请稍后重试');
+    } finally {
+      setIsGeneratingCodes(false);
+    }
+  };
+
   const handleGenerateStabilityQCCodes = async () => {
     try {
       const response = await api.post(`/projects/${id}/generate-stability-qc-codes`, stabilityQCParams);
       
-      // 显示生成结果
-      alert(`成功生成 ${response.data.count} 个${stabilityQCParams.sample_category === 'STB' ? '稳定性' : '质控'}样本编号`);
-      
-      // 可以在这里显示生成的编号列表
+      const categoryLabel = stabilityQCParams.sample_category === 'STB' ? '稳定性' : '质控';
+      toast.success(`成功生成 ${response.data.count} 个${categoryLabel}样本编号`);
       console.log('生成的编号:', response.data.sample_codes);
       
       // 重置表单
@@ -209,7 +322,7 @@ export default function ProjectDetailPage() {
       });
     } catch (error) {
       console.error('生成失败:', error);
-      alert('生成失败，请重试');
+      toast.error('生成稳定性/质控样本编号失败，请稍后重试');
     }
   };
 
@@ -665,19 +778,47 @@ export default function ProjectDetailPage() {
                 </Button>
               </div>
             </div>
+
+            {generatedCodes.length > 0 && (
+              <>
+                <Divider />
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <Text className="font-medium">生成结果</Text>
+                    <Badge color="blue">{generatedCodes.length}</Badge>
+                  </div>
+                  <Text className="text-sm text-zinc-600">
+                    最近一次生成的样本编号如下，可再次生成或直接打印。
+                  </Text>
+                  <div className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-sm leading-6">
+                    {generatedCodes.map((code, index) => (
+                      <div key={`${code}-${index}`} className="text-zinc-800">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </DialogBody>
         <DialogActions>
           <Button plain onClick={() => setIsBatchGenerateDialogOpen(false)}>
             取消
           </Button>
-          <Button>
+          <Button 
+            onClick={() => handleGenerateSampleCodes('preview')}
+            disabled={isGeneratingCodes}
+          >
             <CheckCircleIcon />
-            确认生成
+            {isGeneratingCodes ? '生成中…' : '确认生成'}
           </Button>
-          <Button>
+          <Button 
+            onClick={() => handleGenerateSampleCodes('print')}
+            disabled={isGeneratingCodes}
+          >
             <PrinterIcon />
-            生成并打印
+            {isGeneratingCodes ? '生成中…' : '生成并打印'}
           </Button>
         </DialogActions>
       </Dialog>

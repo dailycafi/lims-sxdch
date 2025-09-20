@@ -72,7 +72,7 @@ export default function PendingInventoryListPage() {
               <option value="completed">已完成</option>
               <option value="all">全部</option>
             </Select>
-            <Button onClick={fetchTasks} className="h-11 px-6">
+            <Button onClick={fetchTasks} className="h-11 px-8 whitespace-nowrap">
               刷新
             </Button>
           </div>

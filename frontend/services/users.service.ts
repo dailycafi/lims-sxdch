@@ -48,7 +48,7 @@ export class UsersService {
    * 更新用户
    */
   static async updateUser(id: number, data: UserUpdate): Promise<User> {
-    const response = await api.put<User>(`/users/${id}`, data);
+    const response = await api.patch<User>(`/users/${id}`, data);
     return response.data;
   }
 
