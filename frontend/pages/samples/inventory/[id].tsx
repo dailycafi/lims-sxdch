@@ -458,13 +458,14 @@ export default function SampleInventoryPage() {
         </div>
 
         {/* 状态区域 - 两栏布局 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* 左侧：当前样本盒状态 */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 flex flex-col">
             <Text className="text-lg font-semibold mb-4">当前样本盒状态</Text>
             
+            <div className="flex-1">
             {currentBox ? (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex flex-col gap-2">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex flex-col gap-2 h-full">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Text className="font-mono font-bold text-blue-900 text-lg">
@@ -511,7 +512,7 @@ export default function SampleInventoryPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg text-center">
+              <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg text-center h-full flex flex-col justify-center">
                 <ExclamationTriangleIcon className="h-12 w-12 mx-auto mb-3 text-amber-500" />
                 <Text className="font-semibold text-amber-800 mb-2">请先扫描样本盒</Text>
                 <Text className="text-sm text-amber-700 mb-4">
@@ -526,16 +527,17 @@ export default function SampleInventoryPage() {
                 </Button>
               </div>
             )}
+            </div>
           </div>
 
           {/* 右侧：样本清点进度 */}
-          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 self-stretch">
+          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 flex flex-col">
             <div className="mb-4">
               <Text className="text-lg font-semibold text-gray-900">待清点样本</Text>
             </div>
 
             {/* 样本统计和进度条 */}
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg flex-1 flex flex-col justify-center">
               <div className="flex items-center justify-between mb-3">
                 <Text className="font-medium text-gray-900">样本清点进度</Text>
                 <div className="flex gap-2">
@@ -568,48 +570,65 @@ export default function SampleInventoryPage() {
 
         {/* 样本列表 */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-200">
-            <Text className="text-lg font-semibold">样本清单</Text>
+          <div className="px-6 py-4 border-b border-zinc-200 bg-gray-50">
+            <Text className="text-lg font-semibold text-gray-900">样本清单</Text>
           </div>
+          
+          {/* 固定表头 */}
+          <div className="bg-white border-b border-zinc-200 sticky top-0 z-10">
+            <div className="grid grid-cols-4 gap-4 px-6 py-3 text-sm font-medium text-zinc-700 bg-zinc-50">
+              <div className="flex items-center">
+                <Text className="font-semibold">样本编号</Text>
+              </div>
+              <div className="flex items-center justify-center">
+                <Text className="font-semibold">状态</Text>
+              </div>
+              <div className="flex items-center justify-center">
+                <Text className="font-semibold">样本盒</Text>
+              </div>
+              <div className="flex items-center justify-center">
+                <Text className="font-semibold">备注</Text>
+              </div>
+            </div>
+          </div>
+          
+          {/* 滚动内容区域 */}
           <div className="max-h-96 overflow-y-auto">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeader>样本编号</TableHeader>
-                  <TableHeader>状态</TableHeader>
-                  <TableHeader>样本盒</TableHeader>
-                  <TableHeader>备注</TableHeader>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {samples.map((sample) => (
-                  <TableRow key={sample.id}>
-                    <TableCell className="font-mono">{sample.code}</TableCell>
-                    <TableCell>
-                      {sample.status === 'pending' && (
-                        <Badge color="zinc">待扫描</Badge>
-                      )}
-                      {sample.status === 'scanned' && (
-                        <Badge color="green">
-                          <CheckCircleIcon className="h-4 w-4" />
-                          已扫描
-                        </Badge>
-                      )}
-                      {sample.status === 'error' && (
-                        <Badge color="red">
-                          <XCircleIcon className="h-4 w-4" />
-                          异常
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-mono">{sample.boxCode || '-'}</TableCell>
-                    <TableCell className="text-sm text-zinc-600">
-                      {sample.errorReason || '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="divide-y divide-zinc-100">
+              {samples.map((sample, index) => (
+                <div key={sample.id} className={clsx(
+                  "grid grid-cols-4 gap-4 px-6 py-4 hover:bg-zinc-50 transition-colors",
+                  index % 2 === 0 ? "bg-white" : "bg-zinc-50/30"
+                )}>
+                  <div className="flex items-center">
+                    <Text className="font-mono text-sm font-medium">{sample.code}</Text>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    {sample.status === 'pending' && (
+                      <Badge color="zinc">待扫描</Badge>
+                    )}
+                    {sample.status === 'scanned' && (
+                      <Badge color="green">
+                        <CheckCircleIcon className="h-4 w-4" />
+                        已扫描
+                      </Badge>
+                    )}
+                    {sample.status === 'error' && (
+                      <Badge color="red">
+                        <XCircleIcon className="h-4 w-4" />
+                        异常
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <Text className="font-mono text-sm">{sample.boxCode || '-'}</Text>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <Text className="text-sm text-zinc-600">{sample.errorReason || '-'}</Text>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
