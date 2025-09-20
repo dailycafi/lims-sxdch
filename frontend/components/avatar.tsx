@@ -32,11 +32,13 @@ export const Avatar = forwardRef<HTMLSpanElement, AvatarProps & React.ComponentP
         {...props}
         className={clsx(
           className,
-          // Basic layout
+          // Basic layout - 修复默认大小
           'inline-grid shrink-0 align-middle [--avatar-radius:20%] *:col-start-1 *:row-start-1',
           'outline -outline-offset-1 outline-black/10 dark:outline-white/10',
+          // 默认大小设置
+          !className?.includes('h-') && !className?.includes('w-') && 'h-9 w-9',
           // Border radius
-          square ? 'rounded-(--avatar-radius) *:rounded-(--avatar-radius)' : 'rounded-full *:rounded-full'
+          square ? 'rounded-[--avatar-radius] *:rounded-[--avatar-radius]' : 'rounded-full *:rounded-full'
         )}
       >
         {initials && (
@@ -51,13 +53,17 @@ export const Avatar = forwardRef<HTMLSpanElement, AvatarProps & React.ComponentP
             </text>
           </svg>
         )}
-        {src && <img className="size-full" src={src} alt={alt} />}
+        {src && <img className="size-full object-cover" src={src} alt={alt} />}
       </span>
     )
   }
 )
 
-export const AvatarButton = forwardRef(function AvatarButton(
+export const AvatarButton = forwardRef<
+  HTMLElement,
+  AvatarProps &
+    (Omit<Headless.ButtonProps, 'as' | 'className'> | Omit<React.ComponentPropsWithoutRef<typeof Link>, 'className'>)
+>(function AvatarButton(
   {
     src,
     square = false,
@@ -65,26 +71,27 @@ export const AvatarButton = forwardRef(function AvatarButton(
     alt,
     className,
     ...props
-  }: AvatarProps &
-    (Omit<Headless.ButtonProps, 'as' | 'className'> | Omit<React.ComponentPropsWithoutRef<typeof Link>, 'className'>),
-  ref: React.ForwardedRef<HTMLElement>
+  },
+  ref
 ) {
   let classes = clsx(
     className,
     square ? 'rounded-[20%]' : 'rounded-full',
-    'relative inline-grid focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-blue-500'
+    'relative inline-grid focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+    // 默认大小设置
+    !className?.includes('h-') && !className?.includes('w-') && 'h-9 w-9'
   )
 
   return 'href' in props ? (
     <Link {...props} className={classes} ref={ref as React.ForwardedRef<HTMLAnchorElement>}>
       <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
+        <Avatar src={src} square={square} initials={initials} alt={alt} className="h-full w-full" />
       </TouchTarget>
     </Link>
   ) : (
     <Headless.Button {...props} className={classes} ref={ref}>
       <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
+        <Avatar src={src} square={square} initials={initials} alt={alt} className="h-full w-full" />
       </TouchTarget>
     </Headless.Button>
   )

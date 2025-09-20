@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Image } from '@/components/image';
 import { useAuthStore } from '@/store/auth';
 import { SidebarLayout } from '@/components/sidebar-layout';
+import { Breadcrumb, BreadcrumbItem } from '@/components/breadcrumb';
 import { 
   Sidebar, 
   SidebarBody, 
@@ -12,9 +13,8 @@ import {
   SidebarHeading,
   SidebarSpacer,
   SidebarLabel,
-  SidebarFooter  // 添加 SidebarFooter
+  SidebarFooter
 } from '@/components/sidebar';
-import { Navbar } from '@/components/navbar';
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown';
 import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/badge';
@@ -40,6 +40,71 @@ import {
 interface AppLayoutProps {
   children: ReactNode;
 }
+
+// 路由到面包屑的映射
+const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
+  '/': [],
+  '/samples/receive': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本接收', current: true }
+  ],
+  '/samples/inventory': [
+    { label: '样本管理', href: '/samples' },
+    { label: '清点入库', current: true }
+  ],
+  '/samples/borrow': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本领用', current: true }
+  ],
+  '/samples/transfer': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本转移', current: true }
+  ],
+  '/samples/destroy': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本销毁', current: true }
+  ],
+  '/samples': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本查询', current: true }
+  ],
+  '/projects': [
+    { label: '项目管理', href: '/projects' },
+    { label: '项目列表', current: true }
+  ],
+  '/projects/new': [
+    { label: '项目管理', href: '/projects' },
+    { label: '新建项目', current: true }
+  ],
+  '/statistics': [
+    { label: '统计分析', href: '/statistics' },
+    { label: '统计查询', current: true }
+  ],
+  '/deviation': [
+    { label: '统计分析', href: '/statistics' },
+    { label: '偏差管理', current: true }
+  ],
+  '/archive': [
+    { label: '统计分析', href: '/statistics' },
+    { label: '项目归档', current: true }
+  ],
+  '/global-params': [
+    { label: '系统管理', href: '/global-params' },
+    { label: '全局参数', current: true }
+  ],
+  '/users': [
+    { label: '系统管理', href: '/users' },
+    { label: '用户管理', current: true }
+  ],
+  '/audit': [
+    { label: '系统管理', href: '/audit' },
+    { label: '审计日志', current: true }
+  ],
+  '/settings': [
+    { label: '系统管理', href: '/settings' },
+    { label: '系统设置', current: true }
+  ],
+};
 
 export function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter();
@@ -74,43 +139,64 @@ export function AppLayout({ children }: AppLayoutProps) {
     return roles.includes(user?.role || '');
   };
 
+  // 获取当前页面的面包屑
+  const currentBreadcrumb = routeToBreadcrumb[router.pathname] || [];
+
   return (
     <SidebarLayout
       navbar={
-        <Navbar className="flex-wrap gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex w-full items-center gap-3">
+          {/* 左侧：Logo和标题 */}
+          <div className="flex flex-1 items-center gap-2 min-w-0">
             <Image
               src="/logo.png"
               alt="徐汇区中心医院"
-              width={40}
-              height={40}
-              className="h-9 w-9 rounded-lg sm:h-10 sm:w-10"
+              width={32}
+              height={32}
+              className="h-8 w-8 flex-shrink-0 rounded-lg"
             />
-            <div className="truncate text-base font-semibold text-zinc-800 dark:text-white sm:text-lg">
-              徐汇区中心医院 LIMS系统
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-zinc-800 dark:text-white">
+                徐汇区中心医院
+              </div>
+              <div className="text-xs text-zinc-600 dark:text-zinc-400 sm:hidden">
+                LIMS
+              </div>
+              <div className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block">
+                LIMS系统
+              </div>
             </div>
           </div>
-          <div className="flex w-full justify-end sm:w-auto">
-            <Dropdown>
-              <DropdownButton as={Avatar} src={undefined} initials={user?.full_name?.charAt(0)} />
-              <DropdownMenu>
-                <DropdownItem href="/profile">个人信息</DropdownItem>
-                <DropdownItem href="/settings">设置</DropdownItem>
-                <DropdownItem onClick={handleLogout}>
-                  <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                  退出登录
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          </div>
-        </Navbar>
+
+          {/* 右侧：用户头像 - 移动端隐藏以节省空间 */}
+          {user && (
+            <div className="hidden flex-shrink-0 sm:flex">
+              <Dropdown>
+                <DropdownButton
+                  as={Avatar}
+                  src={undefined}
+                  initials={user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  className="h-9 w-9 text-base"
+                />
+                <DropdownMenu>
+                  <DropdownItem href="/profile">个人信息</DropdownItem>
+                  <DropdownItem href="/settings">设置</DropdownItem>
+                  <DropdownItem onClick={handleLogout}>
+                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                    退出登录
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
+            </div>
+          )}
+        </div>
       }
       sidebar={
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-3 px-2 py-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
-                <BeakerIcon className="h-5 w-5 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+                <BeakerIcon className="h-4 w-4 text-white" />
               </div>
               <div>
                 <div className="text-sm font-semibold text-white">LIMS</div>
@@ -245,6 +331,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
     >
       <main className="flex-1 overflow-y-auto bg-white">
+        {/* 面包屑导航 */}
+        {currentBreadcrumb.length > 0 && (
+          <div className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
+            <Breadcrumb items={currentBreadcrumb} />
+          </div>
+        )}
+        
         <div className="p-4 sm:p-6">{children}</div>
       </main>
     </SidebarLayout>
