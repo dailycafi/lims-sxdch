@@ -9,7 +9,8 @@ import { Badge } from '@/components/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { AnimatedLoadingState } from '@/components/animated-table';
 import Link from 'next/link';
-import { TasksService, StatisticsService } from '@/services';
+import { TasksService, StatisticsService, UserAccessService } from '@/services';
+import { SmartShortcuts } from '@/components/smart-shortcuts';
 import { TaskOverview, Statistics } from '@/types/api';
 import { 
   ClipboardDocumentCheckIcon, 
@@ -383,10 +384,10 @@ export default function HomePage() {
                   <div className="p-2 rounded-lg bg-gray-100">
                     <ClipboardDocumentCheckIcon className="h-5 w-5 text-gray-700" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">最近任务</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">任务</h3>
                 </div>
                 <Link href="/tasks">
-                  <Button size="sm" className="bg-gray-900 hover:bg-gray-800 text-white">
+                  <Button className="bg-gray-900 hover:bg-gray-800 text-white">
                     查看全部
                   </Button>
                 </Link>
@@ -464,7 +465,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 系统状态和快速访问 - 占1/3宽度 */}
+          {/* 右侧边栏 - 占1/3宽度 */}
           <div className="space-y-6">
             {/* 工作概览 */}
             <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
@@ -496,40 +497,18 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 快速访问 */}
+            {/* 智能快速访问 */}
             <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-lg bg-gray-100">
                   <CpuChipIcon className="h-5 w-5 text-gray-700" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">快速访问</h3>
+                <div className="ml-auto">
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">智能推荐</span>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Link href="/samples" className="group">
-                  <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
-                    <BeakerIcon className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-                    <span className="text-xs text-gray-700 font-medium">样本管理</span>
-                  </div>
-                </Link>
-                <Link href="/projects" className="group">
-                  <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
-                    <FolderIcon className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-                    <span className="text-xs text-gray-700 font-medium">项目管理</span>
-                  </div>
-                </Link>
-                <Link href="/audit" className="group">
-                  <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
-                    <ClipboardDocumentCheckIcon className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-                    <span className="text-xs text-gray-700 font-medium">审计日志</span>
-                  </div>
-                </Link>
-                <Link href="/profile" className="group">
-                  <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
-                    <UsersIcon className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-                    <span className="text-xs text-gray-700 font-medium">个人设置</span>
-                  </div>
-                </Link>
-              </div>
+              <SmartShortcuts />
             </div>
           </div>
         </div>

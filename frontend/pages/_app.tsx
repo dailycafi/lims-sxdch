@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { usePageTracking } from '@/hooks/usePageTracking';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,6 +17,10 @@ const queryClient = new QueryClient({
 
 export default function App({ Component, pageProps }: AppProps) {
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const { isAuthenticated } = useAuthStore();
+
+  // 启用页面访问追踪
+  usePageTracking();
 
   useEffect(() => {
     checkAuth();

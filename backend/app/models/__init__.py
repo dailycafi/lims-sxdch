@@ -1,4 +1,5 @@
 from app.models.user import User, UserRole
+from app.models.user_access import UserAccessLog
 from app.models.project import Project
 from app.models.sample import (
     Sample, 

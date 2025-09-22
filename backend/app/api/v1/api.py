@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, projects, samples, audit, global_params, statistics, deviations_v2 as deviations, archive, tasks
+from app.api.v1.endpoints import auth, users, projects, samples, audit, global_params, statistics, deviations_v2 as deviations, archive, tasks, user_access
 
 api_router = APIRouter()
 
@@ -13,3 +13,4 @@ api_router.include_router(statistics.router, prefix="/statistics", tags=["统计
 api_router.include_router(deviations.router, prefix="/deviations", tags=["偏差管理"])
 api_router.include_router(archive.router, prefix="/archive", tags=["项目归档"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["任务中心"])
+api_router.include_router(user_access.router, prefix="/user-access", tags=["用户访问记录"])

@@ -9,6 +9,7 @@ import { DeviationsService } from './deviations.service';
 import { StatisticsService } from './statistics.service';
 import { ArchiveService } from './archive.service';
 import { TasksService } from './tasks.service';
+import { UserAccessService } from './user-access.service';
 
 // 统一导出所有服务
 export {
@@ -22,6 +23,7 @@ export {
   StatisticsService,
   ArchiveService,
   TasksService,
+  UserAccessService,
 };
 
 // 为了方便使用，也可以创建一个统一的 API 对象
@@ -36,4 +38,5 @@ export const API = {
   statistics: StatisticsService,
   archive: ArchiveService,
   tasks: TasksService,
+  userAccess: UserAccessService,
 } as const;
