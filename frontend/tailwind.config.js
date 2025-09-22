@@ -30,9 +30,11 @@ module.exports = {
       borderRadius: {
         'lg': '0.5rem',
       },
-      // 只保留斜矩形需要的动画
+      // 漂浮和科技感动画
       animation: {
         'float-slow': 'float-slow 6s ease-in-out infinite',
+        'metallic-shine': 'metallic-shine 4s ease-in-out infinite',
+        'tech-scan': 'tech-scan 2s ease-in-out infinite',
       },
       keyframes: {
         'float-slow': {
@@ -41,6 +43,38 @@ module.exports = {
           },
           '50%': { 
             transform: 'translateY(-20px) rotate(15deg)',
+          },
+        },
+        'metallic-shine': {
+          '0%': { 
+            transform: 'translateX(-100%) skewX(-6deg)',
+            opacity: '0',
+          },
+          '20%': {
+            opacity: '0.8',
+          },
+          '80%': {
+            opacity: '0.8',
+          },
+          '100%': { 
+            transform: 'translateX(200%) skewX(-6deg)',
+            opacity: '0',
+          },
+        },
+        'tech-scan': {
+          '0%': { 
+            transform: 'translateX(-120%) skewX(-12deg)',
+            opacity: '0',
+          },
+          '10%': {
+            opacity: '1',
+          },
+          '90%': {
+            opacity: '1',
+          },
+          '100%': { 
+            transform: 'translateX(220%) skewX(-12deg)',
+            opacity: '0',
           },
         },
       },
@@ -53,5 +87,7 @@ module.exports = {
       pattern: /^(bg|text|border)-(zinc|blue|white)-(50|100|200|300|400|500|600|700|800|900|950)$/,
     },
     'animate-float-slow',
+    'animate-metallic-shine',
+    'animate-tech-scan',
   ],
 }

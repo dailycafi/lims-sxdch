@@ -248,4 +248,7 @@ export interface Statistics {
   pending_tasks?: number;
   processed_today?: number;
   audit_logs_today?: number;
+  // 实时系统数据
+  active_users?: number;
+  daily_activities?: number;
 }

@@ -256,9 +256,40 @@ export default function HomePage() {
       <div className="min-h-screen bg-gray-50 space-y-8">
         {/* 现代化欢迎区域 - 黑白主基调 */}
         <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm">
-          {/* 简洁的漂浮斜矩形装饰 */}
-          <div className="absolute top-0 right-0 w-64 h-64 opacity-5">
-            <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-600 transform rotate-12 rounded-3xl animate-float-slow"></div>
+          {/* 科技感漂浮矩形装饰 */}
+          <div className="absolute -top-8 -right-8 w-80 h-80 opacity-15">
+            <div className="relative w-full h-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 transform rotate-12 rounded-2xl animate-float-slow overflow-hidden shadow-2xl border border-blue-500/20">
+              {/* 主要扫描光束 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent -skew-x-12 animate-tech-scan"></div>
+              
+              {/* 次要反光条 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-6 animate-metallic-shine"></div>
+              
+              {/* 顶部科技线条 - 无缝隙 */}
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/60 to-transparent"></div>
+              <div className="absolute top-1 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent"></div>
+              
+              {/* 底部科技线条 */}
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent"></div>
+              
+              {/* 脉冲点 */}
+              <div className="absolute top-4 right-4 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg shadow-blue-400/50"></div>
+              <div className="absolute bottom-6 left-6 w-1.5 h-1.5 bg-cyan-400 rounded-full animate-ping"></div>
+              
+              {/* 网格纹理 */}
+              <div className="absolute inset-2 opacity-30">
+                <div className="w-full h-full" style={{
+                  backgroundImage: `
+                    linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
+                  `,
+                  backgroundSize: '12px 12px'
+                }}></div>
+              </div>
+              
+              {/* 全息效果 */}
+              <div className="absolute inset-3 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/10 rounded-xl"></div>
+            </div>
           </div>
           
           <div className="relative p-8">
@@ -277,9 +308,16 @@ export default function HomePage() {
                 <Heading level={1} className="text-gray-900 text-3xl font-bold mb-2">
                   {dashboardConfig?.title || '工作台'}
                 </Heading>
-                <Text className="text-gray-600 text-lg">
+                <Text className="text-gray-600 text-lg mb-3">
                   {dashboardConfig?.subtitle || `您好，${user?.full_name}！欢迎使用LIMS系统`}
                 </Text>
+                {/* 同步时间信息 */}
+                <div className="flex items-center gap-2 text-sm">
+                  <ClockIcon className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-600">
+                    上次同步: <span className="font-mono">刚刚</span>
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right text-gray-500">
@@ -311,18 +349,23 @@ export default function HomePage() {
               <div
                 key={metric.key}
                 className={clsx(
-                  "relative overflow-hidden rounded-xl bg-white border shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-1",
-                  metric.urgent ? "border-red-200 bg-red-50/30" : "border-gray-200"
+                  "relative overflow-hidden rounded-xl border shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 group",
+                  metric.urgent 
+                    ? "border-red-200 bg-gradient-to-br from-red-50 via-white to-red-50/30" 
+                    : "border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-100"
                 )}
               >
+                {/* 微妙的金属反光效果 */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+                
                 {/* 简洁的装饰线条 */}
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-900 to-gray-600" />
                 
-                <div className="p-6">
+                <div className="relative z-10 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className={clsx(
-                      "p-3 rounded-lg",
-                      metric.urgent ? "bg-red-100" : "bg-gray-100"
+                      "p-3 rounded-lg shadow-inner",
+                      metric.urgent ? "bg-gradient-to-br from-red-100 to-red-200" : "bg-gradient-to-br from-gray-100 to-gray-200"
                     )}>
                       <metric.icon className={clsx(
                         "h-6 w-6",
@@ -467,50 +510,68 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 右侧边栏 - 占1/3宽度 */}
+          {/* 右侧边栏 - 占1/3宽度，带金属反光效果 */}
           <div className="flex flex-col gap-6 min-h-[32rem]">
-            {/* 工作概览 */}
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 flex-1">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-gray-100">
-                  <ChartBarIcon className="h-5 w-5 text-gray-700" />
+            {/* 工作概览 - 金属质感卡片 */}
+            <div className="relative rounded-xl bg-gradient-to-br from-gray-50 via-white to-gray-100 border border-gray-200 shadow-lg p-6 flex-1 overflow-hidden group">
+              {/* 金属反光动画效果 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
+              
+              {/* 边缘高光效果 */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-gray-200 to-gray-300 shadow-inner">
+                    <ChartBarIcon className="h-5 w-5 text-gray-700" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">工作概览</h3>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">工作概览</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-sm">在库样本</span>
-                  <span className="text-gray-900 text-sm font-medium">
-                    {statistics?.in_storage ?? '-'} 份
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-sm">已领用样本</span>
-                  <span className="text-gray-900 text-sm font-medium">
-                    {statistics?.checked_out ?? '-'} 份
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-sm">活跃项目</span>
-                  <span className="text-gray-900 text-sm font-medium">
-                    {statistics?.active_projects ?? '-'} 个
-                  </span>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 text-sm">在库样本</span>
+                    <span className="text-gray-900 text-sm font-medium">
+                      {statistics?.in_storage ?? '-'} 份
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 text-sm">已领用样本</span>
+                    <span className="text-gray-900 text-sm font-medium">
+                      {statistics?.checked_out ?? '-'} 份
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 text-sm">活跃项目</span>
+                    <span className="text-gray-900 text-sm font-medium">
+                      {statistics?.active_projects ?? '-'} 个
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 智能快速访问 */}
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 flex-1">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-gray-100">
-                  <CpuChipIcon className="h-5 w-5 text-gray-700" />
+            {/* 智能快速访问 - 金属质感卡片 */}
+            <div className="relative rounded-xl bg-gradient-to-br from-gray-50 via-white to-gray-100 border border-gray-200 shadow-lg p-6 flex-1 overflow-hidden group">
+              {/* 金属反光动画效果 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
+              
+              {/* 边缘高光效果 */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-gray-200 to-gray-300 shadow-inner">
+                    <CpuChipIcon className="h-5 w-5 text-gray-700" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">快速访问</h3>
+                  <div className="ml-auto">
+                    <span className="text-xs text-gray-500 bg-gradient-to-r from-gray-100 to-gray-200 px-2 py-1 rounded-full shadow-inner">智能推荐</span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">快速访问</h3>
-                <div className="ml-auto">
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">智能推荐</span>
-                </div>
+                <SmartShortcuts />
               </div>
-              <SmartShortcuts />
             </div>
           </div>
         </div>
