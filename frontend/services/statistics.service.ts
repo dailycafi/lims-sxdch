@@ -25,7 +25,7 @@ export class StatisticsService {
    * 获取总体统计数据
    */
   static async getOverviewStatistics(): Promise<Statistics> {
-    const response = await api.get<Statistics>('/statistics/overview');
+    const response = await api.get<Statistics>('/statistics/summary');
     return response.data;
   }
 

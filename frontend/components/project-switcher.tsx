@@ -38,36 +38,26 @@ export function ProjectSwitcher() {
 
   return (
     <div className="flex items-center gap-3">
-      {canCreateProject && (
-        <Link href="/projects/new" className="hidden sm:block">
-          <Button size="sm" color="blue">
-            <PlusIcon className="h-4 w-4" />
-            新建项目
-          </Button>
-        </Link>
-      )}
-      <div className="flex items-center gap-2">
-        <span className="hidden text-sm text-zinc-600 sm:block">项目编号</span>
-        <Select
-          value={selectedProjectId ? String(selectedProjectId) : ''}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSelectedProject(value ? Number(value) : null);
-          }}
-          disabled={isLoading || projects.length === 0}
-          className="min-w-[180px] sm:min-w-[220px]"
-        >
-          <option value="">请选择项目</option>
-          {projectOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-              {option.subLabel && option.subLabel !== option.label
-                ? `（${option.subLabel}）`
-                : ''}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <span className="hidden text-sm text-zinc-600 lg:block whitespace-nowrap">当前项目</span>
+      <Select
+        value={selectedProjectId ? String(selectedProjectId) : ''}
+        onChange={(event) => {
+          const value = event.target.value;
+          setSelectedProject(value ? Number(value) : null);
+        }}
+        disabled={isLoading || projects.length === 0}
+        className="min-w-[200px] sm:min-w-[240px]"
+      >
+        <option value="">请选择项目</option>
+        {projectOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+            {option.subLabel && option.subLabel !== option.label
+              ? `（${option.subLabel}）`
+              : ''}
+          </option>
+        ))}
+      </Select>
     </div>
   );
 }

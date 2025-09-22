@@ -228,9 +228,24 @@ export interface TaskOverview {
 
 // 统计相关类型
 export interface Statistics {
-  samples_total: number;
-  samples_by_status: Record<string, number>;
-  projects_total: number;
-  projects_by_status: Record<string, number>;
-  recent_activities: AuditLog[];
+  total_samples: number;
+  in_storage: number;
+  checked_out: number;
+  transferred: number;
+  destroyed: number;
+  avg_storage_days: number;
+  total_exposure_time: number;
+  exposure_events: number;
+  // 为了兼容角色统计，添加一些可选字段
+  total_users?: number;
+  total_projects?: number;
+  active_projects?: number;
+  pending_approvals?: number;
+  approved_today?: number;
+  my_tasks?: number;
+  my_samples?: number;
+  completed_today?: number;
+  pending_tasks?: number;
+  processed_today?: number;
+  audit_logs_today?: number;
 }

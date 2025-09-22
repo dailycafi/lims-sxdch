@@ -141,12 +141,12 @@ const clearPendingRequests = (error: any) => {
 
 const refreshTokenAPI = {
   refresh: async (refreshToken: string) => {
-    const formData = new FormData();
-    formData.append('refresh_token', refreshToken);
-    
-    const response = await api.post('/auth/refresh', formData, {
+    // 修改：发送 JSON 数据而不是 FormData
+    const response = await api.post('/auth/refresh', {
+      refresh_token: refreshToken,
+    }, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': 'application/json',
       },
       _skipAuth: true,
     } as any);

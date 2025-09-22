@@ -131,6 +131,11 @@ export function SidebarLayout({
           <div className="flex min-w-0 flex-1 items-center overflow-hidden">{navbar}</div>
         </header>
 
+        {/* Navbar on desktop - 大屏幕顶部导航栏 */}
+        <header className="sticky top-0 z-20 hidden lg:flex items-center justify-center border-b border-gray-200 bg-white px-6 py-3">
+          <div className="flex w-full max-w-7xl items-center">{navbar}</div>
+        </header>
+
         {/* Content - 白色背景，带圆角 */}
         <main className="flex-1 bg-white lg:m-2 lg:rounded-xl lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:bg-zinc-900 dark:lg:ring-white/10 overflow-hidden">
           {children}

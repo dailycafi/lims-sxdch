@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { Image } from '@/components/image';
 import { useAuthStore } from '@/store/auth';
 import { SidebarLayout } from '@/components/sidebar-layout';
@@ -18,6 +19,7 @@ import {
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown';
 import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
 import { ProjectSwitcher } from '@/components/project-switcher';
 import {
   HomeIcon,
@@ -37,6 +39,8 @@ import {
   MagnifyingGlassIcon,
   ClipboardDocumentListIcon,
   ClipboardDocumentCheckIcon,
+  PlusIcon,
+  UserIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -181,25 +185,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             <ProjectSwitcher />
           </div>
 
-          {/* 右侧：用户头像 - 移动端隐藏以节省空间 */}
-          {user && (
+          {/* 右侧：新建项目按钮 */}
+          {user && (user.role === 'system_admin' || user.role === 'sample_admin') && (
             <div className="hidden flex-shrink-0 sm:flex">
-              <Dropdown>
-                <DropdownButton
-                  as={Avatar}
-                  src={undefined}
-                  initials={user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                  className="h-9 w-9 text-base"
-                />
-                <DropdownMenu>
-                  <DropdownItem href="/profile">个人信息</DropdownItem>
-                  <DropdownItem href="/settings">设置</DropdownItem>
-                  <DropdownItem onClick={handleLogout}>
-                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                    退出登录
-                  </DropdownItem>
-                </DropdownMenu>
-              </Dropdown>
+              <Link href="/projects/new">
+                <Button color="dark">
+                  <PlusIcon className="h-4 w-4" />
+                  新建项目
+                </Button>
+              </Link>
             </div>
           )}
         </div>
@@ -207,15 +201,30 @@ export function AppLayout({ children }: AppLayoutProps) {
       sidebar={
         <Sidebar>
           <SidebarHeader>
-            <div className="flex items-center gap-3 px-2 py-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
-                <BeakerIcon className="h-4 w-4 text-white" />
+            {user && (
+              <div className="flex items-center gap-3 px-2 py-4 border-b border-zinc-800/50">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 shadow-lg">
+                  <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-white truncate">
+                    {user.full_name || user.username}
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    {user.role === 'system_admin' && '系统管理员'}
+                    {user.role === 'sample_admin' && '样本管理员'}
+                    {user.role === 'lab_director' && '实验室主任'}
+                    {user.role === 'test_manager' && '检验科主任'}
+                    {user.role === 'qa' && '质量管理员'}
+                    {user.role === 'project_lead' && '项目负责人'}
+                    {user.role === 'analyst' && '分析员'}
+                    {!['system_admin', 'sample_admin', 'lab_director', 'test_manager', 'qa', 'project_lead', 'analyst'].includes(user.role) && user.role}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="text-sm font-semibold text-white">LIMS</div>
-                <div className="text-xs text-zinc-400">实验室信息系统</div>
-              </div>
-            </div>
+            )}
             <SidebarSection>
               <SidebarItem href="/" current={isCurrentPath('/')}>
                 <HomeIcon data-slot="icon" className="!w-4 !h-4" />
@@ -344,10 +353,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             <SidebarSpacer />
           </SidebarBody>
 
-          {/* 添加底部登出按钮 */}
+          {/* 底部用户操作区域 */}
           <SidebarFooter>
             <SidebarSection>
-              <SidebarItem onClick={handleLogout}>
+              <SidebarItem href="/profile" current={isCurrentPath('/profile')}>
+                <UserIcon data-slot="icon" className="!w-4 !h-4" />
+                <SidebarLabel>个人信息</SidebarLabel>
+              </SidebarItem>
+              <div className="border-t border-zinc-800/50 my-2" />
+              <SidebarItem onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-900/20">
                 <ArrowRightOnRectangleIcon data-slot="icon" className="!w-4 !h-4" />
                 <SidebarLabel>退出登录</SidebarLabel>
               </SidebarItem>
