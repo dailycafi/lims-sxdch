@@ -1,23 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
-import { Image } from '@/components/image';  // 改为使用自定义 Image 组件
-import { motion } from 'framer-motion';
+import { Image } from '@/components/image';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
+import { backendStatusAPI } from '@/lib/api';
 
 interface LoginForm {
   username: string;
   password: string;
 }
 
+// 错误类型枚举
+enum ErrorType {
+  NETWORK = 'NETWORK',
+  SERVER = 'SERVER', 
+  AUTH = 'AUTH',
+  UNKNOWN = 'UNKNOWN'
+}
+
+interface LoginError {
+  type: ErrorType;
+  title: string;
+  message: string;
+  suggestion: string;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showTestAccounts, setShowTestAccounts] = useState(false);
+  const [error, setError] = useState<LoginError | null>(null);
+  const [showErrorToast, setShowErrorToast] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const login = useAuthStore((state) => state.login);
   
   const {
@@ -26,17 +45,161 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>();
 
+  // 页面加载时检查服务器状态，并定期检查（用于状态指示器）
+  useEffect(() => {
+    const checkStatus = async () => {
+      console.log('[Status Indicator] 检测后端服务器状态...');
+      setServerStatus('checking');
+      const isOnline = await backendStatusAPI.checkStatus();
+      console.log('[Status Indicator] 检测结果:', isOnline ? 'online' : 'offline');
+      setServerStatus(isOnline ? 'online' : 'offline');
+    };
+    
+    // 立即检查一次
+    checkStatus();
+    
+    // 每10秒检查一次服务器状态（用于状态指示器）
+    const interval = setInterval(() => {
+      console.log('[Status Indicator] 定时检查服务器状态...');
+      checkStatus();
+    }, 10000); // 从30秒改为10秒
+    
+    return () => {
+      console.log('[Status Indicator] 清理定时器');
+      clearInterval(interval);
+    };
+  }, []);
+
+  // 自动关闭错误提示
+  useEffect(() => {
+    if (showErrorToast) {
+      const timer = setTimeout(() => {
+        setShowErrorToast(false);
+        setError(null);
+      }, 5000); // 5秒后自动关闭
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showErrorToast]);
+
+  // 解析错误类型
+  const parseError = (error: any): LoginError => {
+    console.error('Login error details:', error);
+    
+    // 网络连接错误
+    if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error') || error.name === 'AbortError') {
+      return {
+        type: ErrorType.NETWORK,
+        title: '网络连接失败',
+        message: '无法连接到后端服务器',
+        suggestion: '请确认后端服务已启动'
+      };
+    }
+    
+    // 服务器错误
+    if (error.response?.status >= 500) {
+      return {
+        type: ErrorType.SERVER,
+        title: '服务器错误',
+        message: '后端服务器暂时不可用',
+        suggestion: '请稍后重试'
+      };
+    }
+    
+    // 认证错误
+    if (error.response?.status === 401 || error.response?.status === 422) {
+      return {
+        type: ErrorType.AUTH,
+        title: '登录失败',
+        message: '用户名或密码错误',
+        suggestion: '请检查用户名和密码'
+      };
+    }
+    
+    // 其他错误
+    return {
+      type: ErrorType.UNKNOWN,
+      title: '登录失败',
+      message: error.message || '发生未知错误',
+      suggestion: '请重试'
+    };
+  };
+
   const onSubmit = async (data: LoginForm) => {
     try {
       setIsLoading(true);
+      setError(null);
+      setShowErrorToast(false);
+      
+      // 点击登录时再次检查后端服务器状态
+      console.log('[Login] 登录前检查后端服务器状态...');
+      const isBackendOnline = await backendStatusAPI.checkStatus();
+      
+      if (!isBackendOnline) {
+        // 后端服务器不可用，显示错误提示
+        const networkError: LoginError = {
+          type: ErrorType.NETWORK,
+          title: '后端服务不可用',
+          message: '无法连接到后端服务器',
+          suggestion: '请确认后端服务已启动'
+        };
+        setError(networkError);
+        setShowErrorToast(true);
+        setServerStatus('offline');
+        return;
+      }
+      
+      console.log('[Login] 后端服务正常，开始登录...');
       await login(data.username, data.password);
+      setServerStatus('online');
       router.push('/');
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err) {
+      const loginError = parseError(err);
+      setError(loginError);
+      setShowErrorToast(true);
+      
+      // 根据错误类型更新状态指示器
+      if (loginError.type === ErrorType.NETWORK || loginError.type === ErrorType.SERVER) {
+        setServerStatus('offline');
+      } else {
+        setServerStatus('online');
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // 关闭错误提示
+  const closeErrorToast = () => {
+    setShowErrorToast(false);
+    setError(null);
+  };
+
+  // 获取状态指示器
+  const getStatusIndicator = () => {
+    switch (serverStatus) {
+      case 'online':
+        return {
+          color: 'bg-green-400',
+          text: '后端服务正常',
+          animate: { scale: [1, 1.2, 1] }
+        };
+      case 'offline':
+        return {
+          color: 'bg-red-400',
+          text: '后端服务连接失败',
+          animate: { scale: [1, 1.1, 1] }
+        };
+      case 'checking':
+        return {
+          color: 'bg-yellow-400',
+          text: '检测后端服务状态...',
+          animate: { scale: [1, 1.2, 1] }
+        };
+    }
+  };
+
+  const statusInfo = getStatusIndicator();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
@@ -81,6 +244,58 @@ export default function LoginPage() {
         </motion.div>
       </div>
 
+      {/* 右上角错误提示 */}
+      <AnimatePresence>
+        {showErrorToast && error && (
+          <motion.div
+            className="fixed top-4 right-4 z-50 max-w-sm"
+            initial={{ opacity: 0, x: 100, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 100, scale: 0.8 }}
+            transition={{ type: "spring", duration: 0.4 }}
+          >
+            <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                    error.type === ErrorType.NETWORK ? 'bg-red-100' :
+                    error.type === ErrorType.AUTH ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                    <svg className={`w-4 h-4 ${
+                      error.type === ErrorType.NETWORK ? 'text-red-600' :
+                      error.type === ErrorType.AUTH ? 'text-yellow-600' : 'text-red-600'
+                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-3 flex-1">
+                  <h4 className="text-sm font-medium text-gray-900">
+                    {error.title}
+                  </h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {error.message}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {error.suggestion}
+                  </p>
+                </div>
+                <div className="ml-4 flex-shrink-0">
+                  <button
+                    onClick={closeErrorToast}
+                    className="inline-flex text-gray-400 hover:text-gray-600 focus:outline-none"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 主登录卡片 */}
       <motion.div 
         className="w-full max-w-md relative z-10"
@@ -113,7 +328,7 @@ export default function LoginPage() {
                   width={64}
                   height={64}
                   className="rounded-xl"
-                  priority // 添加 priority 属性以优化 LCP
+                  priority
                 />
               </div>
             </div>
@@ -125,13 +340,14 @@ export default function LoginPage() {
           <Text className="text-gray-600 mb-4">
             实验室信息管理系统
           </Text>
+          {/* 实时状态指示器 */}
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
             <motion.div 
-              className="w-2 h-2 bg-green-400 rounded-full"
-              animate={{ scale: [1, 1.2, 1] }}
+              className={`w-2 h-2 ${statusInfo.color} rounded-full`}
+              animate={statusInfo.animate}
               transition={{ duration: 1.5, repeat: Infinity }}
             />
-            <span className="font-mono text-xs">系统运行正常</span>
+            <span className="font-mono text-xs">{statusInfo.text}</span>
           </div>
         </motion.div>
 
@@ -260,43 +476,45 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {showTestAccounts && (
-              <motion.div 
-                className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  测试账号
-                </h4>
-                <div className="space-y-2 text-sm">
-                  <motion.div 
-                    className="flex justify-between items-center p-3 bg-white rounded-lg border"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    <div>
-                      <div className="font-medium text-gray-800">管理员</div>
-                      <div className="text-gray-600 font-mono text-xs">admin / admin123</div>
-                    </div>
-                  </motion.div>
-                  <motion.div 
-                    className="flex justify-between items-center p-3 bg-white rounded-lg border"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    <div>
-                      <div className="font-medium text-gray-800">样本管理员</div>
-                      <div className="text-gray-600 font-mono text-xs">sample_admin / sample123</div>
-                    </div>
-                  </motion.div>
-                </div>
-              </motion.div>
-            )}
+            <AnimatePresence>
+              {showTestAccounts && (
+                <motion.div 
+                  className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    测试账号
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 }}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-800">管理员</div>
+                        <div className="text-gray-600 font-mono text-xs">admin / admin123</div>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-800">样本管理员</div>
+                        <div className="text-gray-600 font-mono text-xs">sample_admin / sample123</div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </motion.div>
 
@@ -309,12 +527,12 @@ export default function LoginPage() {
         >
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <span>数据传输加密保护</span>
+            <span>安全登录</span>
           </div>
           <div className="mt-2 text-xs text-gray-400">
-            <span>© 2024 徐汇区中心医院</span>
+            <span>© 2025 徐汇区中心医院</span>
           </div>
         </motion.div>
       </motion.div>

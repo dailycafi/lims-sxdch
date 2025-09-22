@@ -18,6 +18,7 @@ import {
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown';
 import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/badge';
+import { ProjectSwitcher } from '@/components/project-switcher';
 import {
   HomeIcon,
   BeakerIcon,
@@ -35,6 +36,7 @@ import {
   TrashIcon,
   MagnifyingGlassIcon,
   ClipboardDocumentListIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -44,6 +46,9 @@ interface AppLayoutProps {
 // 路由到面包屑的映射
 const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/': [],
+  '/tasks': [
+    { label: '任务中心', current: true }
+  ],
   '/samples/receive': [
     { label: '样本管理', href: '/samples' },
     { label: '样本接收', current: true }
@@ -148,9 +153,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <SidebarLayout
       navbar={
-        <div className="flex w-full items-center gap-3">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:gap-4">
           {/* 左侧：Logo和标题 */}
-          <div className="flex flex-1 items-center gap-2 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Image
               src="/logo.png"
               alt="徐汇区中心医院"
@@ -169,6 +174,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                 LIMS系统
               </div>
             </div>
+          </div>
+
+          {/* 中间：项目选择器 */}
+          <div className="flex w-full justify-between sm:w-auto sm:flex-none sm:justify-center">
+            <ProjectSwitcher />
           </div>
 
           {/* 右侧：用户头像 - 移动端隐藏以节省空间 */}
@@ -216,6 +226,23 @@ export function AppLayout({ children }: AppLayoutProps) {
           
           <SidebarBody>
             <div className="space-y-6">
+              {/* 工作台 */}
+              <div>
+                <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  工作台
+                </h3>
+                <div className="space-y-1">
+                  <SidebarItem href="/tasks" current={isCurrentPath('/tasks')}>
+                    <ClipboardDocumentCheckIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>任务中心</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/projects" current={isCurrentPath('/projects')}>
+                    <FolderIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>项目管理</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
+
               {/* 样本管理 */}
               <div>
                 <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -257,10 +284,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     项目管理
                   </h3>
                   <div className="space-y-1">
-                    <SidebarItem href="/projects" current={isCurrentPath('/projects')}>
-                      <FolderIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>项目列表</SidebarLabel>
-                    </SidebarItem>
                     <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
                       <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>新建项目</SidebarLabel>

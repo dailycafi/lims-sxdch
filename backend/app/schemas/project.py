@@ -26,6 +26,7 @@ class ProjectResponse(ProjectBase):
     sample_code_rule: Optional[Dict[str, Any]] = None
     is_active: bool
     is_archived: bool
+    status: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

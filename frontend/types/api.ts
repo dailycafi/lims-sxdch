@@ -44,23 +44,26 @@ export interface LoginResponse {
 // 项目相关类型
 export interface Project {
   id: number;
-  code: string;
-  name: string;
-  applicant_org_id: number;
-  applicant_org?: Organization;
-  start_date: string;
-  expected_end_date: string;
-  status: 'active' | 'completed' | 'cancelled';
+  sponsor_project_code: string;
+  lab_project_code: string;
+  sponsor_id: number;
+  clinical_org_id: number;
+  sponsor?: Organization | null;
+  clinical_org?: Organization | null;
+  sample_code_rule?: Record<string, any> | null;
+  is_active: boolean;
+  is_archived: boolean;
+  status?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string | null;
 }
 
 export interface ProjectCreate {
-  code: string;
-  name: string;
-  applicant_org_id: number;
-  start_date: string;
-  expected_end_date: string;
+  sponsor_project_code: string;
+  lab_project_code: string;
+  sponsor_id: number;
+  clinical_org_id: number;
+  sample_code_rule?: Record<string, any> | null;
 }
 
 // 样本相关类型
@@ -193,6 +196,34 @@ export interface DeviationCreate {
   description: string;
   type: string;
   severity: 'low' | 'medium' | 'high';
+}
+
+// 任务中心
+export type TaskCategory = 'borrow' | 'return' | 'transfer' | 'destroy';
+
+export interface TaskItem {
+  id: number;
+  category: TaskCategory;
+  project_id: number;
+  project_code?: string | null;
+  sponsor_project_code?: string | null;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  due_at?: string | null;
+  requester?: string | null;
+  assignee?: string | null;
+  sample_count?: number | null;
+  action_required: boolean;
+  metadata: Record<string, any>;
+}
+
+export interface TaskOverview {
+  borrow: TaskItem[];
+  return: TaskItem[];
+  transfer: TaskItem[];
+  destroy: TaskItem[];
 }
 
 // 统计相关类型

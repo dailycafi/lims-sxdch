@@ -10,6 +10,7 @@ import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Fieldset, Field, Label } from '@/components/fieldset';
 import { projectsAPI, api } from '@/lib/api';
+import { useProjectStore } from '@/store/project';
 
 interface ProjectForm {
   sponsor_project_code: string;
@@ -21,6 +22,8 @@ interface ProjectForm {
 export default function NewProjectPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const addProject = useProjectStore((state) => state.addProject);
+  const refreshProjects = useProjectStore((state) => state.fetchProjects);
 
   const { data: organizations } = useQuery({
     queryKey: ['organizations'],
@@ -41,8 +44,10 @@ export default function NewProjectPage() {
 
   const createProjectMutation = useMutation({
     mutationFn: projectsAPI.createProject,
-    onSuccess: () => {
+    onSuccess: async (data) => {
       toast.success('项目创建成功');
+      addProject(data);
+      await refreshProjects({ force: true });
       router.push('/projects');
     },
   });

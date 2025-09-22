@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -26,7 +27,9 @@ import {
   XMarkIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
-import { ProjectsService, GlobalParamsService, SamplesService } from '@/services';
+import { toast } from 'react-hot-toast';
+import { useProjectStore } from '@/store/project';
+import clsx from 'clsx';
 
 interface BorrowRequest {
   id: number;
@@ -58,14 +61,21 @@ interface Sample {
 }
 
 export default function SampleBorrowPage() {
+  const router = useRouter();
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'borrowed' | 'returned' | 'all'>('pending');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BorrowRequest | null>(null);
-  const [selectedProject, setSelectedProject] = useState('');
-  const [projects, setProjects] = useState<any[]>([]);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProject,
+    fetchProjects: fetchProjectList,
+  } = useProjectStore();
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   
@@ -94,8 +104,59 @@ export default function SampleBorrowPage() {
 
   useEffect(() => {
     fetchRequests();
-    fetchProjects();
-  }, [viewMode]); // 依赖于 viewMode 变化
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const getSingleParam = (value: string | string[] | undefined) => {
+      if (!value) return undefined;
+      return Array.isArray(value) ? value[0] : value;
+    };
+
+    const taskType = getSingleParam(router.query.taskType);
+    const taskIdParam = getSingleParam(router.query.taskId);
+    const viewParam = getSingleParam(router.query.view);
+
+    if (viewParam && ['pending', 'approved', 'borrowed', 'returned', 'all'].includes(viewParam)) {
+      setViewMode(viewParam as any);
+    } else if (taskType === 'return') {
+      setViewMode('borrowed');
+    } else if (taskType === 'borrow') {
+      setViewMode('all');
+    }
+
+    if (taskIdParam) {
+      const id = Number(taskIdParam);
+      if (!Number.isNaN(id)) {
+        setHighlightedRequestId(id);
+        setHasAutoOpened(false);
+      }
+    }
+  }, [router.isReady, router.query]);
+
+  useEffect(() => {
+    if (!highlightedRequestId || !requests.length || hasAutoOpened) {
+      return;
+    }
+
+    const matched = requests.find((item) => item.id === highlightedRequestId);
+    if (matched && !isDetailDialogOpen) {
+      handleViewDetails(matched);
+      setHasAutoOpened(true);
+    }
+  }, [requests, highlightedRequestId, isDetailDialogOpen, hasAutoOpened]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjectList().catch((error: any) => {
+        console.error('Failed to fetch projects:', error);
+        toast.error('加载项目列表失败');
+      });
+    }
+  }, [projects.length, fetchProjectList]);
 
   const fetchRequests = async () => {
     try {
@@ -110,16 +171,7 @@ export default function SampleBorrowPage() {
     }
   };
 
-  const fetchProjects = async () => {
-    try {
-      const projects = await ProjectsService.getProjects();
-      setProjects(projects);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
-    }
-  };
-
-  const fetchAvailableSamples = async (projectId: string) => {
+  const fetchAvailableSamples = async (projectId: number) => {
     try {
       const response = await api.get('/samples', {
         params: {
@@ -137,11 +189,10 @@ export default function SampleBorrowPage() {
   };
 
   const handleProjectChange = (projectId: string) => {
-    setSelectedProject(projectId);
+    const id = projectId ? Number(projectId) : null;
+    setSelectedProject(id);
     setSelectedSamples([]);
-    if (projectId) {
-      fetchAvailableSamples(projectId);
-    } else {
+    if (!id) {
       setAvailableSamples([]);
     }
   };
@@ -164,10 +215,30 @@ export default function SampleBorrowPage() {
     }
   };
 
+  useEffect(() => {
+    if (isRequestDialogOpen) {
+      if (selectedProjectId) {
+        fetchAvailableSamples(selectedProjectId).catch(() => {
+          toast.error('加载可用样本失败');
+        });
+      } else {
+        setAvailableSamples([]);
+      }
+    }
+  }, [isRequestDialogOpen, selectedProjectId]);
+
   const handleSubmitRequest = async () => {
+    if (!selectedProjectId) {
+      toast.error('请先选择项目');
+      return;
+    }
+    if (selectedSamples.length === 0) {
+      toast.error('请选择需要领用的样本');
+      return;
+    }
     try {
       await api.post('/samples/borrow-request', {
-        project_id: selectedProject,
+        project_id: selectedProjectId,
         sample_codes: selectedSamples,
         purpose: borrowForm.purpose,
         target_location: borrowForm.target_location,
@@ -208,7 +279,6 @@ export default function SampleBorrowPage() {
   };
 
   const resetForm = () => {
-    setSelectedProject('');
     setSelectedSamples([]);
     setAvailableSamples([]);
     setBorrowForm({
@@ -531,7 +601,13 @@ export default function SampleBorrowPage() {
                   </TableRow>
                 ) : (
                   filteredRequests.map((request) => (
-                    <TableRow key={request.id}>
+                    <TableRow
+                      key={request.id}
+                      className={clsx(
+                        highlightedRequestId === request.id &&
+                          'bg-blue-50/80 ring-1 ring-inset ring-blue-200'
+                      )}
+                    >
                       <TableCell className="font-medium">{request.request_code}</TableCell>
                       <TableCell>
                         <div>
@@ -587,7 +663,7 @@ export default function SampleBorrowPage() {
                   项目 <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={selectedProject}
+                  value={selectedProjectId ? String(selectedProjectId) : ''}
                   onChange={(e) => handleProjectChange(e.target.value)}
                   required
                 >
@@ -654,7 +730,7 @@ export default function SampleBorrowPage() {
             </div>
 
             {/* 样本选择 */}
-            {selectedProject && (
+            {selectedProjectId && (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <Text className="font-medium">选择样本（已选 {selectedSamples.length} 个）</Text>
@@ -719,7 +795,7 @@ export default function SampleBorrowPage() {
           </Button>
           <Button 
             onClick={handleSubmitRequest}
-            disabled={!selectedProject || selectedSamples.length === 0 || !borrowForm.purpose}
+            disabled={!selectedProjectId || selectedSamples.length === 0 || !borrowForm.purpose}
           >
             提交申请
           </Button>

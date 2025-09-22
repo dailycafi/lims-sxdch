@@ -1,7 +1,7 @@
 from typing import List, Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from datetime import datetime
@@ -9,6 +9,14 @@ from itertools import product
 
 from app.core.database import get_db
 from app.models.project import Project
+from app.models.sample import (
+    Sample,
+    SampleReceiveRecord,
+    SampleBorrowRequest,
+    SampleTransferRecord,
+    SampleDestroyRequest,
+)
+from app.models.deviation import Deviation
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
@@ -215,6 +223,67 @@ async def archive_project(
     await db.commit()
     
     return {"message": "项目已归档"}
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """删除项目（仅系统管理员，可删除无关联数据的项目）"""
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要系统管理员权限"
+        )
+
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+
+    if project.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="归档项目不可删除"
+        )
+
+    # 删除前检查是否存在关联数据
+    related_models = [
+        (Sample, "样本"),
+        (SampleReceiveRecord, "样本接收记录"),
+        (SampleBorrowRequest, "样本领用申请"),
+        (SampleTransferRecord, "样本转移记录"),
+        (SampleDestroyRequest, "样本销毁申请"),
+        (Deviation, "偏差记录"),
+    ]
+
+    for model, label in related_models:
+        result = await db.execute(
+            select(func.count()).select_from(model).where(model.project_id == project_id)
+        )
+        if result.scalar_one() > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"项目存在关联{label}，无法删除"
+            )
+
+    try:
+        await db.delete(project)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="项目存在关联数据，无法删除"
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/{project_id}/sample-code-rule")

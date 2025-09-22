@@ -31,7 +31,9 @@ import { SearchInput } from '@/components/search-input';
 import { AnimatedLoadingState } from '@/components/animated-table';
 import clsx from 'clsx'
 import React from 'react'
-import { ProjectsService, GlobalParamsService, SamplesService } from '@/services';
+import { toast } from 'react-hot-toast';
+import { GlobalParamsService } from '@/services';
+import { useProjectStore } from '@/store/project';
 
 interface ReceiveTask {
   id: number;
@@ -52,8 +54,12 @@ export default function SampleReceivePage() {
   const [tasks, setTasks] = useState<ReceiveTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState('');
-  const [projects, setProjects] = useState<any[]>([]);
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProject,
+    fetchProjects: fetchProjectList,
+  } = useProjectStore();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [temperatureFile, setTemperatureFile] = useState<File | null>(null);
   const [expressPhotos, setExpressPhotos] = useState<File[]>([]);
@@ -97,9 +103,19 @@ export default function SampleReceivePage() {
 
   useEffect(() => {
     fetchReceiveTasks();
-    fetchProjects();
     fetchOrganizations();
   }, []);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjectList().catch((error: any) => {
+        if (error?.response?.status !== 401 && !error?.isAuthError) {
+          console.error('Failed to fetch projects:', error);
+          toast.error('加载项目列表失败');
+        }
+      });
+    }
+  }, [projects.length, fetchProjectList]);
 
   const fetchReceiveTasks = async () => {
     try {
@@ -112,18 +128,6 @@ export default function SampleReceivePage() {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
-      const projects = await ProjectsService.getProjects();
-      setProjects(projects);
-    } catch (error: any) {
-      // 401错误已经被api拦截器静默处理，这里只处理其他错误
-      if (error?.response?.status !== 401 && !error?.isAuthError) {
-        console.error('Failed to fetch projects:', error);
-      }
     }
   };
 
@@ -140,9 +144,13 @@ export default function SampleReceivePage() {
   };
 
   const handleReceive = async () => {
+    if (!selectedProjectId) {
+      toast.error('请先选择项目');
+      return;
+    }
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('project_id', selectedProject);
+      formDataToSend.append('project_id', String(selectedProjectId));
       formDataToSend.append('clinical_org_id', formData.clinical_site);
       formDataToSend.append('transport_org_id', formData.transport_company);
       formDataToSend.append('transport_method', formData.transport_method);
@@ -182,7 +190,6 @@ export default function SampleReceivePage() {
   };
 
   const resetForm = () => {
-    setSelectedProject('');
     setFormData({
       clinical_site: '',
       transport_company: '',
@@ -263,18 +270,28 @@ export default function SampleReceivePage() {
   };
 
   // 获取唯一值用于筛选下拉框
-  const uniqueClinicalSites = tasks.map(t => t.clinical_site).filter((v, i, a) => a.indexOf(v) === i);
-  const uniqueReceivers = tasks.map(t => t.received_by).filter((v, i, a) => a.indexOf(v) === i);
-  const uniqueTransportMethods = tasks.map(t => t.transport_method).filter((v, i, a) => a.indexOf(v) === i);
+  const tasksForProject = selectedProjectId
+    ? tasks.filter((task) => task.project_id === selectedProjectId)
+    : tasks;
+
+  const uniqueClinicalSites = tasksForProject
+    .map((t) => t.clinical_site)
+    .filter((v, i, a) => a.indexOf(v) === i);
+  const uniqueReceivers = tasksForProject
+    .map((t) => t.received_by)
+    .filter((v, i, a) => a.indexOf(v) === i);
+  const uniqueTransportMethods = tasksForProject
+    .map((t) => t.transport_method)
+    .filter((v, i, a) => a.indexOf(v) === i);
 
   // 应用筛选
   const applyFilters = () => {
-    return tasks.filter(task => {
+    return tasksForProject.filter(task => {
       // 接收编号筛选
       if (filters.receiveNumber && !`RCV-${task.id.toString().padStart(4, '0')}`.includes(filters.receiveNumber)) {
         return false;
       }
-      
+
       // 项目筛选
       if (filters.project !== 'all' && task.project_id.toString() !== filters.project) {
         return false;
@@ -753,8 +770,8 @@ export default function SampleReceivePage() {
                   项目 <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
+                  value={selectedProjectId ? String(selectedProjectId) : ''}
+                  onChange={(e) => setSelectedProject(e.target.value ? Number(e.target.value) : null)}
                   required
                 >
                   <option value="">请选择项目</option>
@@ -941,7 +958,7 @@ export default function SampleReceivePage() {
           </Button>
           <Button 
             onClick={handleReceive}
-            disabled={!selectedProject || !formData.clinical_site || !formData.sample_count}
+            disabled={!selectedProjectId || !formData.clinical_site || !formData.sample_count}
           >
             接收完成
           </Button>

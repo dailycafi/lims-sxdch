@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -25,6 +26,9 @@ import {
   XMarkIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
+import { toast } from 'react-hot-toast';
+import { useProjectStore } from '@/store/project';
+import clsx from 'clsx';
 
 interface DestroyRequest {
   id: number;
@@ -55,6 +59,7 @@ interface ApprovalFlow {
 }
 
 export default function SampleDestroyPage() {
+  const router = useRouter();
   const [requests, setRequests] = useState<DestroyRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'completed' | 'rejected' | 'all'>('pending');
@@ -62,8 +67,12 @@ export default function SampleDestroyPage() {
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DestroyRequest | null>(null);
   const [approvalFlows, setApprovalFlows] = useState<ApprovalFlow[]>([]);
-  const [selectedProject, setSelectedProject] = useState('');
-  const [projects, setProjects] = useState<any[]>([]);
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProject,
+    fetchProjects: fetchProjectList,
+  } = useProjectStore();
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<any[]>([]);
   
@@ -89,11 +98,62 @@ export default function SampleDestroyPage() {
   });
   const [isESignatureOpen, setIsESignatureOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{type: string; id?: number} | null>(null);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
   useEffect(() => {
     fetchRequests();
-    fetchProjects();
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const getSingleParam = (value: string | string[] | undefined) => {
+      if (!value) return undefined;
+      return Array.isArray(value) ? value[0] : value;
+    };
+
+    const taskType = getSingleParam(router.query.taskType);
+    const taskIdParam = getSingleParam(router.query.taskId);
+    const viewParam = getSingleParam(router.query.view);
+
+    if (viewParam && ['pending', 'approved', 'completed', 'rejected', 'all'].includes(viewParam)) {
+      setViewMode(viewParam as any);
+    } else if (taskType === 'destroy') {
+      setViewMode('all');
+    }
+
+    if (taskIdParam) {
+      const id = Number(taskIdParam);
+      if (!Number.isNaN(id)) {
+        setHighlightedRequestId(id);
+        setHasAutoOpened(false);
+      }
+    }
+  }, [router.isReady, router.query]);
+
+  useEffect(() => {
+    if (!highlightedRequestId || !requests.length || hasAutoOpened) {
+      return;
+    }
+
+    const matched = requests.find((item) => item.id === highlightedRequestId);
+    if (matched && !isApprovalDialogOpen) {
+      handleViewDetails(matched);
+      setHasAutoOpened(true);
+    }
+  }, [requests, highlightedRequestId, isApprovalDialogOpen, hasAutoOpened]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjectList().catch((error: any) => {
+        console.error('Failed to fetch projects:', error);
+        toast.error('加载项目列表失败');
+      });
+    }
+  }, [projects.length, fetchProjectList]);
 
   const fetchRequests = async () => {
     try {
@@ -108,16 +168,7 @@ export default function SampleDestroyPage() {
     }
   };
 
-  const fetchProjects = async () => {
-    try {
-      const response = await api.get('/projects');
-      setProjects(response.data);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
-    }
-  };
-
-  const fetchAvailableSamples = async (projectId: string) => {
+  const fetchAvailableSamples = async (projectId: number) => {
     try {
       const response = await api.get('/samples', {
         params: {
@@ -131,6 +182,15 @@ export default function SampleDestroyPage() {
     }
   };
 
+  const handleProjectChange = (value: string) => {
+    const id = value ? Number(value) : null;
+    setSelectedProject(id);
+    setSelectedSamples([]);
+    if (!id) {
+      setAvailableSamples([]);
+    }
+  };
+
   const fetchApprovalFlow = async (requestId: number) => {
     try {
       const response = await api.get(`/samples/destroy-request/${requestId}/approvals`);
@@ -141,9 +201,17 @@ export default function SampleDestroyPage() {
   };
 
   const handleSubmitRequest = async () => {
+    if (!selectedProjectId) {
+      toast.error('请先选择项目');
+      return;
+    }
+    if (selectedSamples.length === 0) {
+      toast.error('请选择需要销毁的样本');
+      return;
+    }
     try {
       const formData = new FormData();
-      formData.append('project_id', selectedProject);
+      formData.append('project_id', String(selectedProjectId));
       formData.append('sample_codes', JSON.stringify(selectedSamples));
       formData.append('reason', destroyForm.reason);
       formData.append('notes', destroyForm.notes);
@@ -214,14 +282,27 @@ export default function SampleDestroyPage() {
   };
 
   const resetForm = () => {
-    setSelectedProject('');
     setSelectedSamples([]);
+    setAvailableSamples([]);
     setDestroyForm({
       reason: '',
       approval_file: null,
       notes: ''
     });
   };
+
+  useEffect(() => {
+    if (isRequestDialogOpen) {
+      setSelectedSamples([]);
+      if (selectedProjectId) {
+        fetchAvailableSamples(selectedProjectId).catch(() => {
+          toast.error('加载可销毁样本失败');
+        });
+      } else {
+        setAvailableSamples([]);
+      }
+    }
+  }, [isRequestDialogOpen, selectedProjectId]);
 
   const getStatusColor = (status: string): "yellow" | "blue" | "purple" | "orange" | "green" | "red" | "zinc" => {
     switch (status) {
@@ -564,7 +645,14 @@ export default function SampleDestroyPage() {
                     />
                   ) : (
                     filteredRequests.map((request, index) => (
-                      <AnimatedTableRow key={request.id} index={index}>
+                      <AnimatedTableRow
+                        key={request.id}
+                        index={index}
+                        className={clsx(
+                          highlightedRequestId === request.id &&
+                            'bg-blue-50/80 ring-1 ring-inset ring-blue-200'
+                        )}
+                      >
                         <TableCell className="font-medium">{request.request_code}</TableCell>
                         <TableCell>
                           <div>
@@ -612,13 +700,8 @@ export default function SampleDestroyPage() {
                 项目 <span className="text-red-500">*</span>
               </label>
               <Select
-                value={selectedProject}
-                onChange={(e) => {
-                  setSelectedProject(e.target.value);
-                  if (e.target.value) {
-                    fetchAvailableSamples(e.target.value);
-                  }
-                }}
+                value={selectedProjectId ? String(selectedProjectId) : ''}
+                onChange={(e) => handleProjectChange(e.target.value)}
                 required
               >
                 <option value="">请选择项目</option>
@@ -686,7 +769,7 @@ export default function SampleDestroyPage() {
             </div>
 
             {/* 样本选择 */}
-            {selectedProject && (
+            {selectedProjectId && (
               <div>
                 <Text className="font-medium mb-2">选择样本（已选 {selectedSamples.length} 个）</Text>
                 <div className="border border-zinc-200 rounded-lg max-h-64 overflow-y-auto">
@@ -749,7 +832,7 @@ export default function SampleDestroyPage() {
           </Button>
           <Button 
             onClick={handleSubmitRequest}
-            disabled={!selectedProject || selectedSamples.length === 0 || !destroyForm.reason || !destroyForm.approval_file}
+            disabled={!selectedProjectId || selectedSamples.length === 0 || !destroyForm.reason || !destroyForm.approval_file}
           >
             提交申请
           </Button>

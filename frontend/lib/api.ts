@@ -31,6 +31,66 @@ export const api = axios.create({
   },
 });
 
+// 后端状态检测功能
+export const backendStatusAPI = {
+  /**
+   * 检测后端服务器是否可用
+   * @returns Promise<boolean> true表示后端可用，false表示不可用
+   */
+  checkStatus: async (): Promise<boolean> => {
+    try {
+      console.log('[Backend Status] 开始检测后端服务器状态...');
+      
+      // 创建独立的 axios 实例，不使用拦截器
+      const statusChecker = axios.create({
+        baseURL: API_URL,
+        timeout: 3000,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      // 尝试访问一个简单的接口
+      const response = await statusChecker.get('/auth/me', {
+        validateStatus: (status) => {
+          // 401 表示服务器正常但未认证，这也算连接成功
+          console.log('[Backend Status] 收到响应状态码:', status);
+          return status < 500;
+        }
+      });
+      
+      console.log('[Backend Status] 后端服务器连接成功');
+      return true;
+    } catch (err: any) {
+      console.log('[Backend Status] 后端服务器连接失败:', err);
+      console.log('[Backend Status] 错误代码:', err.code);
+      console.log('[Backend Status] 错误消息:', err.message);
+      console.log('[Backend Status] 错误名称:', err.name);
+      
+      // 检查各种网络错误情况
+      const isNetworkError = (
+        err.code === 'ECONNREFUSED' ||
+        err.code === 'ERR_NETWORK' ||
+        err.code === 'NETWORK_ERROR' ||
+        err.code === 'ECONNABORTED' ||
+        err.code === 'ETIMEDOUT' ||
+        err.message?.includes('Network Error') ||
+        err.message?.includes('timeout') ||
+        !err.response
+      );
+      
+      if (isNetworkError) {
+        console.log('[Backend Status] 确认为网络连接错误');
+        return false;
+      }
+      
+      // 其他错误也认为服务器不可用
+      console.log('[Backend Status] 其他错误，认为服务器不可用');
+      return false;
+    }
+  }
+};
+
 // 统一的认证状态标记（请求/响应拦截器都要用）
 let isRedirecting = false;
 let hasShownAuthExpiredToast = false;
@@ -47,6 +107,11 @@ const pendingRequests: PendingRequest[] = [];
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/me', '/auth/refresh'];
 
 const triggerAuthExpired = () => {
+  // 检查是否已经在登录页面，如果是则不显示弹窗
+  if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+    return;
+  }
+  
   if (!hasShownAuthExpiredToast && !isRedirecting) {
     hasShownAuthExpiredToast = true;
     import('@/components/auth-expired-toast')
@@ -60,57 +125,52 @@ const addPendingRequest = (config: any, resolve: (value: any) => void, reject: (
   pendingRequests.push({ config, resolve, reject });
 };
 
-const resolvePendingRequests = (token: string | null) => {
-  while (pendingRequests.length) {
-    const { config, resolve } = pendingRequests.shift()!;
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    resolve(api(config));
+const processPendingRequests = () => {
+  while (pendingRequests.length > 0) {
+    const { config, resolve, reject } = pendingRequests.shift()!;
+    api.request(config).then(resolve).catch(reject);
   }
 };
 
-const rejectPendingRequests = (error: any) => {
-  while (pendingRequests.length) {
+const clearPendingRequests = (error: any) => {
+  while (pendingRequests.length > 0) {
     const { reject } = pendingRequests.shift()!;
     reject(error);
   }
 };
 
-const refreshAccessToken = async (): Promise<string | null> => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const refreshToken = tokenManager.getRefreshToken();
-  if (!refreshToken) {
-    return null;
-  }
-
-  try {
-    const response = await api.post(
-      '/auth/refresh',
-      { refresh_token: refreshToken },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // 自定义标记，避免拦截器重复处理
-        _skipAuth: true,
-      } as any
-    );
-
-    const { access_token, refresh_token } = response.data || {};
-    if (access_token) {
-      tokenManager.setTokens(access_token, refresh_token);
-      return access_token;
+const refreshTokenAPI = {
+  refresh: async (refreshToken: string) => {
+    const formData = new FormData();
+    formData.append('refresh_token', refreshToken);
+    
+    const response = await api.post('/auth/refresh', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      _skipAuth: true,
+    } as any);
+    
+    if (response.data.access_token) {
+      tokenManager.setTokens(response.data.access_token, response.data.refresh_token || refreshToken);
     }
-    return null;
-  } catch (error) {
-    tokenManager.clearTokens();
-    return null;
+    
+    return response.data;
+  },
+};
+
+// 处理 401 错误的辅助函数
+const handle401Error = (error: AxiosError<any>) => {
+  // 如果在登录页面，直接返回错误，不触发认证过期处理
+  if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+    return Promise.reject(error);
   }
+  
+  // 触发认证过期处理
+  triggerAuthExpired();
+  
+  // 返回一个静默的认证错误，不显示错误提示
+  return Promise.reject(createSilentAuthError(error));
 };
 
 const createSilentAuthError = (error: AxiosError<any>) => ({
@@ -162,30 +222,14 @@ api.interceptors.request.use(
     if (typeof window !== 'undefined') {
       const url = config.url || '';
       const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
-      const skipAuth = (config as any)?._skipAuth;
-      const token = tokenManager.getToken();
+      const skipAuth = Boolean((config as any)._skipAuth);
       
-      if ((window as any).__DEBUG_API__) {
-        console.log('[API Debug] Request to:', config.url);
-        console.log('[API Debug] Token from localStorage:', token ? token.substring(0, 20) + '...' : 'null');
-        console.log('[API Debug] Headers before:', {...config.headers});
-      }
-      
-      if (skipAuth) {
-        if (config.headers?.Authorization) {
-          delete config.headers.Authorization;
+      if (!skipAuth && !isAuthEndpoint) {
+        const currentToken = tokenManager.getToken();
+        if (currentToken) {
+          config.headers = config.headers || {};
+          config.headers['Authorization'] = `Bearer ${currentToken}`;
         }
-      } else if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      } else if (!isAuthEndpoint) {
-        // 无 token 的情况下，直接触发登录过期提示并取消请求，避免 401 错误弹出
-        triggerAuthExpired();
-        ;(config as any)._suppressErrorToast = true;
-        return Promise.reject(new CanceledError('AUTH_REQUIRED'));
-      }
-      
-      if ((window as any).__DEBUG_API__) {
-        console.log('[API Debug] Headers after:', {...config.headers});
       }
     }
     
@@ -243,80 +287,46 @@ api.interceptors.response.use(
         originalRequest._retry = true;
         isRefreshing = true;
 
-        return new Promise((resolve, reject) => {
-          refreshAccessToken()
-            .then((newAccessToken) => {
-              if (!newAccessToken) {
-                throw new Error('REFRESH_FAILED');
-              }
+        return refreshTokenAPI.refresh(refreshToken)
+          .then(() => {
+            isRefreshing = false;
+            processPendingRequests();
+            return api.request(originalRequest);
+          })
+          .catch((refreshError) => {
+            isRefreshing = false;
+            clearPendingRequests(refreshError);
+            return handle401Error(error);
+          });
+      } else {
+        return handle401Error(error);
+      }
+    }
 
-              originalRequest.headers = originalRequest.headers || {};
-              originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-              resolvePendingRequests(newAccessToken);
-              resolve(api(originalRequest));
-            })
-            .catch(() => {
-              tokenManager.clearTokens();
-              const silentError = createSilentAuthError(error);
-              rejectPendingRequests(silentError);
-              triggerAuthExpired();
-              reject(silentError);
-            })
-            .finally(() => {
-              isRefreshing = false;
-            });
+    // 其他错误处理
+    const suppressErrorToast = Boolean((error as any)._suppressErrorToast);
+    
+    if (!suppressErrorToast && error.response && typeof window !== 'undefined') {
+      const currentTime = Date.now();
+      const detailMessage = extractDetailMessage(error.response.data);
+      const displayMessage = detailMessage || `请求失败 (${error.response.status})`;
+      
+      // 防止重复错误提示
+      if (currentTime - lastErrorTime > ERROR_THROTTLE_TIME || lastErrorMessage !== displayMessage) {
+        lastErrorTime = currentTime;
+        lastErrorMessage = displayMessage;
+        
+        toast.error(displayMessage, {
+          duration: 4000,
+          position: 'top-right',
         });
       }
-
-      triggerAuthExpired();
-      return Promise.reject(createSilentAuthError(error));
     }
-    
-    // 处理其他错误 - 但避免重复提示
-    if (!isRedirecting) {
-      const now = Date.now();
-      let errorMessage = '';
-      
-      const status = error.response?.status;
-      if (status === 403) {
-        errorMessage = '没有权限执行此操作';
-      } else if (status === 404) {
-        errorMessage = '资源不存在或已删除';
-      } else if (status === 429) {
-        errorMessage = '请求过于频繁，请稍后再试';
-      } else if (status === 500) {
-        // 优先展示后端返回的具体信息
-        errorMessage = extractDetailMessage(error.response?.data) || '服务器错误，请稍后重试';
-      } else if (status === 400 || status === 422) {
-        // 处理参数/验证错误
-        errorMessage = extractDetailMessage(error.response?.data) || '数据验证失败';
-      } else if (!error.response) {
-        // 网络异常或超时
-        errorMessage = '网络异常，请检查网络连接或稍后重试';
-      }
 
-      // 若仍无明确文案，尝试兜底提取
-      if (!errorMessage) {
-        errorMessage = extractDetailMessage(error.response?.data) || error.message || '请求失败，请稍后重试';
-      }
-      
-      // 防止重复显示相同的错误
-      // 若请求或错误被标记为需要静默（例如未登录触发），则不提示错误
-      if ((error as any)?._suppressErrorToast || (error.config as any)?._suppressErrorToast || (error as any)?._isSilent) {
-        return Promise.reject(error);
-      }
-      if (errorMessage && (errorMessage !== lastErrorMessage || now - lastErrorTime > ERROR_THROTTLE_TIME)) {
-        toast.error(errorMessage);
-        lastErrorMessage = errorMessage;
-        lastErrorTime = now;
-      }
-    }
-    
     return Promise.reject(error);
   }
 );
 
-// API 方法
 export const authAPI = {
   login: async (username: string, password: string) => {
     const formData = new FormData();
@@ -337,20 +347,9 @@ export const authAPI = {
   },
 
   refresh: async (refreshToken: string) => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken }, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      _skipAuth: true,
-    } as any);
-
-    if (response.data.access_token) {
-      tokenManager.setTokens(response.data.access_token, response.data.refresh_token);
-    }
-
-    return response.data;
+    return refreshTokenAPI.refresh(refreshToken);
   },
-  
+
   getCurrentUser: async () => {
     const response = await api.get('/auth/me');
     return response.data;
@@ -362,7 +361,8 @@ export const authAPI = {
       try {
         await api.post('/auth/logout', { refresh_token: refreshToken });
       } catch (error) {
-        // 静默处理，确保本地凭据被清理
+        // 忽略退出登录的错误
+        console.warn('Logout request failed:', error);
       }
     }
     tokenManager.clearTokens();

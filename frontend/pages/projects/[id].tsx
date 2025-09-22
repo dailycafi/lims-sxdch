@@ -14,6 +14,8 @@ import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
 import { api } from '@/lib/api';
 import { ESignatureDialog } from '@/components/e-signature-dialog';
+import { useAuthStore } from '@/store/auth';
+import { useProjectStore } from '@/store/project';
 import { 
   CogIcon, 
   DocumentTextIcon, 
@@ -69,6 +71,10 @@ export default function ProjectDetailPage() {
   const [pendingSaveRule, setPendingSaveRule] = useState<any | null>(null);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
   const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
+  const { user } = useAuthStore();
+  const { removeProject, fetchProjects: refreshProjects } = useProjectStore();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // 批量生成表单
   const [batchForm, setBatchForm] = useState({
@@ -355,6 +361,28 @@ export default function ProjectDetailPage() {
     return parts.join('-');
   };
 
+  const canDeleteProject = user?.role === 'system_admin';
+
+  const handleDeleteProject = async () => {
+    if (!project) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await api.delete(`/projects/${project.id}`);
+      toast.success('项目已删除');
+      removeProject(project.id);
+      await refreshProjects({ force: true });
+      setIsDeleteDialogOpen(false);
+      router.push('/projects');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || '删除项目失败';
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -387,9 +415,16 @@ export default function ProjectDetailPage() {
                 <Badge color="zinc">已归档</Badge>
               )}
             </div>
-            <Button onClick={() => router.back()} plain>
-              返回
-            </Button>
+            <div className="flex items-center gap-2">
+              {canDeleteProject && !project.is_archived && (
+                <Button color="red" onClick={() => setIsDeleteDialogOpen(true)}>
+                  删除项目
+                </Button>
+              )}
+              <Button onClick={() => router.back()} plain>
+                返回
+              </Button>
+            </div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
@@ -819,6 +854,26 @@ export default function ProjectDetailPage() {
           >
             <PrinterIcon />
             {isGeneratingCodes ? '生成中…' : '生成并打印'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onClose={setIsDeleteDialogOpen}>
+        <DialogTitle>删除项目</DialogTitle>
+        <DialogDescription>
+          删除后将无法恢复该项目及其配置。
+        </DialogDescription>
+        <DialogBody>
+          <p className="text-sm text-zinc-600">
+            请确认项目下没有任何样本或流程数据再执行删除操作。
+          </p>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsDeleteDialogOpen(false)}>
+            取消
+          </Button>
+          <Button color="red" onClick={handleDeleteProject} disabled={isDeleting}>
+            {isDeleting ? '删除中…' : '确认删除'}
           </Button>
         </DialogActions>
       </Dialog>

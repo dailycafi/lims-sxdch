@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -25,6 +26,9 @@ import {
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ArrowsRightLeftIcon as ArrowsRightLeftIconOutline } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
+import { useProjectStore } from '@/store/project';
+import clsx from 'clsx';
 
 interface TransferRequest {
   id: number;
@@ -52,13 +56,22 @@ interface Sample {
 }
 
 export default function SampleTransferPage() {
-  const [viewMode, setViewMode] = useState<'internal' | 'external' | 'completed' | 'all'>('external');
+  const router = useRouter();
+  const [viewMode, setViewMode] = useState<'internal' | 'external' | 'completed' | 'all'>('all');
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isInternalTransferOpen, setIsInternalTransferOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState('');
-  const [projects, setProjects] = useState<any[]>([]);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferRequest | null>(null);
+  const [highlightedTransferId, setHighlightedTransferId] = useState<number | null>(null);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProject,
+    fetchProjects: fetchProjectList,
+  } = useProjectStore();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
@@ -96,9 +109,17 @@ export default function SampleTransferPage() {
 
   useEffect(() => {
     fetchTransfers();
-    fetchProjects();
     fetchOrganizations();
   }, [viewMode]); // 依赖项改为 viewMode
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjectList().catch((error: any) => {
+        console.error('Failed to fetch projects:', error);
+        toast.error('加载项目列表失败');
+      });
+    }
+  }, [projects.length, fetchProjectList]);
 
   const fetchTransfers = async () => {
     try {
@@ -113,14 +134,49 @@ export default function SampleTransferPage() {
     }
   };
 
-  const fetchProjects = async () => {
-    try {
-      const response = await api.get('/projects');
-      setProjects(response.data);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
     }
-  };
+
+    const getSingleParam = (value: string | string[] | undefined) => {
+      if (!value) return undefined;
+      return Array.isArray(value) ? value[0] : value;
+    };
+
+    const taskType = getSingleParam(router.query.taskType);
+    const taskIdParam = getSingleParam(router.query.taskId);
+    const transferTypeParam = getSingleParam(router.query.transferType);
+    const viewParam = getSingleParam(router.query.view);
+
+    if (viewParam && ['internal', 'external', 'completed', 'all'].includes(viewParam)) {
+      setViewMode(viewParam as any);
+    } else if (transferTypeParam && ['internal', 'external'].includes(transferTypeParam)) {
+      setViewMode(transferTypeParam as any);
+    } else if (taskType === 'transfer') {
+      setViewMode('all');
+    }
+
+    if (taskIdParam) {
+      const id = Number(taskIdParam);
+      if (!Number.isNaN(id)) {
+        setHighlightedTransferId(id);
+        setHasAutoOpened(false);
+      }
+    }
+  }, [router.isReady, router.query]);
+
+  useEffect(() => {
+    if (!highlightedTransferId || !transfers.length || hasAutoOpened) {
+      return;
+    }
+
+    const matched = transfers.find((item) => item.id === highlightedTransferId);
+    if (matched && !isDetailDialogOpen) {
+      handleViewDetails(matched);
+      setHasAutoOpened(true);
+    }
+  }, [transfers, highlightedTransferId, isDetailDialogOpen, hasAutoOpened]);
 
   const fetchOrganizations = async () => {
     try {
@@ -131,7 +187,7 @@ export default function SampleTransferPage() {
     }
   };
 
-  const fetchAvailableSamples = async (projectId: string) => {
+  const fetchAvailableSamples = async (projectId: number) => {
     try {
       const response = await api.get('/samples', {
         params: {
@@ -146,9 +202,17 @@ export default function SampleTransferPage() {
   };
 
   const handleExternalTransfer = async () => {
+    if (!selectedProjectId) {
+      toast.error('请先选择项目');
+      return;
+    }
+    if (selectedSamples.length === 0) {
+      toast.error('请选择需要转移的样本');
+      return;
+    }
     try {
       const formData = new FormData();
-      formData.append('project_id', selectedProject);
+      formData.append('project_id', String(selectedProjectId));
       formData.append('sample_codes', JSON.stringify(selectedSamples));
       formData.append('target_org_id', externalForm.target_org_id);
       formData.append('transport_method', externalForm.transport_method);
@@ -205,9 +269,18 @@ export default function SampleTransferPage() {
     }
   };
 
-  const resetExternalForm = () => {
-    setSelectedProject('');
+  const handleProjectChange = (value: string) => {
+    const id = value ? Number(value) : null;
+    setSelectedProject(id);
     setSelectedSamples([]);
+    if (!id) {
+      setAvailableSamples([]);
+    }
+  };
+
+  const resetExternalForm = () => {
+    setSelectedSamples([]);
+    setAvailableSamples([]);
     setExternalForm({
       target_org_id: '',
       transport_method: '',
@@ -227,6 +300,19 @@ export default function SampleTransferPage() {
       samples: []
     });
   };
+
+  useEffect(() => {
+    if (isTransferDialogOpen) {
+      setSelectedSamples([]);
+      if (selectedProjectId) {
+        fetchAvailableSamples(selectedProjectId).catch(() => {
+          toast.error('加载可转移样本失败');
+        });
+      } else {
+        setAvailableSamples([]);
+      }
+    }
+  }, [isTransferDialogOpen, selectedProjectId]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -318,9 +404,8 @@ export default function SampleTransferPage() {
   const uniqueToLocations = Array.from(new Set(transfers.map(t => t.to_location)));
 
   const handleViewDetails = (transfer: TransferRequest) => {
-    // 实现查看详情逻辑
-    console.log('Viewing details for transfer:', transfer);
-    // 可以打开一个对话框或导航到详情页面
+    setSelectedTransfer(transfer);
+    setIsDetailDialogOpen(true);
   };
 
   const handleExecuteTransfer = (transfer: TransferRequest) => {
@@ -549,8 +634,15 @@ export default function SampleTransferPage() {
                         : '暂无转移记录'}
                     />
                   ) : (
-                    filteredTransfers.map((transfer) => (
-                      <AnimatedTableRow key={transfer.id} index={0}>
+                    filteredTransfers.map((transfer, rowIndex) => (
+                      <AnimatedTableRow
+                        key={transfer.id}
+                        index={rowIndex}
+                        className={clsx(
+                          highlightedTransferId === transfer.id &&
+                            'bg-blue-50/80 ring-1 ring-inset ring-blue-200'
+                        )}
+                      >
                         <TableCell className="font-medium">{transfer.transfer_code}</TableCell>
                         <TableCell>
                           <div>
@@ -609,13 +701,8 @@ export default function SampleTransferPage() {
                   项目 <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={selectedProject}
-                  onChange={(e) => {
-                    setSelectedProject(e.target.value);
-                    if (e.target.value) {
-                      fetchAvailableSamples(e.target.value);
-                    }
-                  }}
+                  value={selectedProjectId ? String(selectedProjectId) : ''}
+                  onChange={(e) => handleProjectChange(e.target.value)}
                   required
                 >
                   <option value="">请选择项目</option>
@@ -717,7 +804,7 @@ export default function SampleTransferPage() {
             </div>
 
             {/* 样本选择 */}
-            {selectedProject && (
+            {selectedProjectId && (
               <div>
                 <Text className="font-medium mb-2">选择样本（已选 {selectedSamples.length} 个）</Text>
                 <div className="border border-zinc-200 rounded-lg max-h-64 overflow-y-auto">
@@ -776,7 +863,7 @@ export default function SampleTransferPage() {
           </Button>
           <Button 
             onClick={handleExternalTransfer}
-            disabled={!selectedProject || selectedSamples.length === 0 || !externalForm.target_org_id || !externalForm.approval_file}
+            disabled={!selectedProjectId || selectedSamples.length === 0 || !externalForm.target_org_id || !externalForm.approval_file}
           >
             提交申请
           </Button>
@@ -912,13 +999,70 @@ export default function SampleTransferPage() {
           <Button onClick={() => alert('确认转出')} color="white">
             确认转出
           </Button>
-          <Button 
-            onClick={handleInternalTransfer}
-            disabled={!internalForm.from_location || !internalForm.to_location || internalForm.samples.length === 0}
-          >
-            <CheckCircleIcon />
-            完成转入
-          </Button>
+      <Button 
+        onClick={handleInternalTransfer}
+        disabled={!internalForm.from_location || !internalForm.to_location || internalForm.samples.length === 0}
+      >
+        <CheckCircleIcon />
+        完成转入
+      </Button>
+    </DialogActions>
+  </Dialog>
+
+      {/* 转移详情 */}
+      <Dialog open={isDetailDialogOpen} onClose={setIsDetailDialogOpen}>
+        <DialogTitle>转移详情</DialogTitle>
+        <DialogDescription>
+          查看转移申请的关键信息
+        </DialogDescription>
+        <DialogBody>
+          {selectedTransfer ? (
+            <div className="space-y-4 text-sm text-zinc-700">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-zinc-500">转移编号</div>
+                  <div className="font-medium text-zinc-900">{selectedTransfer.transfer_code}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">项目编号</div>
+                  <div className="font-medium text-zinc-900">{selectedTransfer.project.lab_project_code}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">类型</div>
+                  <div>{selectedTransfer.transfer_type === 'internal' ? '内部转移' : '外部转移'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">样本数量</div>
+                  <div>{selectedTransfer.sample_count}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">来源位置</div>
+                  <div>{selectedTransfer.from_location}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">目标位置</div>
+                  <div>{selectedTransfer.to_location}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">申请人</div>
+                  <div>{selectedTransfer.requested_by.full_name}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">创建时间</div>
+                  <div>{new Date(selectedTransfer.created_at).toLocaleString('zh-CN')}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-zinc-500">当前状态</div>
+                {getStatusBadge(selectedTransfer.status)}
+              </div>
+            </div>
+          ) : (
+            <Text>暂无详情</Text>
+          )}
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsDetailDialogOpen(false)}>关闭</Button>
         </DialogActions>
       </Dialog>
     </AppLayout>

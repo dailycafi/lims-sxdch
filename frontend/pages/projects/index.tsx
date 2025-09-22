@@ -20,21 +20,20 @@ import {
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ProjectsService } from '@/services';
 
-interface Project {
+interface ProjectItem {
   id: number;
-  code: string; // This is lab_project_code
-  name: string; // This is sponsor_project_code  
-  lab_project_code: string; // Add for compatibility
-  sponsor_project_code: string; // Add for compatibility
-  sponsor: string; // Add for compatibility
-  status: 'active' | 'completed' | 'cancelled';
+  lab_project_code: string;
+  sponsor_project_code: string;
+  sponsor: string;
+  status: string;
+  is_active: boolean;
+  is_archived: boolean;
   created_at: string;
   sample_count?: number;
-  applicant_org?: any;
 }
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
@@ -55,13 +54,17 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      const projects = await ProjectsService.getProjects();
-      const transformedProjects = projects.map(p => ({
-        ...p,
-        lab_project_code: p.code, // API uses 'code' instead of 'lab_project_code'
-        sponsor_project_code: p.name, // Map to appropriate field
-        sponsor: p.applicant_org?.name || '', // Use the organization name
-        sample_count: 0 // Add default if not provided
+      const projects = await ProjectsService.getProjects({ active_only: false });
+      const transformedProjects = projects.map<ProjectItem>((project) => ({
+        id: project.id,
+        lab_project_code: project.lab_project_code,
+        sponsor_project_code: project.sponsor_project_code,
+        sponsor: project.sponsor?.name || '',
+        status: project.status || (project.is_archived ? 'archived' : project.is_active ? 'active' : 'inactive'),
+        is_active: project.is_active,
+        is_archived: project.is_archived,
+        created_at: project.created_at,
+        sample_count: 0,
       }));
       setProjects(transformedProjects);
     } catch (error) {
@@ -76,7 +79,8 @@ export default function ProjectsPage() {
       active: { color: 'green' as const, text: '进行中' },
       completed: { color: 'blue' as const, text: '已完成' },
       archived: { color: 'zinc' as const, text: '已归档' },
-      pending: { color: 'yellow' as const, text: '待启动' }
+      pending: { color: 'yellow' as const, text: '待启动' },
+      inactive: { color: 'zinc' as const, text: '未启用' }
     };
     const { color, text } = config[status as keyof typeof config] || { color: 'zinc' as const, text: status };
     return <Badge color={color}>{text}</Badge>;
@@ -201,6 +205,7 @@ export default function ProjectsPage() {
                         <option value="completed">已完成</option>
                         <option value="archived">已归档</option>
                         <option value="pending">待启动</option>
+                        <option value="inactive">未启用</option>
                       </Select>
                     </div>
 

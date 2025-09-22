@@ -30,17 +30,44 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   
   login: async (username: string, password: string) => {
-    const loginResponse = await authAPI.login(username, password);
-    
-    // 确保 token 已经保存
-    if (!loginResponse.access_token) {
-      throw new Error('登录失败：未收到访问令牌');
+    try {
+      const loginResponse = await authAPI.login(username, password);
+      
+      // 确保 token 已经保存
+      if (!loginResponse.access_token) {
+        throw new Error('登录失败：未收到访问令牌');
+      }
+      
+      // token 已经通过 tokenManager 保存，并自动更新到 axios
+      // 直接获取用户信息
+      const user = await authAPI.getCurrentUser();
+      set({ user, isAuthenticated: true });
+    } catch (error: any) {
+      // 增强错误信息
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        const networkError = new Error('服务器连接失败');
+        networkError.name = 'NetworkError';
+        (networkError as any).code = 'NETWORK_ERROR';
+        throw networkError;
+      }
+      
+      if (error.response?.status === 401) {
+        const authError = new Error('用户名或密码错误');
+        authError.name = 'AuthError';
+        (authError as any).response = error.response;
+        throw authError;
+      }
+      
+      if (error.response?.status >= 500) {
+        const serverError = new Error('服务器内部错误');
+        serverError.name = 'ServerError';
+        (serverError as any).response = error.response;
+        throw serverError;
+      }
+      
+      // 重新抛出原始错误
+      throw error;
     }
-    
-    // token 已经通过 tokenManager 保存，并自动更新到 axios
-    // 直接获取用户信息
-    const user = await authAPI.getCurrentUser();
-    set({ user, isAuthenticated: true });
   },
   
   logout: async () => {
