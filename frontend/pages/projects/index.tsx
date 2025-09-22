@@ -131,18 +131,12 @@ export default function ProjectsPage() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        {/* 页面标题和操作按钮 */}
-        <div className="mb-6 flex items-center justify-between">
+        {/* 页面标题 */}
+        <div className="mb-6">
           <div>
             <Heading>项目管理</Heading>
             <Text className="mt-1 text-zinc-600">管理实验室项目信息</Text>
           </div>
-          <Link href="/projects/new">
-            <Button color="blue">
-              <PlusIcon className="h-4 w-4" />
-              新建项目
-            </Button>
-          </Link>
         </div>
 
         {/* 筛选区域 */}
@@ -266,50 +260,52 @@ export default function ProjectsPage() {
           </div>
 
           {/* 表格内容 */}
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>实验室项目编号</TableHeader>
-                <TableHeader>申办方项目编号</TableHeader>
-                <TableHeader>申办方</TableHeader>
-                <TableHeader>状态</TableHeader>
-                <TableHeader>创建时间</TableHeader>
-                <TableHeader>样本数量</TableHeader>
-                <TableHeader className="text-right">操作</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <AnimatedLoadingState colSpan={7} variant="skeleton" />
-              ) : filteredProjects.length === 0 ? (
-                <AnimatedEmptyState colSpan={7} text="暂无项目数据" />
-              ) : (
-                <AnimatePresence>
-                  {filteredProjects.map((project, index) => (
-                    <AnimatedTableRow key={project.id} index={index}>
-                      <TableCell className="font-medium">
-                        <Link href={`/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
-                          {project.lab_project_code}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{project.sponsor_project_code || '-'}</TableCell>
-                      <TableCell>{project.sponsor || '-'}</TableCell>
-                      <TableCell>{getStatusBadge(project.status)}</TableCell>
-                      <TableCell>{new Date(project.created_at).toLocaleDateString('zh-CN')}</TableCell>
-                      <TableCell>{project.sample_count || 0}</TableCell>
-                      <TableCell className="text-right">
-                        <Link href={`/projects/${project.id}`}>
-                          <Button plain>
-                            查看详情
-                          </Button>
-                        </Link>
-                      </TableCell>
-                    </AnimatedTableRow>
-                  ))}
-                </AnimatePresence>
-              )}
-            </TableBody>
-          </Table>
+          <div>
+            <Table bleed={true} striped>
+              <TableHead>
+                <TableRow>
+                  <TableHeader className="pl-6">实验室项目编号</TableHeader>
+                  <TableHeader>申办方项目编号</TableHeader>
+                  <TableHeader>申办方</TableHeader>
+                  <TableHeader>状态</TableHeader>
+                  <TableHeader>创建时间</TableHeader>
+                  <TableHeader>样本数量</TableHeader>
+                  <TableHeader className="text-right pr-6">操作</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <AnimatedLoadingState colSpan={7} variant="skeleton" />
+                ) : filteredProjects.length === 0 ? (
+                  <AnimatedEmptyState colSpan={7} text="暂无项目数据" />
+                ) : (
+                  <AnimatePresence>
+                    {filteredProjects.map((project, index) => (
+                      <AnimatedTableRow key={project.id} index={index}>
+                        <TableCell className="font-medium pl-6">
+                          <Link href={`/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
+                            {project.lab_project_code}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{project.sponsor_project_code || '-'}</TableCell>
+                        <TableCell>{project.sponsor || '-'}</TableCell>
+                        <TableCell>{getStatusBadge(project.status)}</TableCell>
+                        <TableCell>{new Date(project.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                        <TableCell>{project.sample_count || 0}</TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Link href={`/projects/${project.id}`}>
+                            <Button plain>
+                              查看详情
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </AnimatedTableRow>
+                    ))}
+                  </AnimatePresence>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </AppLayout>

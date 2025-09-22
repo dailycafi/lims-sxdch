@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -247,9 +247,9 @@ async def refresh_access_token(
             detail="Refresh token 无效"
         )
 
-    if stored_refresh.expires_at <= datetime.utcnow():
+    if stored_refresh.expires_at <= datetime.now(timezone.utc):
         stored_refresh.revoked = True
-        stored_refresh.revoked_at = datetime.utcnow()
+        stored_refresh.revoked_at = datetime.now(timezone.utc)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -259,7 +259,7 @@ async def refresh_access_token(
     user = await db.get(User, stored_refresh.user_id)
     if not user or not user.is_active:
         stored_refresh.revoked = True
-        stored_refresh.revoked_at = datetime.utcnow()
+        stored_refresh.revoked_at = datetime.now(timezone.utc)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -294,7 +294,7 @@ async def logout(
 
     if stored_refresh and not stored_refresh.revoked:
         stored_refresh.revoked = True
-        stored_refresh.revoked_at = datetime.utcnow()
+        stored_refresh.revoked_at = datetime.now(timezone.utc)
         await db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
