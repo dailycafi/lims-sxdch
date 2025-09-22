@@ -32,7 +32,8 @@ export function usePageTracking() {
       const cleanPath = url.split('?')[0];
       const config = pageConfig[cleanPath];
       
-      if (config) {
+      // 排除工作台页面，不记录访问
+      if (config && cleanPath !== '/') {
         // 延迟记录，确保页面已完全加载
         setTimeout(() => {
           UserAccessService.trackAccess(cleanPath, config.title, config.icon);

@@ -256,9 +256,9 @@ export default function HomePage() {
       <div className="min-h-screen bg-gray-50 space-y-8">
         {/* 现代化欢迎区域 - 黑白主基调 */}
         <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm">
-          {/* 微妙的几何装饰 */}
+          {/* 简洁的漂浮斜矩形装饰 */}
           <div className="absolute top-0 right-0 w-64 h-64 opacity-5">
-            <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-600 transform rotate-12 rounded-3xl"></div>
+            <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-600 transform rotate-12 rounded-3xl animate-float-slow"></div>
           </div>
           
           <div className="relative p-8">
@@ -375,10 +375,10 @@ export default function HomePage() {
         )}
 
         {/* 主要内容区域 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           {/* 最近任务 - 占2/3宽度 */}
           <div className="lg:col-span-2">
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[32rem]">
               <div className="flex items-center justify-between p-6 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-gray-100">
@@ -409,7 +409,7 @@ export default function HomePage() {
                   </div>
                 </div>
               ) : recentTasks.length > 0 ? (
-                <div className="p-6">
+                <div className="p-6 flex-1 overflow-y-auto">
                   <div className="space-y-3">
                     {recentTasks.slice(0, 5).map((task, index) => (
                       <div
@@ -454,21 +454,23 @@ export default function HomePage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-12 text-center">
-                  <div className="mx-auto h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                    <ClipboardDocumentCheckIcon className="h-8 w-8 text-gray-400" />
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="mx-auto h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                      <ClipboardDocumentCheckIcon className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500">暂无最近任务</p>
+                    <p className="text-sm text-gray-400 mt-1">完成的任务将显示在这里</p>
                   </div>
-                  <p className="text-gray-500">暂无最近任务</p>
-                  <p className="text-sm text-gray-400 mt-1">完成的任务将显示在这里</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* 右侧边栏 - 占1/3宽度 */}
-          <div className="space-y-6">
+          <div className="flex flex-col gap-6 min-h-[32rem]">
             {/* 工作概览 */}
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 flex-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-lg bg-gray-100">
                   <ChartBarIcon className="h-5 w-5 text-gray-700" />
@@ -498,7 +500,7 @@ export default function HomePage() {
             </div>
 
             {/* 智能快速访问 */}
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 flex-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-lg bg-gray-100">
                   <CpuChipIcon className="h-5 w-5 text-gray-700" />

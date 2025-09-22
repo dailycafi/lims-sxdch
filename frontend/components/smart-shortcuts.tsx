@@ -24,7 +24,7 @@ const iconMap: Record<string, any> = {
   ExclamationTriangleIcon
 };
 
-// 默认快速访问配置
+// 默认快速访问配置（排除工作台）
 const defaultShortcuts = [
   { path: '/samples', title: '样本管理', icon: 'BeakerIcon' },
   { path: '/projects', title: '项目管理', icon: 'FolderIcon' },
@@ -50,9 +50,15 @@ export function SmartShortcuts({ className = '' }: SmartShortcutsProps) {
       // 获取最常访问的页面
       const frequentAccess = await UserAccessService.getFrequentAccess(8);
       
-      if (frequentAccess.length > 0) {
-        // 如果有访问记录，使用最常访问的页面
-        setShortcuts(frequentAccess.slice(0, 4));
+      // 过滤掉工作台页面
+      const filteredAccess = frequentAccess.filter(item => item.path !== '/');
+      
+      if (filteredAccess.length > 0) {
+        // 如果有访问记录，使用最常访问的页面（不显示访问次数）
+        setShortcuts(filteredAccess.slice(0, 4).map(item => ({
+          ...item,
+          access_count: 0 // 不显示访问次数
+        })));
       } else {
         // 如果没有访问记录，使用默认配置
         setShortcuts(defaultShortcuts.map(item => ({
@@ -108,16 +114,11 @@ export function SmartShortcuts({ className = '' }: SmartShortcutsProps) {
             className="group"
             onClick={() => handleShortcutClick(shortcut)}
           >
-            <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200 relative">
+            <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
               <IconComponent className="h-6 w-6 text-gray-600 mx-auto mb-2" />
               <span className="text-xs text-gray-700 font-medium block truncate">
                 {shortcut.title}
               </span>
-              {shortcut.access_count > 0 && (
-                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {shortcut.access_count > 99 ? '99+' : shortcut.access_count}
-                </div>
-              )}
             </div>
           </Link>
         );

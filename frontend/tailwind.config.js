@@ -30,6 +30,20 @@ module.exports = {
       borderRadius: {
         'lg': '0.5rem',
       },
+      // 只保留斜矩形需要的动画
+      animation: {
+        'float-slow': 'float-slow 6s ease-in-out infinite',
+      },
+      keyframes: {
+        'float-slow': {
+          '0%, 100%': { 
+            transform: 'translateY(0px) rotate(12deg)',
+          },
+          '50%': { 
+            transform: 'translateY(-20px) rotate(15deg)',
+          },
+        },
+      },
     },
   },
   plugins: [],
@@ -38,5 +52,6 @@ module.exports = {
     {
       pattern: /^(bg|text|border)-(zinc|blue|white)-(50|100|200|300|400|500|600|700|800|900|950)$/,
     },
+    'animate-float-slow',
   ],
 }
