@@ -143,8 +143,8 @@ const getRoleBasedDashboardConfig = (role: string) => {
       };
     default:
       return {
-        title: '工作概览',
-        subtitle: '查看您的工作状态',
+        title: '样本概览',
+        subtitle: '查看您的样本状态',
         primaryMetrics: [
           { 
             key: 'my_tasks', 
@@ -349,15 +349,12 @@ export default function HomePage() {
               <div
                 key={metric.key}
                 className={clsx(
-                  "relative overflow-hidden rounded-xl border shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 group",
+                  "relative overflow-hidden rounded-xl border shadow-sm group",
                   metric.urgent 
                     ? "border-red-200 bg-gradient-to-br from-red-50 via-white to-red-50/30" 
                     : "border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-100"
                 )}
               >
-                {/* 微妙的金属反光效果 */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
-                
                 {/* 简洁的装饰线条 */}
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-900 to-gray-600" />
                 
