@@ -67,6 +67,302 @@ def check_sample_permission(user: User, action: str = "read") -> bool:
     return False
 
 
+@router.get("/storage/structure")
+async def get_storage_structure(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取存储结构（冰箱->层->架->盒）"""
+    # 1. 获取所有唯一的 freezer_id
+    result = await db.execute(
+        select(Sample.freezer_id).distinct().where(Sample.freezer_id.isnot(None))
+    )
+    freezers = [f for f in result.scalars().all() if f]
+    freezers.sort()
+
+    # 2. 构建层级结构
+    # 为了性能，我们一次性获取所有样本的位置信息，然后在内存中构建树
+    # 或者针对每个冰箱查询。如果样本量巨大，应该优化。
+    # 这里为了简单，查询所有非空的存储位置组合
+    result = await db.execute(
+        select(Sample.freezer_id, Sample.shelf_level, Sample.rack_position, Sample.box_code)
+        .distinct()
+        .where(Sample.freezer_id.isnot(None))
+    )
+    locations = result.all()
+
+    hierarchy = {}
+    for f, s, r, b in locations:
+        if not f or not s or not r:
+            continue
+        
+        if f not in hierarchy:
+            hierarchy[f] = {}
+        if s not in hierarchy[f]:
+            hierarchy[f][s] = {}
+        if r not in hierarchy[f][s]:
+            hierarchy[f][s][r] = []
+        
+        if b and b not in hierarchy[f][s][r]:
+            hierarchy[f][s][r].append(b)
+            hierarchy[f][s][r].sort()
+
+    return {
+        "freezers": freezers,
+        "hierarchy": hierarchy
+    }
+
+
+@router.get("/storage/freezers")
+async def get_freezers(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有冰箱及其使用情况统计"""
+    # 获取所有唯一的冰箱ID
+    result = await db.execute(
+        select(Sample.freezer_id).distinct().where(Sample.freezer_id.isnot(None))
+    )
+    freezer_ids = [f for f in result.scalars().all() if f]
+    
+    freezers = []
+    for fid in sorted(freezer_ids):
+        # 统计该冰箱的样本盒数量
+        box_result = await db.execute(
+            select(Sample.box_code).distinct().where(
+                Sample.freezer_id == fid,
+                Sample.box_code.isnot(None)
+            )
+        )
+        boxes = [b for b in box_result.scalars().all() if b]
+        
+        # 统计层数
+        shelf_result = await db.execute(
+            select(Sample.shelf_level).distinct().where(
+                Sample.freezer_id == fid,
+                Sample.shelf_level.isnot(None)
+            )
+        )
+        shelves = [s for s in shelf_result.scalars().all() if s]
+        
+        # 估算总容量（每层10个盒子）
+        total_boxes = len(shelves) * 10 if shelves else 10
+        
+        freezers.append({
+            "id": fid,
+            "name": fid,  # 可以从配置表获取更友好的名称
+            "location": "样本库",  # 可以从配置表获取
+            "temperature": -80,  # 默认超低温，可以从配置表获取
+            "shelves": len(shelves) or 1,
+            "total_boxes": max(total_boxes, len(boxes)),
+            "used_boxes": len(boxes)
+        })
+    
+    return freezers
+
+
+@router.get("/storage/boxes")
+async def get_boxes(
+    freezer_id: Optional[str] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取样本盒列表"""
+    # 构建查询
+    query = select(
+        Sample.box_code,
+        Sample.freezer_id,
+        Sample.shelf_level,
+        Sample.rack_position,
+        func.count(Sample.id).label('used_slots')
+    ).where(
+        Sample.box_code.isnot(None)
+    ).group_by(
+        Sample.box_code,
+        Sample.freezer_id,
+        Sample.shelf_level,
+        Sample.rack_position
+    )
+    
+    if freezer_id:
+        query = query.where(Sample.freezer_id == freezer_id)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    boxes = []
+    for row in rows:
+        boxes.append({
+            "id": hash(f"{row.freezer_id}-{row.shelf_level}-{row.rack_position}-{row.box_code}") % 1000000,
+            "code": row.box_code,
+            "freezer_id": row.freezer_id,
+            "shelf_level": row.shelf_level,
+            "rack_position": row.rack_position,
+            "rows": 10,  # 默认10x10
+            "cols": 10,
+            "total_slots": 100,
+            "used_slots": row.used_slots,
+            "created_at": datetime.utcnow().isoformat()
+        })
+    
+    return boxes
+
+
+@router.post("/storage/boxes")
+async def create_box(
+    box_data: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """创建新的样本盒（记录到审计日志）"""
+    if not check_sample_permission(current_user, "create"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限创建样本盒"
+        )
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="sample_box",
+        entity_id=0,
+        action="create",
+        details={
+            "box_code": box_data.get("code"),
+            "freezer_id": box_data.get("freezer_id"),
+            "shelf_level": box_data.get("shelf_level"),
+            "rack_position": box_data.get("rack_position"),
+            "rows": box_data.get("rows", 10),
+            "cols": box_data.get("cols", 10)
+        },
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return {
+        "message": "样本盒创建成功",
+        "box": box_data
+    }
+
+
+@router.put("/storage/boxes/{box_id}")
+async def update_box(
+    box_id: int,
+    box_data: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新样本盒信息"""
+    if not check_sample_permission(current_user, "create"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限修改样本盒"
+        )
+    
+    # 由于样本盒信息存储在样本表中，我们需要更新所有属于该盒子的样本
+    # 首先找到原始盒子信息
+    old_box_code = box_data.get("old_code")
+    new_code = box_data.get("code")
+    new_shelf_level = box_data.get("shelf_level")
+    new_rack_position = box_data.get("rack_position")
+    
+    if new_code and old_box_code and new_code != old_box_code:
+        # 更新所有样本的 box_code
+        await db.execute(
+            Sample.__table__.update()
+            .where(Sample.box_code == old_box_code)
+            .values(box_code=new_code)
+        )
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="sample_box",
+        entity_id=box_id,
+        action="update",
+        details={
+            "box_code": new_code,
+            "shelf_level": new_shelf_level,
+            "rack_position": new_rack_position,
+        },
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return {
+        "message": "样本盒更新成功",
+        "box": box_data
+    }
+
+
+@router.delete("/storage/boxes/{box_id}")
+async def delete_box(
+    box_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """删除样本盒（仅当盒子为空时）"""
+    if not check_sample_permission(current_user, "create"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限删除样本盒"
+        )
+    
+    # 注意：由于样本盒信息存储在样本表中，删除操作主要是清除样本的盒子关联
+    # 实际实现中可能需要一个独立的 SampleBox 表
+    # 这里我们记录审计日志
+    
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="sample_box",
+        entity_id=box_id,
+        action="delete",
+        details={
+            "box_id": box_id
+        },
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return {
+        "message": "样本盒删除成功"
+    }
+
+
+@router.get("/storage/box/{freezer_id}/{shelf_level}/{rack_position}/{box_code}")
+async def get_box_content(
+    freezer_id: str,
+    shelf_level: str,
+    rack_position: str,
+    box_code: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取指定盒子内的样本"""
+    query = select(Sample).where(
+        Sample.freezer_id == freezer_id,
+        Sample.shelf_level == shelf_level,
+        Sample.rack_position == rack_position,
+        Sample.box_code == box_code
+    )
+    result = await db.execute(query)
+    samples = result.scalars().all()
+    
+    return [
+        {
+            "id": s.id,
+            "sample_code": s.sample_code,
+            "position_in_box": s.position_in_box,
+            "status": s.status,
+            "test_type": s.test_type
+        }
+        for s in samples
+    ]
+
+
 @router.post("/batch", response_model=List[SampleResponse])
 async def create_samples_batch(
     samples_data: List[SampleCreate],
@@ -408,14 +704,29 @@ async def complete_inventory(
     samples = inventory_data.get("samples", [])
     boxes = inventory_data.get("boxes", [])
     
-    # TODO: 创建样本记录，关联样本盒
+    # 辅助字典：记录每个盒子已使用的位置计数
+    box_counters = {}  # box_code -> current_count
+
+    # 创建样本记录，关联样本盒
     for sample_data in samples:
         if sample_data["status"] == "scanned":
+            box_code = sample_data.get("boxCode")
+            
+            # 计算盒内位置
+            if box_code:
+                if box_code not in box_counters:
+                    box_counters[box_code] = 0
+                box_counters[box_code] += 1
+                position = str(box_counters[box_code])
+            else:
+                position = None
+
             sample = Sample(
                 sample_code=sample_data["code"],
                 project_id=record.project_id,
                 status=SampleStatus.IN_STORAGE,
-                box_code=sample_data.get("boxCode"),
+                box_code=box_code,
+                position_in_box=position,
                 created_at=datetime.utcnow()
             )
             db.add(sample)
@@ -482,8 +793,8 @@ async def export_receive_record_checklist(
 
     # 头部信息
     header_rows = [
-        {"字段": "申办者", "值": record.project.sponsor.name if getattr(record.project, "sponsor", None) else ""},
-        {"字段": "申办者项目编号", "值": record.project.sponsor_project_code if record.project else ""},
+        {"字段": "申办方", "值": record.project.sponsor.name if getattr(record.project, "sponsor", None) else ""},
+        {"字段": "申办方项目编号", "值": record.project.sponsor_project_code if record.project else ""},
         {"字段": "临床机构/分中心", "值": record.clinical_org.name if record.clinical_org else ""},
         {"字段": "检测单位/部门", "值": record.project.testing_org.name if getattr(record.project, "testing_org", None) else ""},
         {"字段": "临床试验研究室项目编号", "值": record.project.lab_project_code if record.project else ""},

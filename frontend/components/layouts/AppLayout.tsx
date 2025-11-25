@@ -62,6 +62,10 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
     { label: '样本管理', href: '/samples' },
     { label: '清点入库', current: true }
   ],
+  '/samples/storage': [
+    { label: '样本管理', href: '/samples' },
+    { label: '样本存储', current: true }
+  ],
   '/samples/borrow': [
     { label: '样本管理', href: '/samples' },
     { label: '样本领用', current: true }
@@ -73,6 +77,10 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/samples/destroy': [
     { label: '样本管理', href: '/samples' },
     { label: '样本销毁', current: true }
+  ],
+  '/samples/tracking': [
+    { label: '样本管理', href: '/samples' },
+    { label: '跟踪表', current: true }
   ],
   '/samples': [
     { label: '样本管理', href: '/samples' },
@@ -97,6 +105,10 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/archive': [
     { label: '统计分析', href: '/statistics' },
     { label: '项目归档', current: true }
+  ],
+  '/archive/samples': [
+    { label: '统计分析', href: '/statistics' },
+    { label: '样本归档', current: true }
   ],
   '/global-params': [
     { label: '系统管理', href: '/global-params' },
@@ -209,7 +221,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 LIMS
               </div>
               <div className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block">
-                LIMS系统
+                样本管理系统
               </div>
             </div>
           </div>
@@ -309,6 +321,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <ClipboardDocumentListIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>清点入库</SidebarLabel>
                   </SidebarItem>
+                  <SidebarItem href="/samples/storage" current={isCurrentPath('/samples/storage')}>
+                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>样本存储</SidebarLabel>
+                  </SidebarItem>
                   <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
                     <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本领用</SidebarLabel>
@@ -320,6 +336,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SidebarItem href="/samples/destroy" current={isCurrentPath('/samples/destroy')}>
                     <TrashIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本销毁</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/samples/tracking" current={isCurrentPath('/samples/tracking')}>
+                    <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>跟踪表</SidebarLabel>
                   </SidebarItem>
                   <SidebarItem href="/samples" current={isCurrentPath('/samples')}>
                     <MagnifyingGlassIcon data-slot="icon" className="!w-4 !h-4" />
@@ -360,6 +380,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
                     <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目归档</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/archive/samples" current={isCurrentPath('/archive/samples')}>
+                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>样本归档</SidebarLabel>
                   </SidebarItem>
                 </div>
               </div>

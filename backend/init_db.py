@@ -38,7 +38,7 @@ async def init_db(drop_existing=False):
         print("📌 创建组织机构...")
         from app.models.global_params import Organization
         
-        # 申办者
+        # 申办方
         sponsor1 = Organization(
             name="诺华制药",
             org_type="sponsor",
@@ -261,7 +261,7 @@ async def init_db(drop_existing=False):
         print("  - 研究室主任: lab_director / director123")
         print("  - 分析员: analyst / analyst123")
         print("\n📌 创建的示例数据:")
-        print("  - 2个组织机构（申办者、临床机构、运输公司）")
+        print("  - 2个组织机构（申办方、临床机构、运输公司）")
         print("  - 2个项目")
         print("  - 2条样本接收记录")
         print("  - 10个样本（已入库）")

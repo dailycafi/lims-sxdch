@@ -7,6 +7,7 @@ import enum
 
 class UserRole(str, enum.Enum):
     """用户角色枚举"""
+    SUPER_ADMIN = "super_admin"  # 超级管理员（调试用，可删除任何记录）
     SYSTEM_ADMIN = "system_admin"  # 系统管理员
     LAB_DIRECTOR = "lab_director"  # 研究室主任
     TEST_MANAGER = "test_manager"  # 分析测试主管

@@ -43,7 +43,7 @@ interface SampleType {
 }
 
 const orgTypes = [
-  { value: 'sponsor', label: '申办者' },
+  { value: 'sponsor', label: '申办方' },
   { value: 'clinical', label: '临床机构' },
   { value: 'testing', label: '检测单位' },
   { value: 'transport', label: '运输单位' },

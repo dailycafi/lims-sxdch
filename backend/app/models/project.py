@@ -9,9 +9,9 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
-    sponsor_project_code = Column(String, nullable=False)  # 申办者项目编号
+    sponsor_project_code = Column(String, nullable=False)  # 申办方项目编号
     lab_project_code = Column(String, unique=True, nullable=False)  # 临床试验研究室项目编号
-    sponsor_id = Column(Integer, ForeignKey("organizations.id"))  # 申办者ID
+    sponsor_id = Column(Integer, ForeignKey("organizations.id"))  # 申办方ID
     clinical_org_id = Column(Integer, ForeignKey("organizations.id"))  # 临床机构ID
     
     # 样本编号规则配置

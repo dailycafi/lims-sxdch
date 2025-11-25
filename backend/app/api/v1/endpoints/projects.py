@@ -34,8 +34,13 @@ class SampleCodeRuleUpdate(BaseModel):
 
 def check_project_permission(user: User) -> bool:
     """检查项目管理权限"""
-    allowed_roles = [UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]
+    allowed_roles = [UserRole.SUPER_ADMIN, UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]
     return user.role in allowed_roles
+
+
+def is_super_admin(user: User) -> bool:
+    """检查是否为超级管理员（可执行特殊删除操作）"""
+    return user.role == UserRole.SUPER_ADMIN or user.is_superuser
 
 
 async def create_audit_log(
@@ -231,8 +236,8 @@ async def delete_project(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """删除项目（仅系统管理员，可删除无关联数据的项目）"""
-    if current_user.role != UserRole.SYSTEM_ADMIN:
+    """删除项目（仅系统管理员，可删除无关联数据的项目；超级管理员可强制删除）"""
+    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要系统管理员权限"
@@ -247,33 +252,50 @@ async def delete_project(
             detail="项目不存在"
         )
 
-    if project.is_archived:
+    # 超级管理员可以删除归档项目
+    if project.is_archived and not is_super_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="归档项目不可删除"
         )
 
-    # 删除前检查是否存在关联数据
-    related_models = [
-        (Sample, "样本"),
-        (SampleReceiveRecord, "样本接收记录"),
-        (SampleBorrowRequest, "样本领用申请"),
-        (SampleTransferRecord, "样本转移记录"),
-        (SampleDestroyRequest, "样本销毁申请"),
-        (Deviation, "偏差记录"),
-    ]
+    # 删除前检查是否存在关联数据（超级管理员可跳过检查）
+    if not is_super_admin(current_user):
+        related_models = [
+            (Sample, "样本"),
+            (SampleReceiveRecord, "样本接收记录"),
+            (SampleBorrowRequest, "样本领用申请"),
+            (SampleTransferRecord, "样本转移记录"),
+            (SampleDestroyRequest, "样本销毁申请"),
+            (Deviation, "偏差记录"),
+        ]
 
-    for model, label in related_models:
-        result = await db.execute(
-            select(func.count()).select_from(model).where(model.project_id == project_id)
-        )
-        if result.scalar_one() > 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"项目存在关联{label}，无法删除"
+        for model, label in related_models:
+            result = await db.execute(
+                select(func.count()).select_from(model).where(model.project_id == project_id)
             )
+            if result.scalar_one() > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"项目存在关联{label}，无法删除"
+                )
 
     try:
+        # 超级管理员强制删除时，记录审计日志
+        if is_super_admin(current_user):
+            await create_audit_log(
+                db=db,
+                user_id=current_user.id,
+                entity_type="project",
+                entity_id=project.id,
+                action="force_delete",
+                details={
+                    "project_code": project.lab_project_code,
+                    "sponsor_code": project.sponsor_project_code,
+                    "is_archived": project.is_archived
+                },
+                reason="超级管理员强制删除"
+            )
         await db.delete(project)
         await db.commit()
     except IntegrityError:
@@ -328,12 +350,17 @@ async def update_sample_code_rule(
             detail="项目不存在"
         )
     
-    # TODO: 检查是否已有样本接收，如果有则不允许修改
-    # if project.has_samples:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="项目已有样本接收，不能修改编号规则"
-    #     )
+    # 检查是否已有样本接收，如果有则不允许修改（超级管理员除外）
+    if not is_super_admin(current_user):
+        sample_count_result = await db.execute(
+            select(func.count()).select_from(Sample).where(Sample.project_id == project_id)
+        )
+        sample_count = sample_count_result.scalar_one()
+        if sample_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"项目已有 {sample_count} 个样本接收，编号规则已锁定，不能修改"
+            )
     
     # 记录原始规则
     original_rule = project.sample_code_rule

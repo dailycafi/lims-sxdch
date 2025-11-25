@@ -8,7 +8,7 @@ import { Heading } from '@/components/heading';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
-import { Fieldset, Field, Label } from '@/components/fieldset';
+import { Fieldset, Field, Label, FieldGroup } from '@/components/fieldset';
 import { projectsAPI, api } from '@/lib/api';
 import { useProjectStore } from '@/store/project';
 
@@ -72,59 +72,61 @@ export default function NewProjectPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
           <Fieldset>
-            <Field>
-              <Label>申办者项目编号</Label>
-              <Input
-                {...register('sponsor_project_code', { required: '请输入申办者项目编号' })}
-              />
-              {errors.sponsor_project_code && (
-                <p className="text-sm text-red-600 mt-1">{errors.sponsor_project_code.message}</p>
-              )}
-            </Field>
+            <FieldGroup>
+              <Field>
+                <Label>申办方项目编号</Label>
+                <Input
+                  {...register('sponsor_project_code', { required: '请输入申办方项目编号' })}
+                />
+                {errors.sponsor_project_code && (
+                  <p className="text-sm text-red-600 mt-1">{errors.sponsor_project_code.message}</p>
+                )}
+              </Field>
 
-            <Field>
-              <Label>实验室项目编号</Label>
-              <Input
-                {...register('lab_project_code', { required: '请输入实验室项目编号' })}
-              />
-              {errors.lab_project_code && (
-                <p className="text-sm text-red-600 mt-1">{errors.lab_project_code.message}</p>
-              )}
-            </Field>
+              <Field>
+                <Label>实验室项目编号</Label>
+                <Input
+                  {...register('lab_project_code', { required: '请输入实验室项目编号' })}
+                />
+                {errors.lab_project_code && (
+                  <p className="text-sm text-red-600 mt-1">{errors.lab_project_code.message}</p>
+                )}
+              </Field>
 
-            <Field>
-              <Label>申办者</Label>
-              <Select
-                {...register('sponsor_id', { required: '请选择申办者' })}
-              >
-                <option value="">请选择</option>
-                {sponsors.map((org: any) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </Select>
-              {errors.sponsor_id && (
-                <p className="text-sm text-red-600 mt-1">{errors.sponsor_id.message}</p>
-              )}
-            </Field>
+              <Field>
+                <Label>申办方</Label>
+                <Select
+                  {...register('sponsor_id', { required: '请选择申办方' })}
+                >
+                  <option value="">请选择</option>
+                  {sponsors.map((org: any) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </Select>
+                {errors.sponsor_id && (
+                  <p className="text-sm text-red-600 mt-1">{errors.sponsor_id.message}</p>
+                )}
+              </Field>
 
-            <Field>
-              <Label>临床机构</Label>
-              <Select
-                {...register('clinical_org_id', { required: '请选择临床机构' })}
-              >
-                <option value="">请选择</option>
-                {clinicalOrgs.map((org: any) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </Select>
-              {errors.clinical_org_id && (
-                <p className="text-sm text-red-600 mt-1">{errors.clinical_org_id.message}</p>
-              )}
-            </Field>
+              <Field>
+                <Label>临床机构</Label>
+                <Select
+                  {...register('clinical_org_id', { required: '请选择临床机构' })}
+                >
+                  <option value="">请选择</option>
+                  {clinicalOrgs.map((org: any) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </Select>
+                {errors.clinical_org_id && (
+                  <p className="text-sm text-red-600 mt-1">{errors.clinical_org_id.message}</p>
+                )}
+              </Field>
+            </FieldGroup>
           </Fieldset>
 
           <div className="flex gap-4">

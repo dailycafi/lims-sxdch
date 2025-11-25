@@ -21,6 +21,8 @@ import {
 } from '@heroicons/react/20/solid';
 import { clsx } from 'clsx';
 
+import { StorageLocationPicker } from '@/components/storage/StorageLocationPicker';
+
 interface ReceiveRecord {
   id: number;
   project: {
@@ -67,11 +69,13 @@ export default function SampleInventoryPage() {
   const [isStorageDialogOpen, setIsStorageDialogOpen] = useState(false);
   const [storageLocation, setStorageLocation] = useState({
     freezer: '',
-    level: '',
+    shelf: '',
     rack: '',
     position: ''
   });
   const [scannerActive, setScannerActive] = useState(true);
+  const [currentAssigningBox, setCurrentAssigningBox] = useState<SampleBox | null>(null);
+  const [assignedBoxes, setAssignedBoxes] = useState<Array<{boxCode: string, location: {freezer: string, shelf: string, rack: string, position: string}}>>([]);
 
   useEffect(() => {
     if (id) {
@@ -231,22 +235,57 @@ export default function SampleInventoryPage() {
         boxes: boxes
       });
 
-      alert('清点完成！');
+      alert('清点完成，请开始分配存储位置！');
       setIsStorageDialogOpen(true);
+      // Reset assignment state
+      setAssignedBoxes([]);
+      if (boxes.length > 0) {
+        setCurrentAssigningBox(boxes[0]);
+      }
     } catch (error) {
       console.error('Failed to complete inventory:', error);
       alert('清点失败，请重试');
     }
   };
 
+  const handleStorageSelect = (location: { freezer: string; shelf: string; rack: string; box: string }) => {
+    if (!currentAssigningBox) return;
+
+    // Add to assigned list
+    const newAssignment = {
+      boxCode: currentAssigningBox.code,
+      location: {
+        freezer: location.freezer,
+        shelf: location.shelf,
+        rack: location.rack,
+        position: location.box
+      }
+    };
+    
+    const updatedAssigned = [...assignedBoxes, newAssignment];
+    setAssignedBoxes(updatedAssigned);
+
+    // Move to next box or finish
+    const nextIndex = boxes.findIndex(b => b.code === currentAssigningBox.code) + 1;
+    if (nextIndex < boxes.length) {
+      setCurrentAssigningBox(boxes[nextIndex]);
+    } else {
+      setCurrentAssigningBox(null); // All done
+    }
+  };
+
   const handleStorageConfirm = async () => {
+    if (assignedBoxes.length < boxes.length) {
+      alert('还有样本盒未分配位置！');
+      return;
+    }
+
     try {
-      const storageAssignments = boxes.map((box, index) => ({
-        box_code: box.code,
-        freezer_id: storageLocation.freezer,
-        shelf_level: storageLocation.level,
-        rack_position: storageLocation.rack,
-        compartment: `${storageLocation.position}-${index + 1}`
+      const storageAssignments = assignedBoxes.map(item => ({
+        box_code: item.boxCode,
+        freezer_id: item.location.freezer,
+        shelf_level: item.location.shelf,
+        rack_position: item.location.rack,
       }));
 
       await api.post(`/samples/storage/assign`, {
@@ -254,12 +293,244 @@ export default function SampleInventoryPage() {
         assignments: storageAssignments
       });
 
-      alert('入库完成！');
+      // 询问是否打印样本清单表
+      if (confirm('入库完成！是否打印样本清单表？')) {
+        printSampleListReport();
+      }
+      
       router.push('/samples');
     } catch (error) {
       console.error('Failed to assign storage:', error);
       alert('入库失败，请重试');
     }
+  };
+
+  // 打印样本清单表
+  const printSampleListReport = () => {
+    if (typeof window === 'undefined') return;
+
+    const printWindow = window.open('', '', 'width=900,height=700');
+    if (!printWindow) {
+      alert('浏览器阻止了打印窗口，请允许弹窗后重试');
+      return;
+    }
+
+    const generatedAt = new Date().toLocaleString('zh-CN');
+    const projectInfo = receiveRecord?.project;
+    const scannedSamples = samples.filter(s => s.status === 'scanned');
+
+    // 按样本盒分组
+    const samplesByBox: Record<string, SampleCode[]> = {};
+    scannedSamples.forEach(sample => {
+      const boxCode = sample.boxCode || '未分配';
+      if (!samplesByBox[boxCode]) {
+        samplesByBox[boxCode] = [];
+      }
+      samplesByBox[boxCode].push(sample);
+    });
+
+    // 获取存储位置信息
+    const getBoxLocation = (boxCode: string) => {
+      const assignment = assignedBoxes.find(a => a.boxCode === boxCode);
+      if (assignment) {
+        return `${assignment.location.freezer} / ${assignment.location.shelf} / ${assignment.location.rack}`;
+      }
+      return '-';
+    };
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>样本清单表</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'SimSun', 'Songti SC', serif; 
+            padding: 20mm; 
+            font-size: 12pt;
+            line-height: 1.6;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 20px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 15px;
+          }
+          .header h1 { 
+            font-size: 18pt; 
+            font-weight: bold;
+            margin-bottom: 10px;
+          }
+          .info-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+          }
+          .info-item {
+            display: flex;
+          }
+          .info-label {
+            font-weight: bold;
+            min-width: 100px;
+          }
+          .box-section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+          }
+          .box-header {
+            background: #333;
+            color: white;
+            padding: 8px 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 10px;
+          }
+          th, td { 
+            border: 1px solid #333; 
+            padding: 6px 10px; 
+            text-align: left;
+            font-size: 10pt;
+          }
+          th { 
+            background: #e0e0e0; 
+            font-weight: bold;
+          }
+          tr:nth-child(even) { background: #f5f5f5; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+          }
+          .signature-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-top: 40px;
+          }
+          .signature-item {
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+          }
+          .signature-label {
+            font-size: 10pt;
+            color: #666;
+          }
+          .summary {
+            background: #f0f7ff;
+            border: 1px solid #0066cc;
+            padding: 15px;
+            margin-bottom: 20px;
+          }
+          @media print {
+            body { padding: 10mm; }
+            .box-section { page-break-inside: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>样 本 清 单 表</h1>
+          <p>Sample Inventory List</p>
+        </div>
+
+        <div class="info-section">
+          <div class="info-item">
+            <span class="info-label">项目编号:</span>
+            <span>${projectInfo?.lab_project_code || '-'}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">申办方编号:</span>
+            <span>${projectInfo?.sponsor_project_code || '-'}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">临床机构:</span>
+            <span>${receiveRecord?.clinical_org?.name || '-'}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">接收时间:</span>
+            <span>${receiveRecord?.received_at ? new Date(receiveRecord.received_at).toLocaleString('zh-CN') : '-'}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">清点时间:</span>
+            <span>${generatedAt}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">样本总数:</span>
+            <span>${scannedSamples.length} 个</span>
+          </div>
+        </div>
+
+        <div class="summary">
+          <strong>汇总信息:</strong> 
+          共 ${Object.keys(samplesByBox).length} 个样本盒，${scannedSamples.length} 个样本已入库
+        </div>
+
+        ${Object.entries(samplesByBox).map(([boxCode, boxSamples]) => `
+          <div class="box-section">
+            <div class="box-header">
+              <span>样本盒: ${boxCode}</span>
+              <span>存储位置: ${getBoxLocation(boxCode)} | 数量: ${boxSamples.length}</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50px;">序号</th>
+                  <th>样本编号</th>
+                  <th style="width: 80px;">盒内位置</th>
+                  <th style="width: 80px;">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${boxSamples.map((sample, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td style="font-family: monospace;">${sample.code}</td>
+                    <td>${idx + 1}</td>
+                    <td>✓ 已入库</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `).join('')}
+
+        <div class="footer">
+          <div class="signature-section">
+            <div>
+              <div class="signature-label">清点人:</div>
+              <div class="signature-item">&nbsp;</div>
+            </div>
+            <div>
+              <div class="signature-label">复核人:</div>
+              <div class="signature-item">&nbsp;</div>
+            </div>
+            <div>
+              <div class="signature-label">日期:</div>
+              <div class="signature-item">&nbsp;</div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const getProgress = () => {
@@ -693,68 +964,59 @@ export default function SampleInventoryPage() {
       </Dialog>
 
       {/* 入库对话框 */}
-      <Dialog open={isStorageDialogOpen} onClose={setIsStorageDialogOpen} size="lg">
-        <DialogTitle>样本入库</DialogTitle>
+      <Dialog open={isStorageDialogOpen} onClose={() => {}} size="xl">
+        <DialogTitle>样本入库分配</DialogTitle>
         <DialogDescription>
-          清点完成，请扫描存储位置
+          请为每个样本盒选择存储位置
         </DialogDescription>
         <DialogBody>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  冰箱编号
-                </label>
-                <Input
-                  value={storageLocation.freezer}
-                  onChange={(e) => setStorageLocation({...storageLocation, freezer: e.target.value})}
-                  placeholder="扫描或输入冰箱编号"
-                />
+          <div className="flex flex-col h-[600px]">
+            {/* Progress / Status */}
+            <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+              <div className="flex items-center justify-between mb-2">
+                <Text className="font-medium text-blue-900">
+                  分配进度: {assignedBoxes.length} / {boxes.length}
+                </Text>
+                <div className="text-sm text-blue-700">
+                  当前处理: <span className="font-bold">{currentAssigningBox?.code || '完成'}</span>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  层
-                </label>
-                <Input
-                  value={storageLocation.level}
-                  onChange={(e) => setStorageLocation({...storageLocation, level: e.target.value})}
-                  placeholder="如：第3层"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  架子
-                </label>
-                <Input
-                  value={storageLocation.rack}
-                  onChange={(e) => setStorageLocation({...storageLocation, rack: e.target.value})}
-                  placeholder="如：A架"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  起始位置
-                </label>
-                <Input
-                  value={storageLocation.position}
-                  onChange={(e) => setStorageLocation({...storageLocation, position: e.target.value})}
-                  placeholder="如：1-1"
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${(assignedBoxes.length / boxes.length) * 100}%` }}
                 />
               </div>
             </div>
 
-            <div className="bg-zinc-50 rounded-lg p-4">
-              <Text className="text-sm text-zinc-600">
-                共 {boxes.length} 个样本盒需要存放
-              </Text>
-            </div>
+            {currentAssigningBox ? (
+              <div className="flex-1 border rounded-lg overflow-hidden flex flex-col">
+                <div className="bg-zinc-50 px-4 py-2 border-b">
+                  <Text className="text-sm font-medium">
+                    请选择样本盒 <span className="font-bold text-blue-600">{currentAssigningBox.code}</span> 的存放位置
+                  </Text>
+                </div>
+                <div className="flex-1 p-4 overflow-hidden">
+                  <StorageLocationPicker 
+                    onSelect={handleStorageSelect}
+                    onCancel={() => {}} // No cancel inside picker flow
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center bg-green-50 border border-green-100 rounded-lg">
+                <CheckCircleIcon className="w-16 h-16 text-green-500 mb-4" />
+                <Text className="text-xl font-semibold text-green-800">所有样本盒已分配位置</Text>
+                <Text className="text-green-700 mt-2">点击确认入库完成操作</Text>
+              </div>
+            )}
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsStorageDialogOpen(false)}>
+          <Button plain onClick={() => setIsStorageDialogOpen(false)} disabled={assignedBoxes.length > 0}>
             取消
           </Button>
-          <Button onClick={handleStorageConfirm}>
+          <Button onClick={handleStorageConfirm} disabled={assignedBoxes.length < boxes.length}>
             确认入库
           </Button>
         </DialogActions>

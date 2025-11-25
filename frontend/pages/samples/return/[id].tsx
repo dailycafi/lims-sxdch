@@ -177,12 +177,286 @@ export default function SampleReturnPage() {
         boxes: boxes
       });
 
-      alert('归还完成！');
+      // 询问是否打印样本跟踪表
+      if (confirm('归还完成！是否打印样本跟踪表？')) {
+        printTrackingForm();
+      }
+      
       router.push('/samples/borrow');
     } catch (error) {
       console.error('Failed to complete return:', error);
       alert('归还失败，请重试');
     }
+  };
+
+  // 打印样本跟踪表
+  const printTrackingForm = () => {
+    if (typeof window === 'undefined' || !borrowRecord) return;
+
+    const printWindow = window.open('', '', 'width=900,height=700');
+    if (!printWindow) {
+      alert('浏览器阻止了打印窗口，请允许弹窗后重试');
+      return;
+    }
+
+    const generatedAt = new Date().toLocaleString('zh-CN');
+    const returnedSamples = samples.filter(s => s.status === 'scanned');
+    const borrowedAt = new Date(borrowRecord.borrowed_at);
+    const returnedAt = new Date();
+    const durationMs = returnedAt.getTime() - borrowedAt.getTime();
+    const durationMinutes = Math.round(durationMs / (1000 * 60));
+    const durationHours = Math.floor(durationMinutes / 60);
+    const durationMins = durationMinutes % 60;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>样本跟踪表</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'SimSun', 'Songti SC', serif; 
+            padding: 20mm; 
+            font-size: 12pt;
+            line-height: 1.6;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 25px;
+            border-bottom: 3px double #000;
+            padding-bottom: 15px;
+          }
+          .header h1 { 
+            font-size: 20pt; 
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin-bottom: 5px;
+          }
+          .header .subtitle {
+            font-size: 11pt;
+            color: #666;
+          }
+          .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+          }
+          .info-box {
+            border: 1px solid #333;
+            padding: 12px 15px;
+          }
+          .info-box .label {
+            font-size: 10pt;
+            color: #666;
+            margin-bottom: 3px;
+          }
+          .info-box .value {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+          .highlight-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 25px;
+            text-align: center;
+          }
+          .highlight-box .duration {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #856404;
+          }
+          .highlight-box .label {
+            font-size: 10pt;
+            color: #856404;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px;
+          }
+          th, td { 
+            border: 1px solid #333; 
+            padding: 8px 10px; 
+            text-align: left;
+          }
+          th { 
+            background: #333; 
+            color: white;
+            font-weight: bold;
+          }
+          tr:nth-child(even) { background: #f5f5f5; }
+          .status-good { color: #28a745; font-weight: bold; }
+          .status-damaged { color: #ffc107; font-weight: bold; }
+          .status-lost { color: #dc3545; font-weight: bold; }
+          .footer {
+            margin-top: 40px;
+            border-top: 1px solid #333;
+            padding-top: 20px;
+          }
+          .signature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+          }
+          .signature-item {
+            text-align: center;
+          }
+          .signature-line {
+            border-bottom: 1px solid #333;
+            height: 40px;
+            margin-bottom: 5px;
+          }
+          .signature-label {
+            font-size: 10pt;
+            color: #666;
+          }
+          .summary-section {
+            background: #e8f4fd;
+            border: 1px solid #0066cc;
+            padding: 15px;
+            margin-bottom: 20px;
+          }
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            text-align: center;
+          }
+          .summary-item .number {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #0066cc;
+          }
+          .summary-item .label {
+            font-size: 10pt;
+            color: #666;
+          }
+          @media print {
+            body { padding: 10mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>样 本 跟 踪 表</h1>
+          <p class="subtitle">Sample Tracking Form</p>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-box">
+            <div class="label">领用单号</div>
+            <div class="value">${borrowRecord.request_code}</div>
+          </div>
+          <div class="info-box">
+            <div class="label">项目编号</div>
+            <div class="value">${borrowRecord.project.lab_project_code}</div>
+          </div>
+          <div class="info-box">
+            <div class="label">申办方编号</div>
+            <div class="value">${borrowRecord.project.sponsor_project_code}</div>
+          </div>
+          <div class="info-box">
+            <div class="label">领用人</div>
+            <div class="value">${borrowRecord.borrowed_by.full_name}</div>
+          </div>
+          <div class="info-box">
+            <div class="label">领用时间</div>
+            <div class="value">${borrowedAt.toLocaleString('zh-CN')}</div>
+          </div>
+          <div class="info-box">
+            <div class="label">归还时间</div>
+            <div class="value">${returnedAt.toLocaleString('zh-CN')}</div>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <div class="label">样本暴露时长</div>
+          <div class="duration">${durationHours > 0 ? durationHours + ' 小时 ' : ''}${durationMins} 分钟</div>
+          <div class="label">(共 ${durationMinutes} 分钟)</div>
+        </div>
+
+        <div class="summary-section">
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="number">${borrowRecord.samples.length}</div>
+              <div class="label">领用样本数</div>
+            </div>
+            <div class="summary-item">
+              <div class="number">${returnedSamples.length}</div>
+              <div class="label">归还样本数</div>
+            </div>
+            <div class="summary-item">
+              <div class="number">${borrowRecord.samples.length - returnedSamples.length}</div>
+              <div class="label">未归还样本数</div>
+            </div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">序号</th>
+              <th>样本编号</th>
+              <th style="width: 100px;">归还状态</th>
+              <th style="width: 100px;">样本状态</th>
+              <th>存入样本盒</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${returnedSamples.map((sample, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td style="font-family: monospace;">${sample.sample_code}</td>
+                <td class="status-good">✓ 已归还</td>
+                <td class="${sample.return_status === 'good' ? 'status-good' : sample.return_status === 'damaged' ? 'status-damaged' : 'status-lost'}">
+                  ${sample.return_status === 'good' ? '完好' : sample.return_status === 'damaged' ? '破损' : sample.return_status === 'lost' ? '丢失' : '-'}
+                </td>
+                <td>${sample.box_code || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p><strong>备注：</strong></p>
+          <div style="border: 1px solid #ddd; min-height: 60px; padding: 10px; margin-top: 10px;">
+            &nbsp;
+          </div>
+
+          <div class="signature-grid">
+            <div class="signature-item">
+              <div class="signature-line"></div>
+              <div class="signature-label">归还人签字</div>
+            </div>
+            <div class="signature-item">
+              <div class="signature-line"></div>
+              <div class="signature-label">样本管理员签字</div>
+            </div>
+            <div class="signature-item">
+              <div class="signature-line"></div>
+              <div class="signature-label">复核人签字</div>
+            </div>
+            <div class="signature-item">
+              <div class="signature-line"></div>
+              <div class="signature-label">日期</div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const getProgress = () => {

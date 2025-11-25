@@ -35,7 +35,7 @@ async def ensure_refresh_token_table() -> None:
 @app.get("/")
 async def root():
     """根路径"""
-    return {"message": "欢迎使用LIMS系统API"}
+    return {"message": "欢迎使用样本管理系统API"}
 
 
 @app.get("/health")

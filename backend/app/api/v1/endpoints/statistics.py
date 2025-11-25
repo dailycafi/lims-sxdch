@@ -23,6 +23,7 @@ async def get_sample_records(
     project_id: Optional[int] = None,
     sample_code: Optional[str] = None,
     operation_type: Optional[str] = None,
+    purpose: Optional[str] = None,  # 新增：用途筛选
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     operator: Optional[str] = None,
@@ -84,25 +85,117 @@ async def get_sample_records(
             sample_codes = [f"批量操作({details['sample_count']}个)"]
         
         # 为每个样本创建一条记录
-        for sample_code in sample_codes[:10]:  # 限制每个操作最多显示10个样本
+        # 用途筛选
+        record_purpose = details.get("purpose", "")
+        if purpose and purpose not in record_purpose:
+            continue
+        
+        for sc in sample_codes[:10]:  # 限制每个操作最多显示10个样本
             # 如果有样本编号筛选，跳过不匹配的
-            if sample_code and sample_code != sample_code:
+            if sample_code and sc != sample_code:
                 continue
             
             record = {
                 "id": log.id,
-                "sample_code": sample_code,
+                "sample_code": sc,
                 "project": details.get("project", ""),
                 "operation_type": op_type,
                 "operation_detail": _get_operation_detail(log),
                 "operator": log.user.full_name if log.user else "",
                 "operation_time": log.timestamp.isoformat(),
                 "location": details.get("location", ""),
-                "temperature": details.get("temperature")
+                "temperature": details.get("temperature"),
+                "purpose": record_purpose  # 新增：用途字段
             }
             records.append(record)
     
     return records
+
+
+@router.get("/sample/{sample_code}/access-history")
+async def get_sample_access_history(
+    sample_code: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取单个样本的存取历史，包括存取次数和暴露时间计算"""
+    # 查询样本
+    sample_result = await db.execute(
+        select(Sample).where(Sample.sample_code == sample_code)
+    )
+    sample = sample_result.scalar_one_or_none()
+    
+    if not sample:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="样本不存在"
+        )
+    
+    # 查询该样本的所有领用记录
+    borrow_result = await db.execute(
+        select(SampleBorrowItem).options(
+            selectinload(SampleBorrowItem.request)
+        ).where(
+            SampleBorrowItem.sample_id == sample.id
+        ).order_by(SampleBorrowItem.borrowed_at)
+    )
+    borrow_items = borrow_result.scalars().all()
+    
+    # 计算存取次数和暴露时间
+    access_records = []
+    total_exposure_minutes = 0
+    cumulative_exposure = 0
+    
+    for idx, item in enumerate(borrow_items):
+        if not item.borrowed_at:
+            continue
+            
+        # 计算单次暴露时间
+        end_time = item.returned_at or datetime.utcnow()
+        duration_minutes = int((end_time - item.borrowed_at).total_seconds() / 60)
+        
+        # 累计暴露时间
+        total_exposure_minutes += duration_minutes
+        cumulative_exposure = total_exposure_minutes
+        
+        # 获取用途
+        purpose = item.request.purpose if item.request else "未知"
+        
+        access_records.append({
+            "access_number": idx + 1,
+            "borrowed_at": item.borrowed_at.isoformat(),
+            "returned_at": item.returned_at.isoformat() if item.returned_at else None,
+            "duration_minutes": duration_minutes,
+            "cumulative_exposure_minutes": cumulative_exposure,
+            "purpose": purpose,
+            "status": "已归还" if item.returned_at else "未归还",
+            "notes": item.notes or ""
+        })
+    
+    # 计算统计信息
+    return {
+        "sample_code": sample_code,
+        "project_id": sample.project_id,
+        "current_status": sample.status.value if sample.status else "unknown",
+        "total_access_count": len(access_records),
+        "total_exposure_minutes": total_exposure_minutes,
+        "total_exposure_hours": round(total_exposure_minutes / 60, 2),
+        "access_records": access_records,
+        "exposure_by_purpose": _calculate_exposure_by_purpose(access_records)
+    }
+
+
+def _calculate_exposure_by_purpose(access_records: list) -> dict:
+    """按用途计算暴露时间"""
+    purpose_exposure = {}
+    for record in access_records:
+        purpose = record.get("purpose", "未知")
+        duration = record.get("duration_minutes", 0)
+        if purpose not in purpose_exposure:
+            purpose_exposure[purpose] = {"count": 0, "total_minutes": 0}
+        purpose_exposure[purpose]["count"] += 1
+        purpose_exposure[purpose]["total_minutes"] += duration
+    return purpose_exposure
 
 
 @router.get("/exposure-records")

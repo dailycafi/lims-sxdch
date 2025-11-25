@@ -126,11 +126,11 @@ export default function LoginPage() {
   };
 
   const onSubmit = async (data: LoginForm) => {
+    setIsLoading(true);
+    setError(null);
+    setShowErrorToast(false);
+    
     try {
-      setIsLoading(true);
-      setError(null);
-      setShowErrorToast(false);
-      
       // 点击登录时再次检查后端服务器状态
       console.log('[Login] 登录前检查后端服务器状态...');
       const isBackendOnline = await backendStatusAPI.checkStatus();
@@ -150,15 +150,44 @@ export default function LoginPage() {
       }
       
       console.log('[Login] 后端服务正常，开始登录...');
-      await login(data.username, data.password);
-      setServerStatus('online');
-      router.push('/');
+      const result = await login(data.username, data.password);
+      
+      if (result.success) {
+        setServerStatus('online');
+        router.push('/');
+      } else {
+        // 处理登录失败
+        const loginError: LoginError = {
+          type: result.error?.type === 'network' ? ErrorType.NETWORK :
+                result.error?.type === 'auth' ? ErrorType.AUTH :
+                result.error?.type === 'server' ? ErrorType.SERVER :
+                ErrorType.UNKNOWN,
+          title: result.error?.type === 'network' ? '网络连接失败' :
+                 result.error?.type === 'auth' ? '登录失败' :
+                 result.error?.type === 'server' ? '服务器错误' :
+                 '登录失败',
+          message: result.error?.message || '发生未知错误',
+          suggestion: result.error?.type === 'network' ? '请确认后端服务已启动' :
+                      result.error?.type === 'auth' ? '请检查用户名和密码' :
+                      result.error?.type === 'server' ? '请稍后重试' :
+                      '请重试'
+        };
+        setError(loginError);
+        setShowErrorToast(true);
+        
+        // 根据错误类型更新状态指示器
+        if (result.error?.type === 'network' || result.error?.type === 'server') {
+          setServerStatus('offline');
+        } else {
+          setServerStatus('online');
+        }
+      }
     } catch (err) {
+      // 兜底处理意外错误
       const loginError = parseError(err);
       setError(loginError);
       setShowErrorToast(true);
       
-      // 根据错误类型更新状态指示器
       if (loginError.type === ErrorType.NETWORK || loginError.type === ErrorType.SERVER) {
         setServerStatus('offline');
       } else {

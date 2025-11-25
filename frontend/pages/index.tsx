@@ -309,7 +309,7 @@ export default function HomePage() {
                   {dashboardConfig?.title || '工作台'}
                 </Heading>
                 <Text className="text-gray-600 text-lg mb-3">
-                  {dashboardConfig?.subtitle || `您好，${user?.full_name}！欢迎使用LIMS系统`}
+                  {dashboardConfig?.subtitle || `您好，${user?.full_name}！欢迎使用样本管理系统`}
                 </Text>
                 {/* 同步时间信息 */}
                 <div className="flex items-center gap-2 text-sm">

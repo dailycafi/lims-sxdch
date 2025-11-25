@@ -23,6 +23,7 @@ import {
   ArrowUpTrayIcon,
   CheckCircleIcon 
 } from '@heroicons/react/20/solid';
+import JsBarcode from 'jsbarcode';
 
 interface Project {
   id: number;
@@ -47,7 +48,7 @@ interface SampleCodeElement {
 }
 
 const sampleCodeElements = [
-  { id: 'sponsor_code', name: 'sponsor_code', label: '申办者项目编号' },
+  { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号' },
   { id: 'lab_code', name: 'lab_code', label: '临床试验研究室项目编号' },
   { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号' },
   { id: 'subject_id', name: 'subject_id', label: '受试者编号' },
@@ -224,7 +225,25 @@ export default function ProjectDetailPage() {
       .filter(item => item.seq || item.time);
   };
 
-  const triggerPrint = (codes: string[]) => {
+  const generateBarcodeDataUrl = (text: string) => {
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, text, {
+        format: "CODE128",
+        width: 1.5,
+        height: 40,
+        displayValue: true,
+        fontSize: 14,
+        margin: 0
+      });
+      return canvas.toDataURL('image/png');
+    } catch (e) {
+      console.error('Barcode generation failed for', text, e);
+      return '';
+    }
+  };
+
+  const triggerPrint = (codes: string[], mode: 'list' | 'label' = 'list') => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -237,6 +256,28 @@ export default function ProjectDetailPage() {
 
     const generatedAt = new Date().toLocaleString('zh-CN');
     const projectLabel = project?.lab_project_code || project?.sponsor_project_code || '项目';
+    
+    let content = '';
+    if (mode === 'label') {
+      const barcodes = codes.map(code => ({ code, src: generateBarcodeDataUrl(code) }));
+      content = `
+        <div class="labels">
+          ${barcodes.map(item => `
+            <div class="label">
+              <img src="${item.src}" alt="${item.code}" />
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      content = `
+        <h1>样本编号列表</h1>
+        <p>项目：${projectLabel} | 生成时间：${generatedAt}</p>
+        <ul>
+          ${codes.map(code => `<li>${code}</li>`).join('')}
+        </ul>
+      `;
+    }
 
     printWindow.document.write(`<!DOCTYPE html>
       <html lang="zh-CN">
@@ -247,20 +288,42 @@ export default function ProjectDetailPage() {
             body { font-family: 'SF Pro SC', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif; padding: 24px; }
             h1 { margin-bottom: 8px; }
             p { margin-bottom: 16px; color: #4b5563; }
+            
+            /* List Styles */
             ul { columns: 2; column-gap: 32px; padding: 0; list-style: none; }
             li { margin-bottom: 8px; font-size: 14px; }
+            
+            /* Label Styles */
+            .labels { 
+              display: grid; 
+              grid-template-columns: repeat(auto-fill, 50mm); 
+              gap: 5mm; 
+            }
+            .label {
+              width: 50mm;
+              height: 30mm;
+              border: 1px dashed #ccc; /* Preview border */
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 2mm;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+            }
+            .label img {
+              max-width: 100%;
+              max-height: 100%;
+            }
+
             @media print {
               body { padding: 0; }
               ul { columns: 3; }
+              .label { border: none; } /* Remove border for print */
             }
           </style>
         </head>
         <body>
-          <h1>样本编号列表</h1>
-          <p>项目：${projectLabel} | 生成时间：${generatedAt}</p>
-          <ul>
-            ${codes.map(code => `<li>${code}</li>`).join('')}
-          </ul>
+          ${content}
         </body>
       </html>`);
 
@@ -268,10 +331,10 @@ export default function ProjectDetailPage() {
     printWindow.focus();
     setTimeout(() => {
       printWindow.print();
-    }, 100);
+    }, 500); // Give it a bit more time for images to render
   };
 
-  const handleGenerateSampleCodes = async (mode: 'preview' | 'print' = 'preview') => {
+  const handleGenerateSampleCodes = async (mode: 'preview' | 'print' | 'print_label' = 'preview') => {
     if (!project) {
       toast.error('项目信息尚未加载完成');
       return;
@@ -301,7 +364,9 @@ export default function ProjectDetailPage() {
       toast.success(successMessage);
 
       if (mode === 'print' && codes.length > 0) {
-        triggerPrint(codes);
+        triggerPrint(codes, 'list');
+      } else if (mode === 'print_label' && codes.length > 0) {
+        triggerPrint(codes, 'label');
       }
     } catch (error) {
       console.error('生成样本编号失败:', error);
@@ -430,7 +495,7 @@ export default function ProjectDetailPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <DescriptionList>
               <div>
-                <DescriptionTerm>申办者项目编号</DescriptionTerm>
+                <DescriptionTerm>申办方项目编号</DescriptionTerm>
                 <DescriptionDetails>{project.sponsor_project_code}</DescriptionDetails>
               </div>
               <div>
@@ -438,7 +503,7 @@ export default function ProjectDetailPage() {
                 <DescriptionDetails>{project.lab_project_code}</DescriptionDetails>
               </div>
               <div>
-                <DescriptionTerm>申办者</DescriptionTerm>
+                <DescriptionTerm>申办方</DescriptionTerm>
                 <DescriptionDetails>{project.sponsor?.name || '-'}</DescriptionDetails>
               </div>
               <div>
@@ -853,7 +918,14 @@ export default function ProjectDetailPage() {
             disabled={isGeneratingCodes}
           >
             <PrinterIcon />
-            {isGeneratingCodes ? '生成中…' : '生成并打印'}
+            {isGeneratingCodes ? '生成中…' : '生成并打印清单'}
+          </Button>
+          <Button 
+            onClick={() => handleGenerateSampleCodes('print_label')}
+            disabled={isGeneratingCodes}
+          >
+            <PrinterIcon />
+            {isGeneratingCodes ? '生成中…' : '生成并打印标签'}
           </Button>
         </DialogActions>
       </Dialog>

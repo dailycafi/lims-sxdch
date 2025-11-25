@@ -35,6 +35,27 @@ interface SampleRecord {
   location?: string;
   temperature?: number;
   exposure_duration?: number;
+  purpose?: string;  // 新增：用途
+}
+
+interface SampleAccessHistory {
+  sample_code: string;
+  project_id: number;
+  current_status: string;
+  total_access_count: number;
+  total_exposure_minutes: number;
+  total_exposure_hours: number;
+  access_records: Array<{
+    access_number: number;
+    borrowed_at: string;
+    returned_at: string | null;
+    duration_minutes: number;
+    cumulative_exposure_minutes: number;
+    purpose: string;
+    status: string;
+    notes: string;
+  }>;
+  exposure_by_purpose: Record<string, { count: number; total_minutes: number }>;
 }
 
 interface Statistics {
@@ -49,7 +70,7 @@ interface Statistics {
 }
 
 export default function StatisticsPage() {
-  const [activeTab, setActiveTab] = useState<'records' | 'exposure' | 'summary'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'exposure' | 'access' | 'summary'>('records');
   const [records, setRecords] = useState<SampleRecord[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +79,7 @@ export default function StatisticsPage() {
   const [filters, setFilters] = useState({
     project_id: 'all',
     operation_type: 'all',
+    purpose: '',  // 新增：用途筛选
     start_date: '',
     end_date: '',
     operator: ''
@@ -66,6 +88,11 @@ export default function StatisticsPage() {
   const [exposureRecords, setExposureRecords] = useState<any[]>([]);
   const [alertThresholds, setAlertThresholds] = useState({ max_temperature_c: 8, max_exposure_minutes: 30 });
   const [alerts, setAlerts] = useState<any[]>([]);
+  
+  // 新增：样本存取历史查询
+  const [sampleCodeQuery, setSampleCodeQuery] = useState('');
+  const [accessHistory, setAccessHistory] = useState<SampleAccessHistory | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -131,6 +158,27 @@ export default function StatisticsPage() {
       setAlerts(response.data.alerts || []);
     } catch (e) {
       console.error('Failed to fetch alerts:', e);
+    }
+  };
+
+  // 新增：获取单个样本的存取历史
+  const fetchSampleAccessHistory = async () => {
+    if (!sampleCodeQuery.trim()) return;
+    
+    setLoadingHistory(true);
+    try {
+      const response = await api.get(`/statistics/sample/${encodeURIComponent(sampleCodeQuery.trim())}/access-history`);
+      setAccessHistory(response.data);
+    } catch (error: any) {
+      console.error('Failed to fetch sample access history:', error);
+      if (error.response?.status === 404) {
+        alert('样本不存在');
+      } else {
+        alert('查询失败，请重试');
+      }
+      setAccessHistory(null);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -335,6 +383,7 @@ export default function StatisticsPage() {
               tabs={[
                 { key: 'records', label: '操作记录' },
                 { key: 'exposure', label: '暴露记录' },
+                { key: 'access', label: '存取历史' },
                 { key: 'summary', label: '统计汇总' }
               ]}
               activeTab={activeTab}
@@ -451,6 +500,127 @@ export default function StatisticsPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 新增：存取历史 Tab */}
+          {activeTab === 'access' && (
+            <div className="p-6">
+              <div className="mb-6">
+                <Heading level={3} className="mb-4">单样本存取历史查询</Heading>
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1 max-w-md">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">样本编号</label>
+                    <Input
+                      type="text"
+                      placeholder="输入样本编号..."
+                      value={sampleCodeQuery}
+                      onChange={(e) => setSampleCodeQuery(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && fetchSampleAccessHistory()}
+                      className="w-full h-11"
+                    />
+                  </div>
+                  <Button onClick={fetchSampleAccessHistory} disabled={loadingHistory || !sampleCodeQuery.trim()}>
+                    {loadingHistory ? '查询中...' : '查询'}
+                  </Button>
+                </div>
+              </div>
+
+              {loadingHistory ? (
+                <div className="flex justify-center py-12">
+                  <AnimatedLoadingState colSpan={1} variant="skeleton" />
+                </div>
+              ) : accessHistory ? (
+                <div className="space-y-6">
+                  {/* 汇总信息 */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-blue-700">{accessHistory.total_access_count}</div>
+                        <div className="text-sm text-blue-600">总存取次数</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-amber-700">{accessHistory.total_exposure_minutes}</div>
+                        <div className="text-sm text-amber-600">总暴露时间(分钟)</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-purple-700">{accessHistory.total_exposure_hours}</div>
+                        <div className="text-sm text-purple-600">总暴露时间(小时)</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-zinc-700">
+                          <Badge color={accessHistory.current_status === 'in_storage' ? 'green' : 'yellow'}>
+                            {accessHistory.current_status === 'in_storage' ? '在库' : accessHistory.current_status}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-zinc-600">当前状态</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 按用途统计 */}
+                  {Object.keys(accessHistory.exposure_by_purpose).length > 0 && (
+                    <div>
+                      <Heading level={4} className="mb-3">按用途统计暴露时间</Heading>
+                      <div className="grid grid-cols-3 gap-4">
+                        {Object.entries(accessHistory.exposure_by_purpose).map(([purpose, data]) => (
+                          <div key={purpose} className="bg-zinc-50 border rounded-lg p-4">
+                            <div className="font-medium text-zinc-900">{purpose}</div>
+                            <div className="text-sm text-zinc-600 mt-1">
+                              次数: {data.count} | 时长: {data.total_minutes} 分钟
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 详细记录 */}
+                  <div>
+                    <Heading level={4} className="mb-3">存取记录详情</Heading>
+                    <Table bleed striped>
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader className="pl-6">序号</TableHeader>
+                          <TableHeader>领用时间</TableHeader>
+                          <TableHeader>归还时间</TableHeader>
+                          <TableHeader>单次时长(分钟)</TableHeader>
+                          <TableHeader>累计暴露(分钟)</TableHeader>
+                          <TableHeader>用途</TableHeader>
+                          <TableHeader className="pr-6">状态</TableHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {accessHistory.access_records.map((record) => (
+                          <TableRow key={record.access_number}>
+                            <TableCell className="pl-6">{record.access_number}</TableCell>
+                            <TableCell>{new Date(record.borrowed_at).toLocaleString('zh-CN')}</TableCell>
+                            <TableCell>
+                              {record.returned_at ? new Date(record.returned_at).toLocaleString('zh-CN') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge color={record.duration_minutes > 30 ? 'red' : record.duration_minutes > 15 ? 'yellow' : 'green'}>
+                                {record.duration_minutes}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{record.cumulative_exposure_minutes}</TableCell>
+                            <TableCell>{record.purpose}</TableCell>
+                            <TableCell className="pr-6">
+                              <Badge color={record.status === '已归还' ? 'green' : 'amber'}>
+                                {record.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-zinc-500">
+                  请输入样本编号进行查询
                 </div>
               )}
             </div>
