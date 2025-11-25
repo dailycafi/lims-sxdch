@@ -9,6 +9,7 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Textarea } from '@/components/textarea';
+import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
@@ -29,6 +30,8 @@ interface Organization {
 
 interface SampleType {
   id: number;
+  category?: string;
+  code?: string;
   cycle_group?: string;
   test_type?: string;
   primary_count: number;
@@ -49,15 +52,19 @@ const orgTypes = [
   { value: 'transport', label: '运输单位' },
 ];
 
-type TabType = 'organizations' | 'sample-types';
+type TabType = 'organizations' | 'clinical-samples' | 'qc-stability-samples';
 
 export default function GlobalParamsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('organizations');
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [sampleTypes, setSampleTypes] = useState<SampleType[]>([]);
+  const [clinicalSamples, setClinicalSamples] = useState<SampleType[]>([]);
+  const [qcSamples, setQcSamples] = useState<SampleType[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
-  const [isSampleTypeDialogOpen, setIsSampleTypeDialogOpen] = useState(false);
+  const [isClinicalDialogOpen, setIsClinicalDialogOpen] = useState(false);
+  const [isQCDialogOpen, setIsQCDialogOpen] = useState(false);
+  
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
   const [selectedOrgType, setSelectedOrgType] = useState('all');
@@ -72,8 +79,8 @@ export default function GlobalParamsPage() {
     contact_email: '',
   });
 
-  // 样本类型表单数据
-  const [sampleTypeForm, setSampleTypeForm] = useState({
+  // 临床样本表单数据
+  const [clinicalForm, setClinicalForm] = useState({
     cycle_group: '',
     test_type: '',
     primary_count: 1,
@@ -81,6 +88,13 @@ export default function GlobalParamsPage() {
     purpose: '',
     transport_method: '',
     status: '',
+    special_notes: '',
+  });
+
+  // 稳定性及质控样本表单数据
+  const [qcForm, setQCForm] = useState({
+    test_type: '', // 检测类型 (STB/QC)
+    code: '',      // 代码
     special_notes: '',
   });
 
@@ -99,7 +113,11 @@ export default function GlobalParamsPage() {
         api.get('/global-params/sample-types'),
       ]);
       setOrganizations(orgsRes.data);
-      setSampleTypes(sampleTypesRes.data);
+      
+      const allSamples = sampleTypesRes.data as SampleType[];
+      setClinicalSamples(allSamples.filter(s => s.category === 'clinical' || !s.category));
+      setQcSamples(allSamples.filter(s => s.category === 'qc_stability'));
+      
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -107,7 +125,7 @@ export default function GlobalParamsPage() {
     }
   };
 
-  // 组织管理
+  // --- 组织管理 ---
   const handleCreateOrg = async () => {
     try {
       await api.post('/global-params/organizations', orgForm);
@@ -174,47 +192,41 @@ export default function GlobalParamsPage() {
     setAuditReason('');
   };
 
-  // 样本类型管理
-  const handleCreateSampleType = async () => {
+  // --- 临床样本管理 ---
+  const handleCreateClinical = async () => {
     try {
-      await api.post('/global-params/sample-types', sampleTypeForm);
-      setIsSampleTypeDialogOpen(false);
-      resetSampleTypeForm();
+      await api.post('/global-params/sample-types', {
+        ...clinicalForm,
+        category: 'clinical'
+      });
+      setIsClinicalDialogOpen(false);
+      resetClinicalForm();
       fetchData();
     } catch (error) {
-      console.error('Failed to create sample type:', error);
+      console.error('Failed to create clinical sample type:', error);
     }
   };
 
-  const handleUpdateSampleType = async () => {
+  const handleUpdateClinical = async () => {
     if (!editingSampleType) return;
     try {
       await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
-        ...sampleTypeForm,
+        ...clinicalForm,
+        category: 'clinical',
         audit_reason: auditReason,
       });
-      setIsSampleTypeDialogOpen(false);
-      resetSampleTypeForm();
+      setIsClinicalDialogOpen(false);
+      resetClinicalForm();
       fetchData();
     } catch (error) {
-      console.error('Failed to update sample type:', error);
+      console.error('Failed to update clinical sample type:', error);
     }
   };
 
-  const handleDeleteSampleType = async (id: number) => {
-    if (!confirm('确定要删除此样本类型配置吗？')) return;
-    try {
-      await api.delete(`/global-params/sample-types/${id}`);
-      fetchData();
-    } catch (error) {
-      console.error('Failed to delete sample type:', error);
-    }
-  };
-
-  const openSampleTypeDialog = (sampleType?: SampleType) => {
+  const openClinicalDialog = (sampleType?: SampleType) => {
     if (sampleType) {
       setEditingSampleType(sampleType);
-      setSampleTypeForm({
+      setClinicalForm({
         cycle_group: sampleType.cycle_group || '',
         test_type: sampleType.test_type || '',
         primary_count: sampleType.primary_count,
@@ -226,13 +238,13 @@ export default function GlobalParamsPage() {
       });
     } else {
       setEditingSampleType(null);
-      resetSampleTypeForm();
+      resetClinicalForm();
     }
-    setIsSampleTypeDialogOpen(true);
+    setIsClinicalDialogOpen(true);
   };
 
-  const resetSampleTypeForm = () => {
-    setSampleTypeForm({
+  const resetClinicalForm = () => {
+    setClinicalForm({
       cycle_group: '',
       test_type: '',
       primary_count: 1,
@@ -245,6 +257,73 @@ export default function GlobalParamsPage() {
     setAuditReason('');
   };
 
+  // --- 稳定性及质控样本管理 ---
+  const handleCreateQC = async () => {
+    try {
+      await api.post('/global-params/sample-types', {
+        ...qcForm,
+        category: 'qc_stability',
+        primary_count: 0, // 不适用
+        backup_count: 0,  // 不适用
+      });
+      setIsQCDialogOpen(false);
+      resetQCForm();
+      fetchData();
+    } catch (error) {
+      console.error('Failed to create QC sample type:', error);
+    }
+  };
+
+  const handleUpdateQC = async () => {
+    if (!editingSampleType) return;
+    try {
+      await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
+        ...qcForm,
+        category: 'qc_stability',
+        audit_reason: auditReason,
+      });
+      setIsQCDialogOpen(false);
+      resetQCForm();
+      fetchData();
+    } catch (error) {
+      console.error('Failed to update QC sample type:', error);
+    }
+  };
+
+  const openQCDialog = (sampleType?: SampleType) => {
+    if (sampleType) {
+      setEditingSampleType(sampleType);
+      setQCForm({
+        test_type: sampleType.test_type || '',
+        code: sampleType.code || '',
+        special_notes: sampleType.special_notes || '',
+      });
+    } else {
+      setEditingSampleType(null);
+      resetQCForm();
+    }
+    setIsQCDialogOpen(true);
+  };
+
+  const resetQCForm = () => {
+    setQCForm({
+      test_type: '',
+      code: '',
+      special_notes: '',
+    });
+    setAuditReason('');
+  };
+
+  const handleDeleteSampleType = async (id: number) => {
+    if (!confirm('确定要删除此样本类型配置吗？')) return;
+    try {
+      await api.delete(`/global-params/sample-types/${id}`);
+      fetchData();
+    } catch (error) {
+      console.error('Failed to delete sample type:', error);
+    }
+  };
+
   const getOrgTypeLabel = (type: string) => {
     const orgType = orgTypes.find(t => t.value === type);
     return orgType?.label || type;
@@ -252,16 +331,11 @@ export default function GlobalParamsPage() {
 
   const getOrgTypeColor = (type: string) => {
     switch (type) {
-      case 'sponsor':
-        return 'blue';
-      case 'clinical':
-        return 'green';
-      case 'testing':
-        return 'purple';
-      case 'transport':
-        return 'amber';
-      default:
-        return 'zinc';
+      case 'sponsor': return 'blue';
+      case 'clinical': return 'green';
+      case 'testing': return 'purple';
+      case 'transport': return 'amber';
+      default: return 'zinc';
     }
   };
 
@@ -278,29 +352,16 @@ export default function GlobalParamsPage() {
         </div>
 
         {/* 标签页切换 */}
-        <div className="flex space-x-1 border-b border-zinc-200 mb-6">
-          <button
-            onClick={() => setActiveTab('organizations')}
-            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'organizations'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            <BuildingOfficeIcon className="h-5 w-5" />
-            组织管理
-          </button>
-          <button
-            onClick={() => setActiveTab('sample-types')}
-            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
-              activeTab === 'sample-types'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            <BeakerIcon className="h-5 w-5" />
-            样本类型配置
-          </button>
+        <div className="mb-6">
+          <Tabs
+            tabs={[
+              { key: 'organizations', label: '组织管理' },
+              { key: 'clinical-samples', label: '临床样本配置' },
+              { key: 'qc-stability-samples', label: '稳定性及质控样本配置' }
+            ]}
+            activeTab={activeTab}
+            onChange={(key) => setActiveTab(key as TabType)}
+          />
         </div>
 
         {/* 组织管理内容 */}
@@ -319,7 +380,7 @@ export default function GlobalParamsPage() {
                   ))}
                 </Select>
               </div>
-              <Button onClick={() => openOrgDialog()}>
+              <Button onClick={() => openOrgDialog()} className="whitespace-nowrap">
                 <PlusIcon />
                 新增组织
               </Button>
@@ -342,11 +403,7 @@ export default function GlobalParamsPage() {
                   {loading ? (
                     <AnimatedLoadingState colSpan={7} variant="skeleton" />
                   ) : filteredOrganizations.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        <Text>暂无数据</Text>
-                      </TableCell>
-                    </TableRow>
+                    <AnimatedEmptyState colSpan={7} text="暂无数据" />
                   ) : (
                     filteredOrganizations.map((org) => (
                       <TableRow key={org.id}>
@@ -379,14 +436,14 @@ export default function GlobalParamsPage() {
           </>
         )}
 
-        {/* 样本类型配置内容 */}
-        {activeTab === 'sample-types' && (
+        {/* 临床样本配置内容 */}
+        {activeTab === 'clinical-samples' && (
           <>
             <div className="flex items-center justify-between mb-4">
-              <Text className="text-zinc-600">配置临床样本和稳定性质控样本的类型信息</Text>
-              <Button onClick={() => openSampleTypeDialog()}>
+              <Text className="text-zinc-600">配置临床试验中的样本类型信息（正份/备份）</Text>
+              <Button onClick={() => openClinicalDialog()} className="whitespace-nowrap">
                 <PlusIcon />
-                新增样本类型
+                新增临床样本类型
               </Button>
             </div>
 
@@ -408,14 +465,10 @@ export default function GlobalParamsPage() {
                 <TableBody>
                   {loading ? (
                     <AnimatedLoadingState colSpan={9} variant="skeleton" />
-                  ) : sampleTypes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
-                        <Text>暂无数据</Text>
-                      </TableCell>
-                    </TableRow>
+                  ) : clinicalSamples.length === 0 ? (
+                    <AnimatedEmptyState colSpan={9} text="暂无数据" />
                   ) : (
-                    sampleTypes.map((sampleType) => (
+                    clinicalSamples.map((sampleType) => (
                       <TableRow key={sampleType.id}>
                         <TableCell>{sampleType.cycle_group || '-'}</TableCell>
                         <TableCell>{sampleType.test_type || '-'}</TableCell>
@@ -427,7 +480,66 @@ export default function GlobalParamsPage() {
                         <TableCell className="text-zinc-600">{sampleType.special_notes || '-'}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button plain onClick={() => openSampleTypeDialog(sampleType)}>
+                            <Button plain onClick={() => openClinicalDialog(sampleType)}>
+                              <PencilIcon />
+                            </Button>
+                            <Button plain onClick={() => handleDeleteSampleType(sampleType.id)}>
+                              <TrashIcon />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+
+        {/* 稳定性及质控样本配置内容 */}
+        {activeTab === 'qc-stability-samples' && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <Text className="text-zinc-600">配置稳定性研究和质量控制的样本类型</Text>
+              <Button onClick={() => openQCDialog()} className="whitespace-nowrap">
+                <PlusIcon />
+                新增稳定性/质控样本
+              </Button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>检测类型</TableHeader>
+                    <TableHeader>代码</TableHeader>
+                    <TableHeader>特殊事项</TableHeader>
+                    <TableHeader>创建时间</TableHeader>
+                    <TableHeader>操作</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <AnimatedLoadingState colSpan={5} variant="skeleton" />
+                  ) : qcSamples.length === 0 ? (
+                    <AnimatedEmptyState colSpan={5} text="暂无数据" />
+                  ) : (
+                    qcSamples.map((sampleType) => (
+                      <TableRow key={sampleType.id}>
+                        <TableCell className="font-medium">{sampleType.test_type || '-'}</TableCell>
+                        <TableCell>
+                          {sampleType.code ? (
+                            <Badge color="zinc">{sampleType.code}</Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell className="text-zinc-600">{sampleType.special_notes || '-'}</TableCell>
+                        <TableCell className="text-zinc-500">
+                          {new Date(sampleType.created_at).toLocaleDateString('zh-CN')}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button plain onClick={() => openQCDialog(sampleType)}>
                               <PencilIcon />
                             </Button>
                             <Button plain onClick={() => handleDeleteSampleType(sampleType.id)}>
@@ -550,102 +662,109 @@ export default function GlobalParamsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* 样本类型对话框 */}
-      <Dialog open={isSampleTypeDialogOpen} onClose={setIsSampleTypeDialogOpen}>
-        <DialogTitle>{editingSampleType ? '编辑样本类型' : '新增样本类型'}</DialogTitle>
+      {/* 临床样本对话框 */}
+      <Dialog open={isClinicalDialogOpen} onClose={setIsClinicalDialogOpen}>
+        <DialogTitle>{editingSampleType ? '编辑临床样本类型' : '新增临床样本类型'}</DialogTitle>
         <DialogDescription>
-          {editingSampleType ? '修改样本类型配置' : '添加新的样本类型配置'}
+          {editingSampleType ? '修改临床样本类型配置' : '添加新的临床样本类型配置'}
         </DialogDescription>
         <DialogBody>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                周期/组别
-              </label>
-              <Input
-                value={sampleTypeForm.cycle_group}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, cycle_group: e.target.value })}
-                placeholder="如：A组、第1期等"
-              />
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  周期/组别
+                </label>
+                <Input
+                  value={clinicalForm.cycle_group}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, cycle_group: e.target.value })}
+                  placeholder="如：A组、第1期等"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  检测类型
+                </label>
+                <Input
+                  value={clinicalForm.test_type}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, test_type: e.target.value })}
+                  placeholder="如：血清、血浆、尿液等"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                检测类型
-              </label>
-              <Input
-                value={sampleTypeForm.test_type}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, test_type: e.target.value })}
-                placeholder="如：血清、血浆、尿液等"
-              />
-            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   正份（套）
                 </label>
                 <Input
                   type="number"
-                  value={sampleTypeForm.primary_count}
-                  onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, primary_count: parseInt(e.target.value) || 1 })}
+                  value={clinicalForm.primary_count}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, primary_count: parseInt(e.target.value) || 1 })}
                   min="1"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   备份（套）
                 </label>
                 <Input
                   type="number"
-                  value={sampleTypeForm.backup_count}
-                  onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, backup_count: parseInt(e.target.value) || 1 })}
+                  value={clinicalForm.backup_count}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, backup_count: parseInt(e.target.value) || 1 })}
                   min="0"
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                用途
-              </label>
-              <Input
-                value={sampleTypeForm.purpose}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, purpose: e.target.value })}
-                placeholder="如：首次检测、重测、ISR等"
-              />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  用途
+                </label>
+                <Input
+                  value={clinicalForm.purpose}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, purpose: e.target.value })}
+                  placeholder="如：首次检测、重测、ISR等"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  运输方式
+                </label>
+                <Input
+                  value={clinicalForm.transport_method}
+                  onChange={(e) => setClinicalForm({ ...clinicalForm, transport_method: e.target.value })}
+                  placeholder="如：冷链运输、常温运输等"
+                />
+              </div>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                运输方式
-              </label>
-              <Input
-                value={sampleTypeForm.transport_method}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, transport_method: e.target.value })}
-                placeholder="如：冷链运输、常温运输等"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                 状态
               </label>
               <Input
-                value={sampleTypeForm.status}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, status: e.target.value })}
+                value={clinicalForm.status}
+                onChange={(e) => setClinicalForm({ ...clinicalForm, status: e.target.value })}
                 placeholder="如：正常、待检、已检等"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                 特殊事项
               </label>
               <Textarea
-                value={sampleTypeForm.special_notes}
-                onChange={(e) => setSampleTypeForm({ ...sampleTypeForm, special_notes: e.target.value })}
+                value={clinicalForm.special_notes}
+                onChange={(e) => setClinicalForm({ ...clinicalForm, special_notes: e.target.value })}
                 placeholder="特殊要求或注意事项"
                 rows={2}
               />
             </div>
             {editingSampleType && (
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   修改理由 <span className="text-red-500">*</span>
                 </label>
                 <Textarea
@@ -663,10 +782,83 @@ export default function GlobalParamsPage() {
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsSampleTypeDialogOpen(false)}>
+          <Button plain onClick={() => setIsClinicalDialogOpen(false)}>
             取消
           </Button>
-          <Button onClick={editingSampleType ? handleUpdateSampleType : handleCreateSampleType}>
+          <Button onClick={editingSampleType ? handleUpdateClinical : handleCreateClinical}>
+            {editingSampleType ? '保存修改' : '创建'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 稳定性及质控样本对话框 */}
+      <Dialog open={isQCDialogOpen} onClose={setIsQCDialogOpen}>
+        <DialogTitle>{editingSampleType ? '编辑稳定性/质控样本' : '新增稳定性/质控样本'}</DialogTitle>
+        <DialogDescription>
+          {editingSampleType ? '修改样本类型配置' : '添加新的样本类型配置'}
+        </DialogDescription>
+        <DialogBody>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  检测类型 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={qcForm.test_type}
+                  onChange={(e) => setQCForm({ ...qcForm, test_type: e.target.value })}
+                  placeholder="如：STB, QC"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  代码
+                </label>
+                <Input
+                  value={qcForm.code}
+                  onChange={(e) => setQCForm({ ...qcForm, code: e.target.value })}
+                  placeholder="如：L, M, H"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                特殊事项
+              </label>
+              <Textarea
+                value={qcForm.special_notes}
+                onChange={(e) => setQCForm({ ...qcForm, special_notes: e.target.value })}
+                placeholder="特殊要求或注意事项"
+                rows={3}
+              />
+            </div>
+            
+            {editingSampleType && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  修改理由 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={auditReason}
+                  onChange={(e) => setAuditReason(e.target.value)}
+                  placeholder="请输入修改理由"
+                  rows={2}
+                  required
+                />
+                <Text className="text-sm text-amber-600 mt-1">
+                  注意：修改信息将被记录在审计日志中
+                </Text>
+              </div>
+            )}
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsQCDialogOpen(false)}>
+            取消
+          </Button>
+          <Button onClick={editingSampleType ? handleUpdateQC : handleCreateQC}>
             {editingSampleType ? '保存修改' : '创建'}
           </Button>
         </DialogActions>

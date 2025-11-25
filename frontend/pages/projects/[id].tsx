@@ -21,9 +21,13 @@ import {
   DocumentTextIcon, 
   PrinterIcon, 
   ArrowUpTrayIcon,
-  CheckCircleIcon 
+  CheckCircleIcon,
+  AdjustmentsHorizontalIcon,
+  XMarkIcon
 } from '@heroicons/react/20/solid';
 import JsBarcode from 'jsbarcode';
+
+const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
 interface Project {
   id: number;
@@ -43,21 +47,31 @@ interface SampleCodeElement {
   id: string;
   name: string;
   label: string;
-  enabled: boolean;
-  order: number;
+  number: string;
 }
 
-const sampleCodeElements = [
-  { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号' },
-  { id: 'lab_code', name: 'lab_code', label: '临床试验研究室项目编号' },
-  { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号' },
-  { id: 'subject_id', name: 'subject_id', label: '受试者编号' },
-  { id: 'test_type', name: 'test_type', label: '检测类型' },
-  { id: 'sample_seq', name: 'sample_seq', label: '采血序号' },
-  { id: 'sample_time', name: 'sample_time', label: '采血时间' },
-  { id: 'cycle_group', name: 'cycle_group', label: '周期/组别' },
-  { id: 'sample_type', name: 'sample_type', label: '正份备份' },
+const sampleCodeElements: SampleCodeElement[] = [
+  { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号', number: '①' },
+  { id: 'lab_code', name: 'lab_code', label: '临床试验研究室项目编号', number: '②' },
+  { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号', number: '③' },
+  { id: 'subject_id', name: 'subject_id', label: '受试者编号', number: '④' },
+  { id: 'test_type', name: 'test_type', label: '检测类型', number: '⑤' },
+  { id: 'sample_seq', name: 'sample_seq', label: '采血序号', number: '⑥' },
+  { id: 'sample_time', name: 'sample_time', label: '采血时间', number: '⑦' },
+  { id: 'cycle_group', name: 'cycle_group', label: '周期/组别', number: '⑧' },
+  { id: 'sample_type', name: 'sample_type', label: '正份备份', number: '⑨' },
 ];
+
+// 定义每个插槽允许选择的要素 ID 列表
+const SLOT_ALLOWED_ELEMENTS: Record<number, string[]> = {
+  0: ['sponsor_code', 'lab_code'], // A: ①/②
+  1: ['clinic_code'],              // B: ③
+  2: ['subject_id'],               // C: ④
+  3: ['test_type'],                // D: ⑤
+  4: ['sample_seq', 'sample_time'],// E: ⑥/⑦
+  5: ['cycle_group'],              // F: ⑧
+  6: ['sample_type'],              // G: ⑨
+};
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -66,7 +80,10 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isBatchGenerateDialogOpen, setIsBatchGenerateDialogOpen] = useState(false);
-  const [selectedElements, setSelectedElements] = useState<SampleCodeElement[]>([]);
+  
+  // 新的插槽状态，长度为7 (A-G)
+  const [slots, setSlots] = useState<(string | null)[]>(Array(7).fill(null));
+  
   const [auditReason, setAuditReason] = useState('');
   const [isESignatureOpen, setIsESignatureOpen] = useState(false);
   const [pendingSaveRule, setPendingSaveRule] = useState<any | null>(null);
@@ -108,27 +125,32 @@ export default function ProjectDetailPage() {
     }
   }, [isBatchGenerateDialogOpen]);
 
+  // 当打开配置弹窗时，重新根据项目规则初始化 slots，防止未保存的修改残留
+  useEffect(() => {
+    if (isConfigDialogOpen && project) {
+      initSlotsFromRule(project.sample_code_rule);
+    }
+  }, [isConfigDialogOpen, project]);
+
+  const initSlotsFromRule = (rule: any) => {
+    const newSlots = Array(7).fill(null);
+    if (rule && rule.elements && rule.order) {
+      rule.elements.forEach((elementId: string) => {
+        const position = rule.order[elementId];
+        if (position !== undefined && position < 7) {
+          newSlots[position] = elementId;
+        }
+      });
+    }
+    setSlots(newSlots);
+  };
+
   const fetchProject = async () => {
     try {
       const response = await api.get(`/projects/${id}`);
       setProject(response.data);
-      
-      // 初始化样本编号规则
-      if (response.data.sample_code_rule) {
-        const rule = response.data.sample_code_rule;
-        const elements = sampleCodeElements.map((el, index) => ({
-          ...el,
-          enabled: rule.elements?.includes(el.id) || false,
-          order: rule.order?.[el.id] || index,
-        }));
-        setSelectedElements(elements.sort((a, b) => a.order - b.order));
-      } else {
-        setSelectedElements(sampleCodeElements.map((el, index) => ({
-          ...el,
-          enabled: false,
-          order: index,
-        })));
-      }
+      // 初始化 slots
+      initSlotsFromRule(response.data.sample_code_rule);
     } catch (error) {
       console.error('Failed to fetch project:', error);
     } finally {
@@ -137,13 +159,24 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveCodeRule = async () => {
-    const enabledElements = selectedElements.filter(el => el.enabled);
+    // 校验：必须配置至少一个插槽
+    if (!slots.some(s => s !== null)) {
+      toast.error('请至少配置一项编号规则');
+      return;
+    }
+
+    const enabledElements = slots.filter(s => s !== null) as string[];
+    const orderMap: Record<string, number> = {};
+    
+    slots.forEach((elementId, index) => {
+      if (elementId) {
+        orderMap[elementId] = index;
+      }
+    });
+
     const rule = {
-      elements: enabledElements.map(el => el.id),
-      order: enabledElements.reduce((acc, el, index) => ({
-        ...acc,
-        [el.id]: index,
-      }), {}),
+      elements: enabledElements,
+      order: orderMap,
     };
     setPendingSaveRule(rule);
     setIsESignatureOpen(true);
@@ -167,6 +200,7 @@ export default function ProjectDetailPage() {
       setPendingSaveRule(null);
       setIsESignatureOpen(false);
       fetchProject();
+      toast.success('样本编号规则已更新');
     } catch (error: any) {
       if (error.response?.status === 401) {
         throw new Error('密码错误，请重试');
@@ -175,33 +209,10 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleElementToggle = (elementId: string) => {
-    setSelectedElements(prev =>
-      prev.map(el =>
-        el.id === elementId ? { ...el, enabled: !el.enabled } : el
-      )
-    );
-  };
-
-  const handleElementMove = (elementId: string, direction: 'up' | 'down') => {
-    const index = selectedElements.findIndex(el => el.id === elementId);
-    if (
-      (direction === 'up' && index === 0) ||
-      (direction === 'down' && index === selectedElements.length - 1)
-    ) {
-      return;
-    }
-
-    const newElements = [...selectedElements];
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    [newElements[index], newElements[newIndex]] = [newElements[newIndex], newElements[index]];
-    
-    // 更新order
-    newElements.forEach((el, idx) => {
-      el.order = idx;
-    });
-    
-    setSelectedElements(newElements);
+  const handleSlotChange = (index: number, value: string) => {
+    const newSlots = [...slots];
+    newSlots[index] = value === '' ? null : value;
+    setSlots(newSlots);
   };
 
   const parseCommaSeparatedList = (value: string) =>
@@ -309,7 +320,7 @@ export default function ProjectDetailPage() {
               padding: 2mm;
               box-sizing: border-box;
               page-break-inside: avoid;
-            }
+              }
             .label img {
               max-width: 100%;
               max-height: 100%;
@@ -331,7 +342,7 @@ export default function ProjectDetailPage() {
     printWindow.focus();
     setTimeout(() => {
       printWindow.print();
-    }, 500); // Give it a bit more time for images to render
+    }, 500);
   };
 
   const handleGenerateSampleCodes = async (mode: 'preview' | 'print' | 'print_label' = 'preview') => {
@@ -397,33 +408,40 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const generateSamplePreview = () => {
-    const enabledElements = selectedElements.filter(el => el.enabled).sort((a, b) => a.order - b.order);
-    const parts = enabledElements.map(el => {
-      switch (el.id) {
-        case 'sponsor_code':
-          return project?.sponsor_project_code || 'SPONSOR';
-        case 'lab_code':
-          return project?.lab_project_code || 'LAB';
-        case 'clinic_code':
-          return 'CHH';
-        case 'subject_id':
-          return '004';
-        case 'test_type':
-          return 'PK';
-        case 'sample_seq':
-          return '01';
-        case 'sample_time':
-          return '2h';
-        case 'cycle_group':
-          return 'A';
-        case 'sample_type':
-          return 'a1';
-        default:
-          return '';
-      }
-    });
-    return parts.join('-');
+  // 获取示例值
+  const getExampleValue = (elementId: string) => {
+    switch (elementId) {
+      case 'sponsor_code': return project?.sponsor_project_code || 'SPONSOR';
+      case 'lab_code': return project?.lab_project_code || 'LAB';
+      case 'clinic_code': return 'CHH';
+      case 'subject_id': return '004';
+      case 'test_type': return 'PK';
+      case 'sample_seq': return '01';
+      case 'sample_time': return '2h';
+      case 'cycle_group': return 'A';
+      case 'sample_type': return 'a1';
+      default: return '???';
+    }
+  };
+
+  const generateVisualPreview = () => {
+    return (
+      <div className="font-mono text-xl tracking-wide">
+        {slots.map((slot, index) => {
+          if (!slot) return null;
+          const isLast = slots.slice(index + 1).every(s => s === null);
+          return (
+            <span key={index} className="text-red-600 font-medium">
+              {getExampleValue(slot)}
+              {!isLast && <span className="text-zinc-400 mx-1">-</span>}
+            </span>
+          );
+        })}
+        {slots.every(s => s === null) && (
+          <span className="text-zinc-400 text-base italic">暂未配置规则，请在下方选择...</span>
+        )}
+      </div>
+    );
   };
 
   const canDeleteProject = user?.role === 'system_admin';
@@ -540,7 +558,7 @@ export default function ProjectDetailPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-8">
               {/* 样本编号规则 */}
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -550,16 +568,37 @@ export default function ProjectDetailPage() {
                       配置样本编号的组成要素和顺序
                     </Text>
                   </div>
-                  <Button onClick={() => setIsConfigDialogOpen(true)}>
-                    <CogIcon />
+                  <Button outline onClick={() => setIsConfigDialogOpen(true)} className="whitespace-nowrap flex-shrink-0">
+                    <AdjustmentsHorizontalIcon />
                     配置规则
                   </Button>
                 </div>
                 
                 {project.sample_code_rule ? (
-                  <div className="bg-zinc-50 rounded-lg p-4">
-                    <Text className="text-sm text-zinc-600 mb-2">当前规则预览：</Text>
-                    <Text className="font-mono text-lg">{generateSamplePreview()}</Text>
+                  <div className="bg-zinc-50 rounded-lg p-6 border border-zinc-200">
+                    <div className="space-y-4">
+                      <div>
+                        <Text className="text-sm text-zinc-500 font-medium mb-2">编号预览：</Text>
+                        {generateVisualPreview()}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-8 text-sm">
+                        {slots.map((slotId, index) => {
+                          if (!slotId) return null;
+                          const element = sampleCodeElements.find(e => e.id === slotId);
+                          if (!element) return null;
+                          return (
+                            <div key={index} className="flex items-baseline gap-2">
+                              <span className="font-bold text-red-600 w-4">{SLOT_LABELS[index]}</span>
+                              <span className="text-zinc-700">
+                                {element.label}
+                                <span className="text-red-600 ml-1">{element.number}</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="bg-amber-50 rounded-lg p-4">
@@ -582,8 +621,10 @@ export default function ProjectDetailPage() {
                     </Text>
                   </div>
                   <Button 
+                    color="dark"
                     onClick={() => setIsBatchGenerateDialogOpen(true)}
                     disabled={!project.sample_code_rule}
+                    className="whitespace-nowrap flex-shrink-0"
                   >
                     <DocumentTextIcon />
                     生成编号
@@ -595,69 +636,98 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* 配置样本编号规则对话框 */}
-      <Dialog open={isConfigDialogOpen} onClose={setIsConfigDialogOpen}>
+      {/* 配置样本编号规则对话框 - 视觉化重构版 */}
+      <Dialog open={isConfigDialogOpen} onClose={setIsConfigDialogOpen} size="3xl">
         <DialogTitle>配置样本编号规则</DialogTitle>
         <DialogDescription>
-          选择样本编号的组成要素并设置顺序
+          样本编号规则配置，下拉选择每一位的内容
         </DialogDescription>
         <DialogBody>
-          <div className="space-y-4">
-            <div className="bg-zinc-50 rounded-lg p-3">
-              <Text className="text-sm text-zinc-600 mb-2">编号预览：</Text>
-              <Text className="font-mono">{generateSamplePreview()}</Text>
-            </div>
-
-            <div className="space-y-2">
-              {selectedElements.map((element, index) => (
-                <div
-                  key={element.id}
-                  className="flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-lg"
-                >
-                  <Checkbox
-                    checked={element.enabled}
-                    onChange={() => handleElementToggle(element.id)}
-                  />
-                  <Text className="flex-1">{element.label}</Text>
-                  {element.enabled && (
-                    <div className="flex gap-1">
-                      <Button
-                        plain
-                        size="small"
-                        onClick={() => handleElementMove(element.id, 'up')}
-                        disabled={index === 0}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        plain
-                        size="small"
-                        onClick={() => handleElementMove(element.id, 'down')}
-                        disabled={index === selectedElements.length - 1}
-                      >
-                        ↓
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {project.sample_code_rule && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  修改理由 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={auditReason}
-                  onChange={(e) => setAuditReason(e.target.value)}
-                  placeholder="请输入修改理由"
-                />
-                <Text className="text-sm text-amber-600 mt-1">
-                  注意：一旦有样本被接收，编号规则将不允许修改
-                </Text>
+          <div className="space-y-8">
+            
+            {/* 预览区域 - 优化视觉 */}
+            <div className="space-y-3">
+              <Text className="text-base font-semibold text-zinc-900">编号预览</Text>
+              <div className="p-6 bg-zinc-50/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 flex items-center justify-center min-h-[100px] shadow-sm">
+                {generateVisualPreview()}
               </div>
-            )}
+              <p className="text-xs text-zinc-500 px-1">
+                * 编号将按照 A 到 G 的顺序自动拼接，未配置的位置将被自动忽略。
+              </p>
+            </div>
+
+            {/* 配置列表区域 - iOS Settings 风格 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <Text className="text-base font-semibold text-zinc-900">规则配置</Text>
+                <button 
+                  onClick={() => setSlots(Array(7).fill(null))}
+                  className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                >
+                  重置所有
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500 px-1 mb-2">
+                根据标准规范，每个位置仅支持特定的编号要素。
+              </p>
+              
+              <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
+                {SLOT_LABELS.map((label, index) => {
+                  const currentSlotValue = slots[index];
+                  const currentElement = sampleCodeElements.find(e => e.id === currentSlotValue);
+                  
+                  return (
+                    <div key={label} className="group flex items-center p-4 hover:bg-zinc-50 transition-colors relative">
+                      {/* 左侧：位置标识 */}
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-mono font-bold text-lg mr-4 group-hover:bg-white group-hover:shadow-sm transition-all">
+                        {label}
+                      </div>
+                      
+                      {/* 中间：选择器 */}
+                      <div className="flex-grow min-w-0">
+                        <div className="relative">
+                          <select
+                            value={currentSlotValue || ''}
+                            onChange={(e) => handleSlotChange(index, e.target.value)}
+                            className="w-full appearance-none bg-transparent py-2 pl-0 pr-8 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer"
+                          >
+                            <option value="">未配置 (跳过)</option>
+                            <optgroup label="该位置可用选项">
+                              {sampleCodeElements
+                                .filter(el => SLOT_ALLOWED_ELEMENTS[index]?.includes(el.id))
+                                .map(el => (
+                                  <option key={el.id} value={el.id}>
+                                    {el.number} {el.label}
+                                  </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          {/* 自定义下拉箭头 */}
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-400">
+                            <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+                          </div>
+                        </div>
+                        {/* 描述文本 */}
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          {currentElement ? `已选择: ${currentElement.label}` : '该位置将不显示任何内容'}
+                        </div>
+                      </div>
+
+                      {/* 右侧：清除按钮 (仅当有值时显示) */}
+                      {currentSlotValue && (
+                        <button 
+                          onClick={() => handleSlotChange(index, '')}
+                          className="ml-4 p-1 text-zinc-300 hover:text-red-500 transition-colors"
+                          title="清除该位置"
+                        >
+                          <XMarkIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </DialogBody>
         <DialogActions>
@@ -665,8 +735,9 @@ export default function ProjectDetailPage() {
             取消
           </Button>
           <Button 
+            color="dark"
             onClick={handleSaveCodeRule}
-            disabled={!selectedElements.some(el => el.enabled) || (project.sample_code_rule && !auditReason)}
+            disabled={false}
           >
             保存配置
           </Button>
@@ -871,6 +942,7 @@ export default function ProjectDetailPage() {
               </div>
               <div className="mt-4">
                 <Button 
+                  color="dark"
                   onClick={handleGenerateStabilityQCCodes}
                   disabled={!stabilityQCParams.sample_category || !stabilityQCParams.code || !stabilityQCParams.quantity}
                 >
@@ -907,6 +979,7 @@ export default function ProjectDetailPage() {
             取消
           </Button>
           <Button 
+            color="dark"
             onClick={() => handleGenerateSampleCodes('preview')}
             disabled={isGeneratingCodes}
           >
@@ -914,6 +987,7 @@ export default function ProjectDetailPage() {
             {isGeneratingCodes ? '生成中…' : '确认生成'}
           </Button>
           <Button 
+            color="dark"
             onClick={() => handleGenerateSampleCodes('print')}
             disabled={isGeneratingCodes}
           >
@@ -921,6 +995,7 @@ export default function ProjectDetailPage() {
             {isGeneratingCodes ? '生成中…' : '生成并打印清单'}
           </Button>
           <Button 
+            color="dark"
             onClick={() => handleGenerateSampleCodes('print_label')}
             disabled={isGeneratingCodes}
           >

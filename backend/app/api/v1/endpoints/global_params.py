@@ -27,8 +27,10 @@ class OrganizationUpdate(OrganizationCreate):
     audit_reason: str  # 修改理由
 
 class SampleTypeCreate(BaseModel):
+    category: str = "clinical"  # clinical, stability, qc
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
+    code: Optional[str] = None
     primary_count: int = 1
     backup_count: int = 1
     purpose: Optional[str] = None
@@ -56,8 +58,10 @@ class OrganizationResponse(BaseModel):
 
 class SampleTypeResponse(BaseModel):
     id: int
+    category: str
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
+    code: Optional[str] = None
     primary_count: int
     backup_count: int
     purpose: Optional[str] = None
@@ -296,13 +300,19 @@ async def create_sample_type(
 
 @router.get("/sample-types", response_model=List[SampleTypeResponse])
 async def read_sample_types(
+    category: Optional[str] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """获取样本类型配置列表"""
-    result = await db.execute(
-        select(SampleType).where(SampleType.is_active == True).order_by(SampleType.id)
-    )
+    query = select(SampleType).where(SampleType.is_active == True)
+    
+    if category:
+        query = query.where(SampleType.category == category)
+        
+    query = query.order_by(SampleType.id)
+    
+    result = await db.execute(query)
     sample_types = result.scalars().all()
     return sample_types
 
@@ -335,8 +345,10 @@ async def update_sample_type(
     
     # 记录原始数据
     original_data = {
+        "category": db_sample_type.category,
         "cycle_group": db_sample_type.cycle_group,
         "test_type": db_sample_type.test_type,
+        "code": db_sample_type.code,
         "primary_count": db_sample_type.primary_count,
         "backup_count": db_sample_type.backup_count,
         "purpose": db_sample_type.purpose,
@@ -411,7 +423,7 @@ async def delete_sample_type(
         entity_id=db_sample_type.id,
         action="delete",
         details={
-            "cycle_group": db_sample_type.cycle_group,
+            "category": db_sample_type.category,
             "test_type": db_sample_type.test_type
         }
     )

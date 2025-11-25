@@ -203,9 +203,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <SidebarLayout
       navbar={
-        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:gap-4">
+        <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
           {/* 左侧：Logo和标题 */}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Image
               src="/logo.png"
               alt="徐汇区中心医院"
@@ -213,14 +213,11 @@ export function AppLayout({ children }: AppLayoutProps) {
               height={32}
               className="h-8 w-8 flex-shrink-0 rounded-lg"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 hidden sm:block">
               <div className="truncate text-sm font-semibold text-zinc-800 dark:text-white">
                 徐汇区中心医院
               </div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400 sm:hidden">
-                LIMS
-              </div>
-              <div className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block">
+              <div className="text-xs text-zinc-600 dark:text-zinc-400">
                 样本管理系统
               </div>
             </div>
@@ -228,8 +225,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* 中间：项目选择器 - 仅在非主页显示 */}
           {router.pathname !== '/' && (
-            <div className="flex w-full justify-between sm:w-auto sm:flex-none sm:justify-center">
-              <ProjectSwitcher />
+            <div className="flex flex-1 min-w-0 justify-end sm:justify-center overflow-hidden">
+              <div className="w-full max-w-[180px] sm:max-w-xs">
+                <ProjectSwitcher />
+              </div>
             </div>
           )}
 
@@ -348,20 +347,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
               </div>
 
-              {/* 项目管理 - 仅管理员可见 */}
-              {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
-                <div>
-                  <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    项目管理
-                  </h3>
-                  <div className="space-y-1">
-                    <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
-                      <FolderIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>新建项目</SidebarLabel>
-                    </SidebarItem>
-                  </div>
-                </div>
-              )}
 
               {/* 统计分析 */}
               <div>
@@ -389,7 +374,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
 
               {/* 系统管理 - 仅管理员可见 */}
-              {shouldShowMenuItem(['SYSTEM_ADMIN', 'SAMPLE_ADMIN']) && (
+              {shouldShowMenuItem(['system_admin', 'sample_admin']) && (
                 <div>
                   <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     系统管理

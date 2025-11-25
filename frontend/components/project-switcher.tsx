@@ -46,7 +46,7 @@ export function ProjectSwitcher() {
           setSelectedProject(value ? Number(value) : null);
         }}
         disabled={isLoading || projects.length === 0}
-        className="min-w-[200px] sm:min-w-[240px]"
+        className="w-full min-w-[120px] sm:min-w-[240px] text-sm"
       >
         <option value="">请选择项目</option>
         {projectOptions.map((option) => (

@@ -407,7 +407,7 @@ export default function StorageManagementPage() {
                         key={freezer.id}
                         freezer={freezer}
                         onClick={() => handleFreezerSelect(freezer)}
-                        isSelected={selectedFreezer?.id === freezer.id}
+                        isSelected={(selectedFreezer as any)?.id === freezer.id}
                       />
                     ))}
                   </AnimatePresence>

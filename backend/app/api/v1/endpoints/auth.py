@@ -32,9 +32,6 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """获取当前用户"""
-    print(f"[DEBUG] get_current_user called")
-    print(f"[DEBUG] Received token: {token[:50] if token else 'None'}...")
-    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无法验证凭据",
@@ -42,10 +39,8 @@ async def get_current_user(
     )
     
     payload = decode_token(token)
-    print(f"[DEBUG] Decoded payload: {payload}")
     
     if payload is None:
-        print("[DEBUG] Token decode failed")
         raise credentials_exception
     
     username: str = payload.get("sub")

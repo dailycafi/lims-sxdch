@@ -320,7 +320,6 @@ export default function AuditPage() {
                     <TableCell>
                       <Button 
                         plain
-                        size="small"
                         onClick={() => {
                           setSelectedLog(log);
                           setIsDetailDialogOpen(true);
@@ -344,7 +343,6 @@ export default function AuditPage() {
               <div className="flex gap-2">
                 <Button
                   plain
-                  size="small"
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
                 >
@@ -352,7 +350,6 @@ export default function AuditPage() {
                 </Button>
                 <Button
                   plain
-                  size="small"
                   onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
                 >

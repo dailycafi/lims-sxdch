@@ -127,7 +127,6 @@
 /* 按钮修复 */
 @layer components {
   /* 黑白按钮样式 */
-  button[color="blue"],
   button[color="dark"],
   button[type="submit"] {
     --btn-bg: rgb(17 24 39) !important;
@@ -139,7 +138,6 @@
     color: white !important;
   }
   
-  button[color="blue"]:hover,
   button[color="dark"]:hover,
   button[type="submit"]:hover {
     background-color: rgb(0 0 0) !important;

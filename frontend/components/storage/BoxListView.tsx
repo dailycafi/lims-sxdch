@@ -1,3 +1,4 @@
+import React from 'react';
 import { Button } from '@/components/button';
 import { Badge } from '@/components/badge';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
@@ -63,7 +64,7 @@ export function BoxListView({ samples, onSampleClick, selectedSampleId }: BoxLis
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button plain onClick={(e) => { e.stopPropagation(); onSampleClick?.(sample); }}>
+                    <Button plain onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSampleClick?.(sample); }}>
                       <InformationCircleIcon className="w-4 h-4" />
                     </Button>
                   </TableCell>

@@ -671,11 +671,23 @@ export default function SampleDestroyPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            onClick={() => handleViewDetails(request)}
-                          >
-                            查看
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              plain
+                              onClick={() => handleViewDetails(request)}
+                            >
+                              查看
+                            </Button>
+                            {request.status === 'ready' && (
+                              <Button
+                                color="red"
+                                onClick={() => handleExecuteDestroy(request.id)}
+                              >
+                                <TrashIcon className="h-4 w-4 mr-1" />
+                                执行销毁
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </AnimatedTableRow>
                     ))
@@ -945,6 +957,20 @@ export default function SampleDestroyPage() {
               color={approvalForm.action === 'approve' ? 'blue' : 'red'}
             >
               {approvalForm.action === 'approve' ? '批准' : '拒绝'}
+            </Button>
+          )}
+          {selectedRequest?.status === 'ready' && (
+            <Button
+              color="red"
+              onClick={() => {
+                setIsApprovalDialogOpen(false);
+                if (selectedRequest) {
+                  handleExecuteDestroy(selectedRequest.id);
+                }
+              }}
+            >
+              <TrashIcon className="h-4 w-4 mr-1" />
+              执行销毁
             </Button>
           )}
         </DialogActions>

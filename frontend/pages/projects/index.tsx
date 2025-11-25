@@ -10,6 +10,7 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
+import { useAuthStore } from '@/store/auth';
 import { 
   PlusIcon, 
   FolderIcon,
@@ -46,6 +47,7 @@ export default function ProjectsPage() {
   });
   
   const [viewMode, setViewMode] = useState<'all' | 'active' | 'completed' | 'archived'>('all');
+  const { user } = useAuthStore();
 
   useEffect(() => {
     fetchProjects();
@@ -132,11 +134,19 @@ export default function ProjectsPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <div>
             <Heading>项目管理</Heading>
             <Text className="mt-1 text-zinc-600">管理实验室项目信息</Text>
           </div>
+          {user && (user.role === 'system_admin' || user.role === 'sample_admin') && (
+            <Link href="/projects/new">
+              <Button>
+                <PlusIcon className="h-4 w-4" />
+                新建项目
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* 筛选区域 */}

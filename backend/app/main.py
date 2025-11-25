@@ -4,6 +4,12 @@ from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.database import engine
 from app.models.auth import RefreshToken
+import logging
+
+# 配置日志级别，只输出 ERROR 信息
+logging.basicConfig(level=logging.ERROR)
+for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "sqlalchemy.engine"]:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 # 创建FastAPI应用
 app = FastAPI(

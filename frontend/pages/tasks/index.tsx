@@ -199,7 +199,7 @@ export default function TaskCenterPage() {
                        <div className="flex items-center gap-2">
                          <Badge color={statusColors[task.status] || 'zinc'}>{task.status}</Badge>
                          {task.action_required && (
-                           <Badge color="rose" size="sm">需处理</Badge>
+                            <Badge color="rose">需处理</Badge>
                          )}
                        </div>
                      </TableCell>

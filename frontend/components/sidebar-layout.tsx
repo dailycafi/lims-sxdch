@@ -4,7 +4,7 @@ import * as Headless from '@headlessui/react'
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 
-// 汉堡菜单图标 - 调整640以上的大小
+// 汉堡菜单图标 - 使用 path 提高兼容性
 function HamburgerIcon() {
   return (
     <svg
@@ -14,11 +14,9 @@ function HamburgerIcon() {
       strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-10 w-10 sm:h-7 sm:w-7"
+      className="h-6 w-6 text-zinc-700 dark:text-zinc-200 sm:h-7 sm:w-7"
     >
-      <line x1="2" y1="6" x2="22" y2="6" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <line x1="2" y1="18" x2="22" y2="18" />
+      <path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
     </svg>
   )
 }
@@ -118,10 +116,10 @@ export function SidebarLayout({
       {/* 主要内容区域 */}
       <div className="flex flex-1 flex-col lg:pl-64">
         {/* Navbar on mobile - 调整按钮大小 */}
-        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-200 bg-white px-2 py-2 lg:hidden">
+        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-200 bg-white/80 backdrop-blur-md px-2 py-2 lg:hidden supports-[backdrop-filter]:bg-white/60">
           <motion.button
             onClick={() => setShowSidebar(true)}
-            className="flex h-16 w-16 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-700 transition-all duration-200 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 active:bg-zinc-100"
+            className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-700 transition-all duration-200 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 active:bg-zinc-100"
             aria-label="打开导航"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

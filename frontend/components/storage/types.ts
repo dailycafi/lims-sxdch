@@ -32,6 +32,9 @@ export interface BoxSample {
   subject_code?: string;
   project_code?: string;
   created_at?: string;
+  access_count?: number;
+  total_duration?: number;
+  retest_count?: number;
 }
 
 // 显示模式枚举

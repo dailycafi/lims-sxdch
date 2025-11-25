@@ -1,4 +1,9 @@
 import asyncio
+import bcrypt
+# 修复 passlib 与 bcrypt 4.0+ 的兼容性问题
+if not hasattr(bcrypt, '__about__'):
+    bcrypt.__about__ = type('about', (object,), {'__version__': bcrypt.__version__})
+
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.database import Base
 from app.core.config import settings
@@ -20,7 +25,7 @@ async def drop_all_tables(engine):
 async def init_db(drop_existing=False):
     """初始化数据库"""
     # 创建引擎
-    engine = create_async_engine(settings.DATABASE_URL, echo=True)
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
     
     if drop_existing:
         await drop_all_tables(engine)
@@ -28,14 +33,12 @@ async def init_db(drop_existing=False):
     # 创建所有表
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ 创建所有数据表成功")
     
     # 创建会话
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
         # 1. 创建组织机构
-        print("📌 创建组织机构...")
         from app.models.global_params import Organization
         
         # 申办方
@@ -96,7 +99,6 @@ async def init_db(drop_existing=False):
         await session.flush()
         
         # 2. 创建用户
-        print("📌 创建用户...")
         from app.models.user import User, UserRole
         
         # 系统管理员
@@ -158,7 +160,6 @@ async def init_db(drop_existing=False):
         await session.flush()
         
         # 3. 创建项目
-        print("📌 创建项目...")
         from app.models.project import Project
         
         project1 = Project(
@@ -195,7 +196,6 @@ async def init_db(drop_existing=False):
         await session.flush()
         
         # 4. 创建样本接收记录
-        print("📌 创建样本接收记录...")
         from app.models.sample import SampleReceiveRecord
         
         receive_record1 = SampleReceiveRecord(
@@ -252,19 +252,7 @@ async def init_db(drop_existing=False):
         
         await session.commit()
         
-        print("\n✅ 数据库初始化完成!")
-        print("\n📌 创建的用户账号:")
-        print("  - 系统管理员: admin / admin123")
-        print("  - 样本管理员: sample_admin / sample123")
-        print("  - 项目负责人: project_lead / project123")
-        print("  - 分析测试主管: test_manager / test123")
-        print("  - 研究室主任: lab_director / director123")
-        print("  - 分析员: analyst / analyst123")
-        print("\n📌 创建的示例数据:")
-        print("  - 2个组织机构（申办方、临床机构、运输公司）")
-        print("  - 2个项目")
-        print("  - 2条样本接收记录")
-        print("  - 10个样本（已入库）")
+        print("✅ 数据库初始化完成")
     
     await engine.dispose()
 
@@ -273,13 +261,16 @@ if __name__ == "__main__":
     import sys
     
     drop_existing = False
-    if len(sys.argv) > 1 and sys.argv[1] == "--drop":
+    args = sys.argv[1:]
+    
+    if "--drop" in args:
         drop_existing = True
-        print("⚠️  警告：将删除所有现有数据表并重新创建！")
-        confirm = input("确认操作？(yes/no): ")
-        if confirm.lower() != "yes":
-            print("操作已取消")
-            sys.exit(0)
+        if "--force" not in args:
+            print("⚠️  警告：将删除所有现有数据表并重新创建！")
+            confirm = input("确认操作？(yes/no): ")
+            if confirm.lower() != "yes":
+                print("操作已取消")
+                sys.exit(0)
     
     print("🚀 开始初始化数据库...")
     asyncio.run(init_db(drop_existing=drop_existing))

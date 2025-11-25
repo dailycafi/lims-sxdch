@@ -115,13 +115,13 @@ export default function SampleReturnPage() {
       return;
     }
 
-    if (samples[sampleIndex].status !== 'pending_return') {
-      alert('该样本未选择归还');
+    if (samples[sampleIndex].status === 'scanned') {
+      alert('该样本已经扫描过了');
       return;
     }
 
-    if (samples[sampleIndex].status === 'scanned') {
-      alert('该样本已经扫描过了');
+    if (samples[sampleIndex].status !== 'pending_return') {
+      alert('该样本未选择归还');
       return;
     }
 
@@ -518,18 +518,24 @@ export default function SampleReturnPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <Text className="font-medium mb-4">归还模式</Text>
           <div className="flex gap-4">
-            <Button
-              {...(returnMode === 'full' ? {} : { outline: true })}
-              onClick={() => handleReturnModeChange('full')}
-            >
-              全部归还
-            </Button>
-            <Button
-              {...(returnMode === 'partial' ? {} : { outline: true })}
-              onClick={() => handleReturnModeChange('partial')}
-            >
-              部分归还
-            </Button>
+            {returnMode === 'full' ? (
+              <Button color="blue" onClick={() => handleReturnModeChange('full')}>
+                全部归还
+              </Button>
+            ) : (
+              <Button outline onClick={() => handleReturnModeChange('full')}>
+                全部归还
+              </Button>
+            )}
+            {returnMode === 'partial' ? (
+              <Button color="blue" onClick={() => handleReturnModeChange('partial')}>
+                部分归还
+              </Button>
+            ) : (
+              <Button outline onClick={() => handleReturnModeChange('partial')}>
+                部分归还
+              </Button>
+            )}
           </div>
           {returnMode === 'partial' && (
             <Text className="text-sm text-zinc-600 mt-2">
@@ -561,18 +567,24 @@ export default function SampleReturnPage() {
               <div className="flex items-center gap-4 mb-4">
                 <Text className="font-medium">扫码模式：</Text>
                 <div className="flex gap-2">
-                  <Button
-                    {...(scanMode === 'sample' ? {} : { outline: true })}
-                    onClick={() => setScanMode('sample')}
-                  >
-                    扫描样本
-                  </Button>
-                  <Button
-                    {...(scanMode === 'box' ? {} : { outline: true })}
-                    onClick={() => setScanMode('box')}
-                  >
-                    扫描盒子
-                  </Button>
+                  {scanMode === 'sample' ? (
+                    <Button onClick={() => setScanMode('sample')}>
+                      扫描样本
+                    </Button>
+                  ) : (
+                    <Button outline onClick={() => setScanMode('sample')}>
+                      扫描样本
+                    </Button>
+                  )}
+                  {scanMode === 'box' ? (
+                    <Button onClick={() => setScanMode('box')}>
+                      扫描盒子
+                    </Button>
+                  ) : (
+                    <Button outline onClick={() => setScanMode('box')}>
+                      扫描盒子
+                    </Button>
+                  )}
                 </div>
               </div>
 

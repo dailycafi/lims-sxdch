@@ -5,7 +5,7 @@ from app.core.config import settings
 # 创建异步引擎
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=False,  # 强制关闭 SQLAlchemy 的日志输出
     future=True
 )
 

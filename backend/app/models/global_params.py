@@ -24,14 +24,16 @@ class SampleType(Base):
     __tablename__ = "sample_types"
 
     id = Column(Integer, primary_key=True, index=True)
-    cycle_group = Column(String, nullable=True)  # 周期/组别
-    test_type = Column(String, nullable=True)  # 检测类型
-    primary_count = Column(Integer, default=1)  # 正份数量
-    backup_count = Column(Integer, default=1)  # 备份数量
-    purpose = Column(String, nullable=True)  # 用途
-    transport_method = Column(String, nullable=True)  # 运输方式
-    status = Column(String, nullable=True)  # 状态
-    special_notes = Column(Text, nullable=True)  # 特殊事项
+    category = Column(String, default="clinical")  # clinical, stability, qc
+    cycle_group = Column(String, nullable=True)  # 周期/组别 (临床用)
+    test_type = Column(String, nullable=True)  # 检测类型 (通用)
+    code = Column(String, nullable=True)  # 代码 (STB/QC用)
+    primary_count = Column(Integer, default=1)  # 正份数量 (临床用)
+    backup_count = Column(Integer, default=1)  # 备份数量 (临床用)
+    purpose = Column(String, nullable=True)  # 用途 (临床用)
+    transport_method = Column(String, nullable=True)  # 运输方式 (临床用)
+    status = Column(String, nullable=True)  # 状态 (临床用)
+    special_notes = Column(Text, nullable=True)  # 特殊事项 (通用)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

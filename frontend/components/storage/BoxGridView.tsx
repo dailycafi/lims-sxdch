@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useWindowSize } from '@/hooks/useWindowSize';
 import clsx from 'clsx';
-import { SampleBox, BoxSample, DISPLAY_MODES, STATUS_COLORS } from './types';
+import { SampleBox, BoxSample, DISPLAY_MODES, STATUS_COLORS, DisplayMode } from './types';
 
 interface BoxGridViewProps {
   box: SampleBox;
@@ -23,7 +23,7 @@ export function BoxGridView({
 }: BoxGridViewProps) {
   const { rows, cols } = box;
   const { width } = useWindowSize();
-  const [displayMode, setDisplayMode] = useState(DISPLAY_MODES.FULL);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(DISPLAY_MODES.FULL);
   
   // 根据窗口宽度和盒子尺寸动态计算显示模式
   useEffect(() => {
@@ -162,7 +162,11 @@ export function BoxGridView({
               onClick={() => sample && onSampleClick?.(sample)}
               onMouseEnter={() => onPositionHover?.(position)}
               onMouseLeave={() => onPositionHover?.(null)}
-              title={sample ? `${sample.sample_code} - ${statusStyle?.label || sample.status}` : `空位 ${position}`}
+              title={sample ? `${sample.sample_code}
+状态: ${statusStyle?.label || sample.status}
+存取次数: ${sample.access_count || 0}
+取出时长: ${sample.total_duration || 0}分钟
+重测次数: ${sample.retest_count || 0}` : `空位 ${position}`}
             >
               {renderSampleContent(sample, position, statusStyle)}
             </motion.div>

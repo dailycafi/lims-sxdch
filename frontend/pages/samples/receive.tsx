@@ -860,7 +860,7 @@ export default function SampleReceivePage() {
                       onChange={handleTemperatureFileChange}
                       className="hidden"
                     />
-                    <div className="inline-flex items-baseline justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
+                    <div className="inline-flex items-center justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
                       <CloudArrowUpIcon className="w-4 h-4" />
                       上传温度数据
                     </div>
@@ -934,7 +934,7 @@ export default function SampleReceivePage() {
                       onChange={handleExpressPhotosChange}
                       className="hidden"
                     />
-                    <div className="inline-flex items-baseline justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
+                    <div className="inline-flex items-center justify-center gap-x-2 rounded-lg border px-3 py-2 text-sm font-semibold border-zinc-950/10 text-zinc-950 hover:bg-zinc-950/2.5 cursor-pointer">
                       <CloudArrowUpIcon className="w-4 h-4" />
                       上传照片
                     </div>

@@ -291,7 +291,6 @@ export default function BorrowExecutePage() {
                       {sample.status === 'pending' && (
                         <Button
                           plain
-                          size="small"
                           onClick={() => {
                             const reason = prompt('请输入跳过原因：');
                             if (reason) {
