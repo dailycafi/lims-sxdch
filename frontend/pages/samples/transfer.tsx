@@ -319,7 +319,7 @@ export default function SampleTransferPage() {
       case 'pending':
         return <Badge color="yellow">待执行</Badge>;
       case 'in_transit':
-        return <Badge color="blue">运输中</Badge>;
+        return <Badge color="zinc">运输中</Badge>;
       case 'completed':
         return <Badge color="green">已完成</Badge>;
       default:
@@ -652,7 +652,7 @@ export default function SampleTransferPage() {
                         </TableCell>
                         <TableCell>
                           {transfer.transfer_type === 'internal' ? (
-                            <Badge color="blue">内部</Badge>
+                            <Badge color="zinc">内部</Badge>
                           ) : (
                             <Badge color="purple">外部</Badge>
                           )}
@@ -671,7 +671,7 @@ export default function SampleTransferPage() {
                               查看
                             </Button>
                             {transfer.status === 'pending' && (
-                              <Button color="blue" onClick={() => handleExecuteTransfer(transfer)}>
+                              <Button color="dark" onClick={() => handleExecuteTransfer(transfer)}>
                                 执行
                               </Button>
                             )}

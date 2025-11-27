@@ -519,7 +519,7 @@ export default function SampleReturnPage() {
           <Text className="font-medium mb-4">归还模式</Text>
           <div className="flex gap-4">
             {returnMode === 'full' ? (
-              <Button color="blue" onClick={() => handleReturnModeChange('full')}>
+              <Button color="dark" onClick={() => handleReturnModeChange('full')}>
                 全部归还
               </Button>
             ) : (
@@ -528,7 +528,7 @@ export default function SampleReturnPage() {
               </Button>
             )}
             {returnMode === 'partial' ? (
-              <Button color="blue" onClick={() => handleReturnModeChange('partial')}>
+              <Button color="dark" onClick={() => handleReturnModeChange('partial')}>
                 部分归还
               </Button>
             ) : (
@@ -632,7 +632,7 @@ export default function SampleReturnPage() {
                     <div key={box.id} className="p-3 bg-zinc-50 rounded-lg">
                       <div className="flex items-center justify-between">
                         <Text className="font-medium">{box.code}</Text>
-                        <Badge color="blue">
+                        <Badge color="zinc">
                           {box.samples.length} 个样本
                         </Badge>
                       </div>
@@ -687,7 +687,7 @@ export default function SampleReturnPage() {
                         </Badge>
                       )}
                       {sample.status === 'returned' && (
-                        <Badge color="blue">已归还</Badge>
+                        <Badge color="zinc">已归还</Badge>
                       )}
                     </TableCell>
                     <TableCell>

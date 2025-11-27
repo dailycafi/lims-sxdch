@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useAuthStore } from '@/store/auth';
+import { tokenManager } from '@/lib/token-manager';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
@@ -186,10 +187,24 @@ export default function HomePage() {
     ].slice(0, 5).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [taskOverview]);
 
-  const fetchDashboardData = async () => {
-    if (!user) return;
+  // 用于防止重复请求
+  const [hasFetchedData, setHasFetchedData] = useState(false);
+
+  const fetchDashboardData = async (force = false) => {
+    // 确保 token 存在再发起请求
+    if (!user || !tokenManager.getToken()) {
+      console.log('[Dashboard] Skipping data fetch - no user or token');
+      return;
+    }
+    
+    // 防止重复获取（除非强制刷新）
+    if (hasFetchedData && !force) {
+      console.log('[Dashboard] Data already fetched, skipping');
+      return;
+    }
     
     setLoading(true);
+    setHasFetchedData(true);
     try {
       // 并行获取全局任务概览和统计数据（不限制项目）
       const [taskData, statsData] = await Promise.all([
@@ -216,7 +231,7 @@ export default function HomePage() {
   }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && tokenManager.getToken()) {
       fetchDashboardData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,7 +345,7 @@ export default function HomePage() {
                 </div>
                 <Button 
                   outline 
-                  onClick={fetchDashboardData} 
+                  onClick={() => fetchDashboardData(true)} 
                   disabled={loading}
                   className="border-gray-300 text-gray-700 hover:bg-gray-50"
                 >

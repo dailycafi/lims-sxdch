@@ -647,7 +647,7 @@ export default function StatisticsPage() {
                       
                       <DescriptionTerm>已领用</DescriptionTerm>
                       <DescriptionDetails>
-                        <Badge color="blue">{statistics.checked_out}</Badge>
+                        <Badge color="zinc">{statistics.checked_out}</Badge>
                       </DescriptionDetails>
                       
                       <DescriptionTerm>已转移</DescriptionTerm>

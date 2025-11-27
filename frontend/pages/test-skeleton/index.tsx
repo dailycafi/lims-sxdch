@@ -68,7 +68,7 @@ export default function TestSkeletonPage() {
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <Button color="blue" onClick={() => triggerLoading(3000)}>
+              <Button color="dark" onClick={() => triggerLoading(3000)}>
                 显示 3 秒
               </Button>
               <Button color="green" onClick={() => triggerLoading(5000)}>

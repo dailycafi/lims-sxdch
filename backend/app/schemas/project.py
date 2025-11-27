@@ -12,18 +12,21 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     sample_code_rule: Optional[Dict[str, Any]] = None
+    sample_meta_config: Optional[Dict[str, Any]] = None
 
 
 class ProjectUpdate(BaseModel):
     sponsor_id: Optional[int] = None
     clinical_org_id: Optional[int] = None
     sample_code_rule: Optional[Dict[str, Any]] = None
+    sample_meta_config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
 
 class ProjectResponse(ProjectBase):
     id: int
     sample_code_rule: Optional[Dict[str, Any]] = None
+    sample_meta_config: Optional[Dict[str, Any]] = None
     is_active: bool
     is_archived: bool
     status: Optional[str] = None

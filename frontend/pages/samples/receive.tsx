@@ -163,11 +163,11 @@ export default function SampleReceivePage() {
         formDataToSend.append('temperature_file', temperatureFile);
       }
       
-      expressPhotos.forEach((photo, index) => {
-        formDataToSend.append(`express_photos[${index}]`, photo);
+      expressPhotos.forEach((photo) => {
+        formDataToSend.append('express_photos', photo);
       });
 
-      const response = await api.post('/samples/receive-task', formDataToSend, {
+      const response = await api.post('/samples/receive', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -230,7 +230,7 @@ export default function SampleReceivePage() {
         );
       case 'in_progress':
         return (
-          <Badge color="blue" className="gap-1.5">
+          <Badge color="zinc" className="gap-1.5">
             <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500" />
             清点中
           </Badge>

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import { SidebarLayout } from '@/components/sidebar-layout';
 import { TasksService } from '@/services/tasks.service';
+import { tokenManager } from '@/lib/token-manager';
 import { Breadcrumb, BreadcrumbItem } from '@/components/breadcrumb';
 import { 
   Sidebar, 
@@ -144,6 +145,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // 获取未处理任务数量
   const fetchPendingTaskCount = async () => {
+    // 确保 token 存在再发起请求，避免不必要的 401 错误
+    if (!tokenManager.getToken()) {
+      console.log('[AppLayout] Skipping task fetch - no token available');
+      return;
+    }
+    
     try {
       const overview = await TasksService.getTaskOverview({
         project_id: selectedProjectId ?? undefined,
@@ -168,9 +175,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // 页面加载和项目切换时获取任务数量
   useEffect(() => {
-    if (user) {
+    if (user && tokenManager.getToken()) {
       fetchPendingTaskCount();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedProjectId]);
 
   // 判断当前路径是否匹配
@@ -225,7 +233,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* 中间：项目选择器 - 仅在非主页显示 */}
           {router.pathname !== '/' && (
-            <div className="flex flex-1 min-w-0 justify-end sm:justify-center overflow-hidden">
+            <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
               <div className="w-full max-w-[180px] sm:max-w-xs">
                 <ProjectSwitcher />
               </div>

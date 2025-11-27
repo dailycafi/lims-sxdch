@@ -64,6 +64,7 @@ export default function SampleBorrowPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'borrowed' | 'returned' | 'all'>('pending');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -228,6 +229,8 @@ export default function SampleBorrowPage() {
   }, [isRequestDialogOpen, selectedProjectId]);
 
   const handleSubmitRequest = async () => {
+    if (submitting) return;
+
     if (!selectedProjectId) {
       toast.error('请先选择项目');
       return;
@@ -236,7 +239,21 @@ export default function SampleBorrowPage() {
       toast.error('请选择需要领用的样本');
       return;
     }
+    if (!borrowForm.purpose) {
+      toast.error('请选择用途');
+      return;
+    }
+    if (!borrowForm.target_location) {
+      toast.error('请填写目标位置');
+      return;
+    }
+    if (!borrowForm.target_date) {
+      toast.error('请选择目标时间');
+      return;
+    }
+
     try {
+      setSubmitting(true);
       await api.post('/samples/borrow-request', {
         project_id: selectedProjectId,
         sample_codes: selectedSamples,
@@ -249,17 +266,24 @@ export default function SampleBorrowPage() {
       setIsRequestDialogOpen(false);
       resetForm();
       fetchRequests();
+      toast.success('领用申请提交成功');
     } catch (error) {
       console.error('Failed to submit borrow request:', error);
+      toast.error('提交申请失败，请重试');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleApproveBorrow = async (requestId: number) => {
     try {
       await api.post(`/samples/borrow-request/${requestId}/approve`);
+      toast.success('申请已批准');
       fetchRequests();
+      setIsDetailDialogOpen(false);
     } catch (error) {
       console.error('Failed to approve borrow request:', error);
+      toast.error('审批失败，请重试');
     }
   };
 
@@ -299,7 +323,7 @@ export default function SampleBorrowPage() {
       case 'pending':
         return <Badge color="yellow">待审批</Badge>;
       case 'approved':
-        return <Badge color="blue">已批准</Badge>;
+        return <Badge color="zinc">已批准</Badge>;
       case 'borrowed':
         return <Badge color="purple">已领用</Badge>;
       case 'returned':
@@ -631,7 +655,7 @@ export default function SampleBorrowPage() {
                           </Button>
                           {request.status === 'approved' && (
                             <Button 
-                              color="blue"
+                              color="dark"
                               onClick={() => handleExecuteBorrow(request)}
                             >
                               执行领用
@@ -795,9 +819,9 @@ export default function SampleBorrowPage() {
           </Button>
           <Button 
             onClick={handleSubmitRequest}
-            disabled={!selectedProjectId || selectedSamples.length === 0 || !borrowForm.purpose}
+            disabled={submitting}
           >
-            提交申请
+            {submitting ? '提交中...' : '提交申请'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -848,9 +872,19 @@ export default function SampleBorrowPage() {
           )}
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsDetailDialogOpen(false)}>
-            关闭
-          </Button>
+          <div className="flex gap-2 w-full justify-end">
+            {selectedRequest?.status === 'pending' && (
+              <Button 
+                color="indigo"
+                onClick={() => selectedRequest && handleApproveBorrow(selectedRequest.id)}
+              >
+                批准申请
+              </Button>
+            )}
+            <Button plain onClick={() => setIsDetailDialogOpen(false)}>
+              关闭
+            </Button>
+          </div>
         </DialogActions>
       </Dialog>
     </AppLayout>

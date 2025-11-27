@@ -17,6 +17,9 @@ class Project(Base):
     # 样本编号规则配置
     sample_code_rule = Column(JSON, nullable=True)  # 存储样本编号规则
     
+    # 样本元数据配置 (周期、检测类型等选项字典)
+    sample_meta_config = Column(JSON, nullable=True)
+    
     is_active = Column(Boolean, default=True)
     is_archived = Column(Boolean, default=False)
     created_by = Column(Integer, ForeignKey("users.id"))

@@ -1,3 +1,8 @@
+import bcrypt
+# 修复 passlib 与 bcrypt 4.0+ 的兼容性问题
+if not hasattr(bcrypt, '__about__'):
+    bcrypt.__about__ = type('about', (object,), {'__version__': bcrypt.__version__})
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
@@ -6,10 +11,10 @@ from app.core.database import engine
 from app.models.auth import RefreshToken
 import logging
 
-# 配置日志级别，只输出 ERROR 信息
-logging.basicConfig(level=logging.ERROR)
+# 配置日志级别 - 调试时改为 WARNING 以查看认证日志
+logging.basicConfig(level=logging.WARNING)
 for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "sqlalchemy.engine"]:
-    logging.getLogger(logger_name).setLevel(logging.ERROR)
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 # 创建FastAPI应用
 app = FastAPI(

@@ -433,8 +433,31 @@ async def generate_sample_codes(
     test_types = _parse_list(generation_params.get("test_types"))
     primary = _parse_list(generation_params.get("primary"))  # a1,a2
     backup = _parse_list(generation_params.get("backup"))    # b1,b2
-    subjects = _parse_list(generation_params.get("subjects"))
-    clinic_codes = _parse_list(generation_params.get("clinic_codes")) or [""]
+    
+    # 新版：临床机构-受试者配对 e.g. [{"clinic":"01","subject":"003"}]
+    clinic_subject_pairs = generation_params.get("clinic_subject_pairs") or []
+    if isinstance(clinic_subject_pairs, list):
+        norm_pairs = []
+        for p in clinic_subject_pairs:
+            if isinstance(p, dict):
+                clinic = str(p.get("clinic", "")).strip()
+                subject = str(p.get("subject", "")).strip()
+                if clinic or subject:
+                    norm_pairs.append({"clinic": clinic, "subject": subject})
+        clinic_subject_pairs = norm_pairs
+    
+    # 兼容旧版：如果没有配对数据，尝试使用旧的 subjects 和 clinic_codes
+    if not clinic_subject_pairs:
+        subjects = _parse_list(generation_params.get("subjects"))
+        clinic_codes = _parse_list(generation_params.get("clinic_codes")) or [""]
+        # 笛卡尔积方式（旧逻辑兼容）
+        for cc in clinic_codes:
+            for subj in (subjects or [""]):
+                clinic_subject_pairs.append({"clinic": cc, "subject": subj})
+    
+    # 如果仍为空，使用默认空值
+    if not clinic_subject_pairs:
+        clinic_subject_pairs = [{"clinic": "", "subject": ""}]
 
     # 采血序号/时间对 e.g. [{"seq":"01","time":"0h"}]
     seq_time_pairs = generation_params.get("seq_time_pairs") or []
@@ -469,7 +492,6 @@ async def generate_sample_codes(
     test_types = test_types or [""]
     primary = primary or []
     backup = backup or []
-    subjects = subjects or [""]
     seq_time_pairs = seq_time_pairs or [{"seq": "", "time": ""}]
 
     # 辅助：根据元素ID返回该部分的字符串
@@ -496,16 +518,20 @@ async def generate_sample_codes(
 
     generated_codes: list[str] = []
 
-    # 组合：clinic × subject × test_type × seq/time × cycle × sample_type(primary/backup)
+    # 组合：clinic_subject_pair × test_type × seq/time × cycle × sample_type(primary/backup)
+    # 注意：临床机构和受试者是配对关系，不做笛卡尔积
     sample_types = primary + backup if (primary or backup) else [""]
-    for clinic_code, subject, tt, st, cycle, stype in product(clinic_codes, subjects, test_types, seq_time_pairs, cycles, sample_types):
-        parts = [_part(el, clinic_code, subject, tt, st, cycle, stype) for el in elements]
-        # 过滤空段（未选择的A-G不显示）
-        parts = [p for p in parts if p != ""]
-        if not parts:
-            continue
-        code = "-".join(parts)
-        generated_codes.append(code)
+    for cs_pair in clinic_subject_pairs:
+        clinic_code = cs_pair.get("clinic", "")
+        subject = cs_pair.get("subject", "")
+        for tt, st, cycle, stype in product(test_types, seq_time_pairs, cycles, sample_types):
+            parts = [_part(el, clinic_code, subject, tt, st, cycle, stype) for el in elements]
+            # 过滤空段（未选择的A-G不显示）
+            parts = [p for p in parts if p != ""]
+            if not parts:
+                continue
+            code = "-".join(parts)
+            generated_codes.append(code)
 
     # 去重并限制数量
     unique_codes = list(dict.fromkeys(generated_codes))
@@ -525,9 +551,8 @@ async def generate_sample_codes(
                 "test_types": test_types,
                 "primary": primary,
                 "backup": backup,
-                "subjects": subjects,
+                "clinic_subject_pairs_count": len(clinic_subject_pairs),
                 "seq_time_pairs": seq_time_pairs,
-                "clinic_codes": clinic_codes
             },
             "count": len(unique_codes)
         }
@@ -578,6 +603,73 @@ async def import_subjects(
     # 去重并限制
     subjects = list(dict.fromkeys(subjects))[:5000]
     return {"subjects": subjects}
+
+
+@router.post("/{project_id}/import-clinic-subjects")
+async def import_clinic_subjects(
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """导入临床机构-受试者配对（Excel）。支持两列(clinic,subject)或中文列(临床机构,受试者编号)。"""
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限")
+
+    try:
+        content = await file.read()
+        import pandas as _pd
+        import io as _io
+        df = _pd.read_excel(_io.BytesIO(content))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Excel 解析失败")
+
+    cols = [str(c).strip().lower() for c in df.columns]
+    clinic_alias = ["clinic", "clinic_code", "临床机构", "临床机构序号", "分中心", "分中心序号", "机构"]
+    subject_alias = ["subject", "subject_id", "受试者", "受试者编号", "被试者", "编号"]
+
+    def _find_col(candidates: List[str]) -> Optional[int]:
+        for idx, name in enumerate(cols):
+            if name in candidates:
+                return idx
+        return None
+
+    clinic_idx = _find_col(clinic_alias)
+    subject_idx = _find_col(subject_alias)
+    
+    # 如果未找到明确列名，默认第一列为临床机构，第二列为受试者
+    if clinic_idx is None:
+        clinic_idx = 0
+    if subject_idx is None:
+        subject_idx = 1 if len(df.columns) > 1 else 0
+
+    pairs: List[dict] = []
+    clinic_series = df.iloc[:, clinic_idx].astype(str).tolist()
+    subject_series = df.iloc[:, subject_idx].astype(str).tolist()
+    
+    for c, s in zip(clinic_series, subject_series):
+        c, s = c.strip(), s.strip()
+        if not c or c.lower() in ["nan", "none"]:
+            continue
+        if not s or s.lower() in ["nan", "none"]:
+            continue
+        pairs.append({"clinic": c, "subject": s})
+
+    if not pairs:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="未识别到临床机构-受试者配对")
+
+    # 去重并限制
+    uniq = []
+    seen = set()
+    for p in pairs:
+        key = (p.get("clinic", ""), p.get("subject", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(p)
+        if len(uniq) >= 5000:
+            break
+    return {"clinic_subject_pairs": uniq}
 
 
 @router.post("/{project_id}/import-seq-times")
@@ -688,12 +780,12 @@ async def generate_stability_qc_codes(
         )
     
     # 生成编号
-    # 格式：临床试验研究室项目编号-样本类别-代码-序号
-    # 例如：L2501-STB-L-31
+    # 格式：样本类别-代码-序号
+    # 例如：STB-L-31
     sample_codes = []
     for i in range(params.quantity):
         code_number = params.start_number + i
-        sample_code = f"{project.lab_project_code}-{params.sample_category}-{params.code}-{code_number}"
+        sample_code = f"{params.sample_category}-{params.code}-{code_number}"
         sample_codes.append(sample_code)
     
     # 记录审计日志

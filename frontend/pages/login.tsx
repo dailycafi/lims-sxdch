@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
+import { toast } from 'react-hot-toast';
 import { Image } from '@/components/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
@@ -44,6 +45,12 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>();
+
+  // 进入登录页面时，清除可能存在的认证过期 toast
+  useEffect(() => {
+    // 使用 remove 强制移除，而不是 dismiss（dismiss 可能对 custom toast 无效）
+    toast.remove('auth-expired');
+  }, []);
 
   // 页面加载时检查服务器状态，并定期检查（用于状态指示器）
   useEffect(() => {
@@ -154,6 +161,10 @@ export default function LoginPage() {
       
       if (result.success) {
         setServerStatus('online');
+        // 确保清除认证过期 toast（使用 remove 强制移除）
+        toast.remove('auth-expired');
+        // 等待一小段时间确保 token 完全同步到 axios 后再跳转
+        await new Promise(resolve => setTimeout(resolve, 100));
         router.push('/');
       } else {
         // 处理登录失败
@@ -461,7 +472,7 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  color="blue"
+                  color="dark"
                   className="w-full h-12 text-base font-medium"
                 >
                   {isLoading ? (

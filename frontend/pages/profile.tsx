@@ -126,7 +126,7 @@ export default function ProfilePage() {
             <div className="flex-1 min-w-0">
               <Heading level={2}>{user.full_name || user.username}</Heading>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-zinc-600">
-                <Badge color="blue">{roleLabel}</Badge>
+                <Badge color="zinc">{roleLabel}</Badge>
                 <Badge color={user.is_active ? 'green' : 'zinc'}>{user.is_active ? '账户已激活' : '已停用'}</Badge>
                 <span>用户名：{user.username}</span>
               </div>
@@ -200,7 +200,7 @@ export default function ProfilePage() {
             </Button>
             <Button
               type="submit"
-              color="blue"
+              color="dark"
               disabled={!hasChanges || !isFormValid || isSaving}
             >
               {isSaving ? '保存中…' : '保存修改'}

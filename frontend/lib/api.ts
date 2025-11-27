@@ -9,13 +9,27 @@ if (typeof window !== 'undefined') {
 
 // 根据环境自动选择 URL
 const getApiUrl = () => {
-  // 生产环境：使用相对路径（通过 nginx 或其他反向代理）
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+  // 优先使用环境变量
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
   
-  // 开发环境：直接调用后端（绕过有问题的 rewrites）
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  // 在开发环境下，直接请求后端，绕过 Next.js 代理
+  // 这样可以避免代理过程中 header 丢失或重写问题
+  if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    return 'http://localhost:8000/api/v1';
+  }
+  
+  // 在浏览器端（客户端），始终使用相对路径 '/api/v1'
+  // 这会通过 next.config.js 中的 rewrites 代理到后端
+  // 从而避免 CORS 问题和端口硬编码问题
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+  
+  // 在服务端渲染 (SSR) 时，必须使用完整的绝对路径
+  // 因为 SSR 是在 Node.js 容器内执行，无法像浏览器那样自动推断域名
+  return 'http://localhost:8000/api/v1';
 };
 
 const API_URL = getApiUrl();
@@ -94,6 +108,7 @@ export const backendStatusAPI = {
 // 统一的认证状态标记（请求/响应拦截器都要用）
 let isRedirecting = false;
 let hasShownAuthExpiredToast = false;
+let loginCooldownUntil = 0; // 登录后的冷却期，防止立即显示 auth expired toast
 
 type PendingRequest = {
   resolve: (value: any) => void;
@@ -104,11 +119,18 @@ type PendingRequest = {
 let isRefreshing = false;
 const pendingRequests: PendingRequest[] = [];
 
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/me', '/auth/refresh'];
+// 这些端点不需要认证，或者认证失败时不应尝试刷新 token
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh'];
 
 const triggerAuthExpired = () => {
   // 检查是否已经在登录页面，如果是则不显示弹窗
   if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+    return;
+  }
+  
+  // 检查是否在登录冷却期内（登录成功后 3 秒内不显示 toast）
+  if (Date.now() < loginCooldownUntil) {
+    console.log('[API] Skipping auth expired toast - in login cooldown period');
     return;
   }
   
@@ -229,6 +251,9 @@ api.interceptors.request.use(
         if (currentToken) {
           config.headers = config.headers || {};
           config.headers['Authorization'] = `Bearer ${currentToken}`;
+          console.log(`[API Request] ${url} - Token added (${currentToken.substring(0, 20)}...)`);
+        } else {
+          console.warn(`[API Request] ${url} - No token available!`);
         }
       }
     }
@@ -246,7 +271,11 @@ if (typeof window !== 'undefined') {
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       console.log('[API] Token updated via listener');
+      // 设置 3 秒冷却期，防止登录后立即显示 auth expired toast
+      loginCooldownUntil = Date.now() + 3000;
       hasShownAuthExpiredToast = false;
+      // 登录成功后，强制移除可能存在的认证过期 toast
+      toast.remove('auth-expired');
     } else {
       delete api.defaults.headers.common['Authorization'];
       console.log('[API] Token removed via listener');

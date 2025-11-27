@@ -596,7 +596,7 @@ export default function DeviationManagement() {
             <Button plain onClick={() => setIsReportDialogOpen(false)}>
               取消
             </Button>
-            <Button color="blue" onClick={handleCreateDeviation}>
+            <Button color="dark" onClick={handleCreateDeviation}>
               提交报告
             </Button>
           </DialogActions>
@@ -698,7 +698,7 @@ export default function DeviationManagement() {
                   关闭
                 </Button>
                 {canProcessDeviation(selectedDeviation) && (
-                  <Button color="blue" onClick={() => {
+                  <Button color="dark" onClick={() => {
                     setIsDetailDialogOpen(false);
                     setIsApprovalDialogOpen(true);
                   }}>
@@ -774,7 +774,7 @@ export default function DeviationManagement() {
             <Button plain onClick={() => setIsApprovalDialogOpen(false)}>
               取消
             </Button>
-            <Button color="blue" onClick={handleApprovalAction}>
+            <Button color="dark" onClick={handleApprovalAction}>
               确认处理
             </Button>
           </DialogActions>

@@ -60,8 +60,16 @@ export default function AuditPage() {
 
   const fetchLogs = async () => {
     try {
+      // 过滤掉空值参数
+      const cleanedFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as any);
+
       const params = {
-        ...filters,
+        ...cleanedFilters,
         skip: (currentPage - 1) * pageSize,
         limit: pageSize
       };
@@ -87,8 +95,16 @@ export default function AuditPage() {
 
   const handleExport = async () => {
     try {
+      // 过滤掉空值参数
+      const cleanedFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as any);
+
       const response = await api.get('/audit/export', {
-        params: filters,
+        params: cleanedFilters,
         responseType: 'blob'
       });
 

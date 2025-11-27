@@ -560,7 +560,7 @@ export default function ArchivePage() {
             <Button plain onClick={() => setIsRequestDialogOpen(false)}>
               取消
             </Button>
-            <Button color="blue" onClick={handleRequestArchive}>
+            <Button color="dark" onClick={handleRequestArchive}>
               提交申请
             </Button>
           </DialogActions>
@@ -601,7 +601,7 @@ export default function ArchivePage() {
                       <DescriptionList>
                         <DescriptionTerm>样本总数</DescriptionTerm>
                         <DescriptionDetails>
-                          <Badge color="blue">{projectSummary.total_samples}</Badge>
+                          <Badge color="zinc">{projectSummary.total_samples}</Badge>
                         </DescriptionDetails>
                         
                         <DescriptionTerm>已销毁样本</DescriptionTerm>

@@ -32,6 +32,9 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """获取当前用户"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无法验证凭据",
@@ -41,6 +44,7 @@ async def get_current_user(
     payload = decode_token(token)
     
     if payload is None:
+        logger.warning(f"[Auth] Token validation failed - payload is None")
         raise credentials_exception
     
     username: str = payload.get("sub")
@@ -103,7 +107,7 @@ async def _issue_token_pair(
 
     if parent_token:
         parent_token.revoked = True
-        parent_token.revoked_at = datetime.utcnow()
+        parent_token.revoked_at = datetime.now(timezone.utc)
 
     db.add(refresh_token_record)
     await db.flush()
@@ -140,7 +144,7 @@ async def login(
     )
     for token_record in existing_tokens_result.scalars().all():
         token_record.revoked = True
-        token_record.revoked_at = datetime.utcnow()
+        token_record.revoked_at = datetime.now(timezone.utc)
 
     access_token, refresh_token = await _issue_token_pair(db, user)
 
@@ -236,11 +240,28 @@ async def refresh_access_token(
     )
     stored_refresh = result.scalar_one_or_none()
 
-    if not stored_refresh or stored_refresh.revoked:
+    if not stored_refresh:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token 无效"
+            detail="Refresh token 不存在"
         )
+
+    # 检查是否已被撤销
+    if stored_refresh.revoked:
+        # 宽限期处理：如果是最近30秒内被撤销的，允许再次刷新（解决并发刷新导致的掉线问题）
+        grace_period = timedelta(seconds=30)
+        now = datetime.now(timezone.utc)
+        
+        # 确保时间比较是时区一致的
+        revoked_at = stored_refresh.revoked_at
+        if revoked_at and revoked_at.tzinfo is None:
+            revoked_at = revoked_at.replace(tzinfo=timezone.utc)
+            
+        if not revoked_at or (now - revoked_at) > grace_period:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token 已被撤销"
+            )
 
     if stored_refresh.expires_at <= datetime.now(timezone.utc):
         stored_refresh.revoked = True

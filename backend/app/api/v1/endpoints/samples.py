@@ -553,6 +553,7 @@ async def receive_samples(
     sample_status: str = Form(...),
     storage_location: Optional[str] = Form(None),
     temperature_file: Optional[UploadFile] = File(None),
+    express_photos: List[UploadFile] = File(None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -563,11 +564,12 @@ async def receive_samples(
             detail="只有样本管理员可以接收样本"
         )
     
+    import os
+    
     # 保存温度文件
     temperature_file_path = None
     if temperature_file:
         # 创建上传目录
-        import os
         upload_dir = "uploads/temperature"
         os.makedirs(upload_dir, exist_ok=True)
         
@@ -583,6 +585,22 @@ async def receive_samples(
         
         temperature_file_path = file_path
     
+    # 保存快递单照片
+    express_photo_paths = []
+    if express_photos:
+        upload_dir = "uploads/express_photos"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        for photo in express_photos:
+            file_extension = os.path.splitext(photo.filename)[1]
+            file_name = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(express_photo_paths)}{file_extension}"
+            file_path = os.path.join(upload_dir, file_name)
+            
+            with open(file_path, "wb") as f:
+                content = await photo.read()
+                f.write(content)
+            express_photo_paths.append(file_path)
+    
     # 创建接收记录
     receive_record = SampleReceiveRecord(
         project_id=project_id,
@@ -594,6 +612,7 @@ async def receive_samples(
         sample_count=sample_count,
         sample_status=sample_status,
         storage_location=storage_location,
+        express_photos=json.dumps(express_photo_paths) if express_photo_paths else None,
         received_by=current_user.id,
         received_at=datetime.utcnow(),
         status="pending"  # 待清点
@@ -727,6 +746,7 @@ async def complete_inventory(
                 status=SampleStatus.IN_STORAGE,
                 box_code=box_code,
                 position_in_box=position,
+                special_notes=sample_data.get("specialNotes"),
                 created_at=datetime.utcnow()
             )
             db.add(sample)

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'react-hot-toast';
 import { authAPI } from '@/lib/api';
 import { tokenManager } from '@/lib/token-manager';
 
@@ -57,6 +58,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       // 直接获取用户信息
       const user = await authAPI.getCurrentUser();
       set({ user, isAuthenticated: true });
+      
+      // 登录成功后，强制移除可能存在的 auth-expired toast
+      toast.remove('auth-expired');
+      
       return { success: true };
     } catch (error: any) {
       // 返回错误对象而不是抛出，避免 Next.js 开发模式的错误覆盖层

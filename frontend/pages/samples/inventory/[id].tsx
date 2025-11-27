@@ -44,7 +44,16 @@ interface SampleCode {
   status: 'pending' | 'scanned' | 'error';
   errorReason?: string;
   boxCode?: string;
+  specialNotes?: string;
 }
+
+const SPECIAL_NOTE_OPTIONS = [
+  '溶血',
+  '脂血',
+  '黄疸',
+  '凝块',
+  '量少'
+];
 
 interface SampleBox {
   id: string;
@@ -742,7 +751,7 @@ export default function SampleInventoryPage() {
                     <Text className="font-mono font-bold text-blue-900 text-lg">
                       {currentBox.code}
                     </Text>
-                    <Badge color="blue">当前使用</Badge>
+                    <Badge color="zinc">当前使用</Badge>
                     <Badge color={currentBoxStatusColor}>{currentBoxStatusLabel}</Badge>
                   </div>
                   <Badge color={currentBoxStatusColor}>
@@ -847,7 +856,7 @@ export default function SampleInventoryPage() {
           
           {/* 固定表头 */}
           <div className="bg-white border-b border-zinc-200 sticky top-0 z-10">
-            <div className="grid grid-cols-4 gap-4 px-6 py-3 text-sm font-medium text-zinc-700 bg-zinc-50">
+            <div className="grid grid-cols-5 gap-4 px-6 py-3 text-sm font-medium text-zinc-700 bg-zinc-50">
               <div className="flex items-center">
                 <Text className="font-semibold">样本编号</Text>
               </div>
@@ -856,6 +865,9 @@ export default function SampleInventoryPage() {
               </div>
               <div className="flex items-center justify-center">
                 <Text className="font-semibold">样本盒</Text>
+              </div>
+              <div className="flex items-center justify-center">
+                <Text className="font-semibold">特殊事项</Text>
               </div>
               <div className="flex items-center justify-center">
                 <Text className="font-semibold">备注</Text>
@@ -868,7 +880,7 @@ export default function SampleInventoryPage() {
             <div className="divide-y divide-zinc-100">
               {samples.map((sample, index) => (
                 <div key={sample.id} className={clsx(
-                  "grid grid-cols-4 gap-4 px-6 py-4 hover:bg-zinc-50 transition-colors",
+                  "grid grid-cols-5 gap-4 px-6 py-4 hover:bg-zinc-50 transition-colors",
                   index % 2 === 0 ? "bg-white" : "bg-zinc-50/30"
                 )}>
                   <div className="flex items-center">
@@ -893,6 +905,26 @@ export default function SampleInventoryPage() {
                   </div>
                   <div className="flex items-center justify-center">
                     <Text className="font-mono text-sm">{sample.boxCode || '-'}</Text>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <input
+                      list={`special-notes-${sample.id}`}
+                      type="text"
+                      className="w-full px-2 py-1 text-sm border border-zinc-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-zinc-100 disabled:text-zinc-400"
+                      value={sample.specialNotes || ''}
+                      onChange={(e) => {
+                        const newSamples = [...samples];
+                        newSamples[index] = { ...newSamples[index], specialNotes: e.target.value };
+                        setSamples(newSamples);
+                      }}
+                      placeholder={sample.status === 'scanned' ? "选择或输入" : "-"}
+                      disabled={sample.status !== 'scanned'}
+                    />
+                    <datalist id={`special-notes-${sample.id}`}>
+                      {SPECIAL_NOTE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt} />
+                      ))}
+                    </datalist>
                   </div>
                   <div className="flex items-center justify-center">
                     <Text className="text-sm text-zinc-600">{sample.errorReason || '-'}</Text>
