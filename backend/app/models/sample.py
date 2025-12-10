@@ -46,11 +46,15 @@ class Sample(Base):
     purpose = Column(Enum(SamplePurpose), nullable=True)
     
     # 存储位置信息
-    freezer_id = Column(String, nullable=True)  # 冰箱编号
-    shelf_level = Column(String, nullable=True)  # 层
-    rack_position = Column(String, nullable=True)  # 架子位置
-    box_code = Column(String, nullable=True)  # 样本盒编号
-    position_in_box = Column(String, nullable=True)  # 盒内位置
+    freezer_id = Column(String, nullable=True)  # 冰箱编号 (Legacy or for quick access)
+    shelf_level = Column(String, nullable=True)  # 层 (Legacy)
+    rack_position = Column(String, nullable=True)  # 架子位置 (Legacy)
+    box_code = Column(String, nullable=True)  # 样本盒编号 (Legacy)
+    
+    # New Storage Hierarchy Link
+    box_id = Column(Integer, ForeignKey("storage_boxes.id"), nullable=True)
+    
+    position_in_box = Column(String, nullable=True)  # 盒内位置 (e.g., "A1")
     
     # 其他信息
     transport_condition = Column(String, nullable=True)  # 运输条件
@@ -61,6 +65,7 @@ class Sample(Base):
     
     # 关系
     project = relationship("Project")
+    box = relationship("app.models.storage.StorageBox", backref="samples")
 
 
 class SampleReceiveRecord(Base):

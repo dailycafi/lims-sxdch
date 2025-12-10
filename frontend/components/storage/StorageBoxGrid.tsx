@@ -28,7 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
   in_storage: 'bg-emerald-100 border-emerald-300 text-emerald-700',
   checked_out: 'bg-amber-100 border-amber-300 text-amber-700',
   transferred: 'bg-purple-100 border-purple-300 text-purple-700',
-  destroyed: 'bg-red-100 border-red-300 text-red-700',
+  destroyed: 'bg-red-50 border-red-200 text-red-400/50 grayscale opacity-50', // 视觉弱化，表示位置可能释放
   returned: 'bg-cyan-100 border-cyan-300 text-cyan-700',
   archived: 'bg-zinc-600 border-zinc-700 text-white',
 };

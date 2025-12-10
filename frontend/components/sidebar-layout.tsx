@@ -3,6 +3,7 @@
 import * as Headless from '@headlessui/react'
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
+import clsx from 'clsx'
 
 // 汉堡菜单图标 - 使用 path 提高兼容性
 function HamburgerIcon() {
@@ -96,17 +97,27 @@ function MobileSidebar({ open, close, children }: React.PropsWithChildren<{ open
   )
 }
 
-export function SidebarLayout({
+import { SidebarProvider, useSidebar } from './sidebar'
+
+function SidebarLayoutContent({
   navbar,
   sidebar,
   children,
 }: React.PropsWithChildren<{ navbar: React.ReactNode; sidebar: React.ReactNode }>) {
   let [showSidebar, setShowSidebar] = useState(false)
+  const { isCollapsed } = useSidebar()
 
   return (
     <div className="relative isolate flex min-h-screen w-full bg-zinc-100 dark:bg-zinc-900">
       {/* Sidebar on desktop - 黑色背景，只在大屏幕显示 */}
-      <div className="fixed inset-y-0 left-0 w-64 bg-zinc-950 shadow-2xl hidden lg:block z-30">{sidebar}</div>
+      <motion.div 
+        className="fixed inset-y-0 left-0 bg-zinc-950 shadow-2xl hidden lg:block z-30"
+        initial={false}
+        animate={{ width: isCollapsed ? 80 : 256 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+        {sidebar}
+      </motion.div>
 
       {/* Sidebar on mobile - 小于lg时显示 */}
       <MobileSidebar open={showSidebar} close={() => setShowSidebar(false)}>
@@ -114,7 +125,12 @@ export function SidebarLayout({
       </MobileSidebar>
 
       {/* 主要内容区域 */}
-      <div className="flex flex-1 flex-col lg:pl-64">
+      <motion.div 
+        className="flex flex-1 flex-col"
+        initial={false}
+        animate={{ paddingLeft: isCollapsed ? 80 : 256 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
         {/* Navbar on mobile - 调整按钮大小 */}
         <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-200 bg-white/80 backdrop-blur-md px-2 py-2 lg:hidden supports-[backdrop-filter]:bg-white/60">
           <motion.button
@@ -138,7 +154,15 @@ export function SidebarLayout({
         <main className="flex-1 bg-white lg:m-2 lg:rounded-xl lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:bg-zinc-900 dark:lg:ring-white/10 overflow-hidden">
           {children}
         </main>
-      </div>
+      </motion.div>
     </div>
+  )
+}
+
+export function SidebarLayout(props: React.PropsWithChildren<{ navbar: React.ReactNode; sidebar: React.ReactNode }>) {
+  return (
+    <SidebarProvider>
+      <SidebarLayoutContent {...props} />
+    </SidebarProvider>
   )
 }

@@ -89,9 +89,29 @@ async def create_project(
             detail="实验室项目编号已存在"
         )
     
+    # 如果指定了配置模板，加载模板内容
+    if project_data.config_template_id:
+        from app.models.global_params import GlobalConfiguration
+        result = await db.execute(
+            select(GlobalConfiguration).where(GlobalConfiguration.id == project_data.config_template_id)
+        )
+        config = result.scalar_one_or_none()
+        if config:
+            # 将模板配置合并到 sample_meta_config
+            current_config = project_data.sample_meta_config or {}
+            # 深度合并或覆盖，这里简单合并
+            merged_config = {**config.config_data, **current_config}
+            project_data.sample_meta_config = merged_config
+            
+            # 如果模板中有样本编号规则，也可以应用（需约定结构）
+            # if "sample_code_rule" in config.config_data:
+            #     project_data.sample_code_rule = config.config_data["sample_code_rule"]
+
     try:
+        # exclude config_template_id as it's not a model field
+        create_data = project_data.model_dump(exclude={"config_template_id"})
         db_project = Project(
-            **project_data.model_dump(),
+            **create_data,
             created_by=current_user.id
         )
         db.add(db_project)

@@ -13,6 +13,7 @@ class ProjectBase(BaseModel):
 class ProjectCreate(ProjectBase):
     sample_code_rule: Optional[Dict[str, Any]] = None
     sample_meta_config: Optional[Dict[str, Any]] = None
+    config_template_id: Optional[int] = None
 
 
 class ProjectUpdate(BaseModel):

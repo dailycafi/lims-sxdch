@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -85,6 +85,18 @@ export default function SampleInventoryPage() {
   const [scannerActive, setScannerActive] = useState(true);
   const [currentAssigningBox, setCurrentAssigningBox] = useState<SampleBox | null>(null);
   const [assignedBoxes, setAssignedBoxes] = useState<Array<{boxCode: string, location: {freezer: string, shelf: string, rack: string, position: string}}>>([]);
+  
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 自动聚焦逻辑：只要没有弹窗且扫描激活，就保持焦点在输入框
+  useEffect(() => {
+    if (!isErrorDialogOpen && !isStorageDialogOpen && scannerActive && inputRef.current) {
+      // 只有当焦点不在其他输入框（如备注）时才强制聚焦
+      if (document.activeElement?.tagName !== 'INPUT' || document.activeElement === document.body) {
+        inputRef.current.focus();
+      }
+    }
+  }, [samples, currentBox, isErrorDialogOpen, isStorageDialogOpen, scannerActive, scanMode]);
 
   useEffect(() => {
     if (id) {
@@ -171,6 +183,10 @@ export default function SampleInventoryPage() {
       boxCode: currentBox.code
     };
     setSamples(updatedSamples);
+
+    // 成功提示音效（可选，这里用 console 代替，实际可换成 Audio）
+    // const audio = new Audio('/sounds/beep.mp3');
+    // audio.play().catch(() => {});
 
     // 将样本加入盒子
     const updatedBox = {
@@ -706,6 +722,7 @@ export default function SampleInventoryPage() {
           <div className="space-y-3">
             <div className="flex gap-2 max-w-2xl">
               <Input
+                ref={inputRef}
                 value={currentScanCode}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}

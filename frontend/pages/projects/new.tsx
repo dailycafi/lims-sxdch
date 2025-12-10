@@ -17,6 +17,7 @@ interface ProjectForm {
   lab_project_code: string;
   sponsor_id: number;
   clinical_org_id: number;
+  config_template_id?: number;
 }
 
 export default function NewProjectPage() {
@@ -29,6 +30,14 @@ export default function NewProjectPage() {
     queryKey: ['organizations'],
     queryFn: async () => {
       const response = await api.get('/global-params/organizations');
+      return response.data;
+    },
+  });
+
+  const { data: globalConfigs } = useQuery({
+    queryKey: ['global-configurations'],
+    queryFn: async () => {
+      const response = await api.get('/global-params/configurations');
       return response.data;
     },
   });
@@ -59,6 +68,7 @@ export default function NewProjectPage() {
         ...data,
         sponsor_id: Number(data.sponsor_id),
         clinical_org_id: Number(data.clinical_org_id),
+        config_template_id: data.config_template_id ? Number(data.config_template_id) : undefined,
       });
     } finally {
       setIsLoading(false);
@@ -125,6 +135,21 @@ export default function NewProjectPage() {
                 {errors.clinical_org_id && (
                   <p className="text-sm text-red-600 mt-1">{errors.clinical_org_id.message}</p>
                 )}
+              </Field>
+
+              <Field>
+                <Label>项目配置模板 (可选)</Label>
+                <Select
+                  {...register('config_template_id')}
+                >
+                  <option value="">请选择 (使用默认配置)</option>
+                  {globalConfigs?.map((cfg: any) => (
+                    <option key={cfg.id} value={cfg.id}>
+                      {cfg.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-zinc-500 mt-1">选择后将自动应用该模板包含的样本类型、访视阶段等设置</p>
               </Field>
             </FieldGroup>
           </Fieldset>

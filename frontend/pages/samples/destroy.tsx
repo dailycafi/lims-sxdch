@@ -27,6 +27,7 @@ import {
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { toast } from 'react-hot-toast';
+import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import clsx from 'clsx';
 
@@ -44,6 +45,7 @@ interface DestroyRequest {
   reason: string;
   status: string;
   current_approver?: string;
+  approval_file_path?: string; // 新增字段
   created_at: string;
 }
 
@@ -73,6 +75,7 @@ export default function SampleDestroyPage() {
     setSelectedProject,
     fetchProjects: fetchProjectList,
   } = useProjectStore();
+  const { user } = useAuthStore();
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<any[]>([]);
   
@@ -431,9 +434,40 @@ export default function SampleDestroyPage() {
 
   const filteredRequests = applyFilters(filteredByViewMode(requests));
 
-  // 获取唯一值用于筛选
-  const uniqueRequesters = Array.from(new Set(requests.map(r => r.requested_by.full_name)));
-  const uniqueReasons = Array.from(new Set(requests.map(r => r.reason)));
+  // 权限判断
+  const canRequest = user && (['project_lead', 'super_admin'].includes(user.role));
+  // 分析测试主管审批权限
+  const canApproveTestManager = user && (['test_manager', 'super_admin'].includes(user.role));
+  // 研究室主任审批权限
+  const canApproveDirector = user && (['lab_director', 'super_admin'].includes(user.role));
+  // 样本管理员执行权限
+  const canExecute = user && (['sample_admin', 'super_admin'].includes(user.role));
+
+  // 生成销毁报告
+  const handleGenerateReport = async (request: DestroyRequest) => {
+    try {
+      // 这里调用后端API生成报告，目前仅做模拟
+      toast.success('销毁报告生成中...');
+      // const response = await api.get(`/samples/destroy-request/${request.id}/report`, { responseType: 'blob' });
+      // 下载逻辑...
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      toast.error('生成报告失败');
+    }
+  };
+
+  // 查看审批附件
+  const handleViewApprovalFile = (url?: string) => {
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast.error('未找到附件');
+    }
+  };
+
+  // 获取筛选选项列表
+  const uniqueRequesters = Array.from(new Set(requests.map(r => r.requested_by.full_name))).filter(Boolean);
+  const uniqueReasons = Array.from(new Set(requests.map(r => r.reason))).filter(Boolean);
 
   return (
     <AppLayout>
@@ -442,12 +476,16 @@ export default function SampleDestroyPage() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <Heading>样本销毁</Heading>
-            <Text className="mt-1 text-zinc-600">管理样本销毁申请和审批流程</Text>
+            <Text className="mt-1 text-zinc-600">
+              流程：项目负责人申请 &rarr; 分析测试主管审批 &rarr; 研究室主任审批 &rarr; 样本管理员销毁
+            </Text>
           </div>
+          {canRequest && (
           <Button onClick={() => setIsRequestDialogOpen(true)}>
             <TrashIcon className="h-4 w-4" />
             申请销毁
           </Button>
+          )}
         </div>
 
         {/* 筛选区域 - 可折叠 */}
@@ -620,6 +658,7 @@ export default function SampleDestroyPage() {
                   <TableHeader>申请人</TableHeader>
                   <TableHeader>样本数量</TableHeader>
                   <TableHeader>销毁原因</TableHeader>
+                  <TableHeader>审批附件</TableHeader>
                   <TableHeader>当前审批人</TableHeader>
                   <TableHeader>申请时间</TableHeader>
                   <TableHeader>状态</TableHeader>
@@ -631,13 +670,13 @@ export default function SampleDestroyPage() {
                   {loading ? (
                     <AnimatedLoadingState 
                       key="loading"
-                      colSpan={9} 
+                      colSpan={10} 
                       variant="skeleton"
                     />
                   ) : filteredRequests.length === 0 ? (
                     <AnimatedEmptyState
                       key="empty"
-                      colSpan={9}
+                      colSpan={10}
                       icon={TrashIcon}
                       text={activeFilterCount > 0 
                         ? '没有符合筛选条件的销毁申请' 
@@ -663,6 +702,13 @@ export default function SampleDestroyPage() {
                         <TableCell>{request.requested_by.full_name}</TableCell>
                         <TableCell>{request.sample_count}</TableCell>
                         <TableCell>{request.reason}</TableCell>
+                        <TableCell>
+                          {request.approval_file_path ? (
+                            <Button plain className="text-blue-600 p-0 h-auto" onClick={() => handleViewApprovalFile(request.approval_file_path)}>
+                              查看
+                            </Button>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell>{request.current_approver || '-'}</TableCell>
                         <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
                         <TableCell>
@@ -678,13 +724,34 @@ export default function SampleDestroyPage() {
                             >
                               查看
                             </Button>
-                            {request.status === 'ready' && (
+                            
+                            {/* 审批按钮逻辑 */}
+                            {request.status === 'pending' && canApproveTestManager && (
+                              <Button color="blue" onClick={() => handleOpenApproval(request)}>
+                                审批
+                              </Button>
+                            )}
+                            {request.status === 'test_manager_approved' && canApproveDirector && (
+                              <Button color="purple" onClick={() => handleOpenApproval(request)}>
+                                审批
+                              </Button>
+                            )}
+                            
+                            {/* 执行按钮逻辑 */}
+                            {request.status === 'ready' && canExecute && (
                               <Button
                                 color="red"
                                 onClick={() => handleExecuteDestroy(request.id)}
                               >
                                 <TrashIcon className="h-4 w-4 mr-1" />
                                 执行销毁
+                              </Button>
+                            )}
+                            
+                            {/* 报告生成逻辑 */}
+                            {request.status === 'completed' && (
+                              <Button plain onClick={() => handleGenerateReport(request)}>
+                                生成报告
                               </Button>
                             )}
                           </div>

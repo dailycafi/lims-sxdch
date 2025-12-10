@@ -27,6 +27,7 @@ import {
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ArrowsRightLeftIcon as ArrowsRightLeftIconOutline } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import clsx from 'clsx';
 
@@ -39,6 +40,8 @@ interface TransferRequest {
     sponsor_project_code: string;
   };
   requested_by: {
+    id: number;
+    username: string;
     full_name: string;
   };
   sample_count: number;
@@ -53,6 +56,11 @@ interface Sample {
   sample_code: string;
   current_location: string;
   selected?: boolean;
+  cycle_group?: string;
+  test_type?: string;
+  is_primary?: boolean;
+  subject_code?: string;
+  special_notes?: string;
 }
 
 export default function SampleTransferPage() {
@@ -72,6 +80,7 @@ export default function SampleTransferPage() {
     setSelectedProject,
     fetchProjects: fetchProjectList,
   } = useProjectStore();
+  const { user } = useAuthStore();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
@@ -213,11 +222,28 @@ export default function SampleTransferPage() {
     try {
       const formData = new FormData();
       formData.append('project_id', String(selectedProjectId));
+      
+      // 构建包含特殊事项的样本数据
+      const samplesWithNotes = availableSamples
+        .filter(s => selectedSamples.includes(s.sample_code))
+        .map(s => ({
+          code: s.sample_code,
+          special_notes: s.special_notes
+        }));
+        
+      // 传递包含备注的样本信息，后端需要相应支持解析对象列表，或者我们将备注放在 notes 里
+      // 这里为了兼容现有 API，我们暂时只传 code，但建议后续更新后端 API 支持 per-sample notes
+      // 目前假设 notes 字段可以包含汇总信息
+      const notesSummary = samplesWithNotes
+        .filter(s => s.special_notes)
+        .map(s => `${s.code}: ${s.special_notes}`)
+        .join('; ');
+        
       formData.append('sample_codes', JSON.stringify(selectedSamples));
       formData.append('target_org_id', externalForm.target_org_id);
       formData.append('transport_method', externalForm.transport_method);
       formData.append('target_date', externalForm.target_date);
-      formData.append('notes', externalForm.notes);
+      formData.append('notes', externalForm.notes + (notesSummary ? `\n样本特殊事项: ${notesSummary}` : ''));
       
       if (externalForm.approval_file) {
         formData.append('approval_file', externalForm.approval_file);
@@ -237,11 +263,46 @@ export default function SampleTransferPage() {
     }
   };
 
+  const handleConfirmTransferOut = () => {
+    if (!internalForm.from_location) {
+      toast.error('请输入转出位置');
+      return;
+    }
+    if (internalForm.samples.length === 0) {
+      toast.error('请扫描至少一个样本');
+      return;
+    }
+    
+    // 这里可以添加一个确认状态，例如锁定上半部分，高亮下半部分
+    // 由于目前后端是一步完成，这里作为视觉反馈和流程引导
+    toast.success('转出确认成功，请扫描目标位置以完成转入');
+  };
+
   const handleInternalTransfer = async () => {
+    // 手动校验，给出具体提示
+    if (!internalForm.from_location) {
+      toast.error('请输入转出位置');
+      return;
+    }
+    if (internalForm.samples.length === 0) {
+      toast.error('请扫描至少一个样本');
+      return;
+    }
+    if (!internalForm.to_location) {
+      toast.error('请输入目标位置');
+      return;
+    }
+
     try {
-      await api.post('/samples/transfer/internal', {
+      const promise = api.post('/samples/transfer/internal', {
         ...internalForm,
         samples: internalForm.samples
+      });
+      
+      await toast.promise(promise, {
+        loading: '正在处理转移...',
+        success: '内部转移完成',
+        error: '转移失败'
       });
       
       setIsInternalTransferOpen(false);
@@ -267,6 +328,13 @@ export default function SampleTransferPage() {
         samples: [...internalForm.samples, code]
       });
     }
+  };
+
+  // 处理特殊事项变更
+  const handleSpecialNoteChange = (sampleCode: string, note: string) => {
+    setAvailableSamples(prev => prev.map(s => 
+      s.sample_code === sampleCode ? { ...s, special_notes: note } : s
+    ));
   };
 
   const handleProjectChange = (value: string) => {
@@ -345,13 +413,23 @@ export default function SampleTransferPage() {
     });
   };
 
+  // 权限判断
+  const isManager = user && ['super_admin', 'sample_admin', 'system_admin', 'lab_director'].includes(user.role);
+
   // 应用视图模式过滤
   const filteredByViewMode = (transfers: TransferRequest[]) => {
-    if (viewMode === 'all') return transfers;
-    if (viewMode === 'internal') return transfers.filter(t => t.transfer_type === 'internal');
-    if (viewMode === 'external') return transfers.filter(t => t.transfer_type === 'external');
-    if (viewMode === 'completed') return transfers.filter(t => t.status === 'completed');
-    return transfers;
+    // 基础过滤：如果是普通用户（实验人员），只能看到自己的申请
+    // 管理员可以看到所有
+    let baseTransfers = transfers;
+    if (!isManager && user) {
+      baseTransfers = transfers.filter(t => t.requested_by.id === user.id);
+    }
+
+    if (viewMode === 'all') return baseTransfers;
+    if (viewMode === 'internal') return baseTransfers.filter(t => t.transfer_type === 'internal');
+    if (viewMode === 'external') return baseTransfers.filter(t => t.transfer_type === 'external');
+    if (viewMode === 'completed') return baseTransfers.filter(t => t.status === 'completed');
+    return baseTransfers;
   };
 
   // 应用筛选
@@ -670,7 +748,7 @@ export default function SampleTransferPage() {
                             <Button plain onClick={() => handleViewDetails(transfer)}>
                               查看
                             </Button>
-                            {transfer.status === 'pending' && (
+                            {isManager && transfer.status === 'pending' && (
                               <Button color="dark" onClick={() => handleExecuteTransfer(transfer)}>
                                 执行
                               </Button>
@@ -805,10 +883,12 @@ export default function SampleTransferPage() {
 
             {/* 样本选择 */}
             {selectedProjectId && (
-              <div>
-                <Text className="font-medium mb-2">选择样本（已选 {selectedSamples.length} 个）</Text>
-                <div className="border border-zinc-200 rounded-lg max-h-64 overflow-y-auto">
-                  <Table>
+              <div className="space-y-4">
+                <Text className="font-medium">选择样本</Text>
+                
+                {/* 待选样本列表 - 增加详细列 */}
+                <div className="border border-zinc-200 rounded-lg max-h-60 overflow-y-auto">
+                  <Table striped>
                     <TableHead>
                       <TableRow>
                         <TableHeader className="w-12">
@@ -823,12 +903,23 @@ export default function SampleTransferPage() {
                             }}
                           />
                         </TableHeader>
+                        <TableHeader>周期/组别</TableHeader>
+                        <TableHeader>检测类型</TableHeader>
+                        <TableHeader>正份/备份</TableHeader>
+                        <TableHeader>受试者编号</TableHeader>
                         <TableHeader>样本编号</TableHeader>
                         <TableHeader>当前位置</TableHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {availableSamples.map((sample) => (
+                      {availableSamples.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-4 text-zinc-500">
+                            该项目暂无库存样本
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        availableSamples.map((sample) => (
                         <TableRow key={sample.id}>
                           <TableCell>
                             <input
@@ -843,13 +934,62 @@ export default function SampleTransferPage() {
                               }}
                             />
                           </TableCell>
+                            <TableCell>{sample.cycle_group || '-'}</TableCell>
+                            <TableCell>{sample.test_type || '-'}</TableCell>
+                            <TableCell>
+                              {sample.is_primary !== undefined 
+                                ? (sample.is_primary ? '正份' : '备份') 
+                                : '-'}
+                            </TableCell>
+                            <TableCell>{sample.subject_code || '-'}</TableCell>
                           <TableCell className="font-mono text-sm">{sample.sample_code}</TableCell>
                           <TableCell className="text-sm text-zinc-600">{sample.current_location}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* 已选样本确认与特殊事项标注 */}
+                {selectedSamples.length > 0 && (
+                  <div className="mt-4">
+                     <Text className="font-medium mb-2">已选样本 ({selectedSamples.length}) - 请确认特殊事项</Text>
+                     <div className="border border-zinc-200 rounded-lg max-h-60 overflow-y-auto bg-gray-50">
+                       <Table>
+                         <TableHead>
+                           <TableRow>
+                             <TableHeader>样本编号</TableHeader>
+                             <TableHeader>特殊事项</TableHeader>
+                           </TableRow>
+                         </TableHead>
+                         <TableBody>
+                           {availableSamples
+                             .filter(s => selectedSamples.includes(s.sample_code))
+                             .map(sample => (
+                               <TableRow key={sample.id}>
+                                 <TableCell className="font-mono">{sample.sample_code}</TableCell>
+                                 <TableCell>
+                                   <Select
+                                     value={sample.special_notes || ''}
+                                     onChange={(e) => handleSpecialNoteChange(sample.sample_code, e.target.value)}
+                                     className="h-8 text-sm py-0"
+                                   >
+                                     <option value="">无</option>
+                                     <option value="溶血">溶血</option>
+                                     <option value="脂血">脂血</option>
+                                     <option value="黄疸">黄疸</option>
+                                     <option value="包装破损">包装破损</option>
+                                     <option value="标签模糊">标签模糊</option>
+                                   </Select>
+                                 </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -996,15 +1136,14 @@ export default function SampleTransferPage() {
           }}>
             取消
           </Button>
-          <Button onClick={() => alert('确认转出')} color="white">
-            确认转出
+          <Button onClick={handleConfirmTransferOut} color="white">
+            开始转运
           </Button>
       <Button 
         onClick={handleInternalTransfer}
-        disabled={!internalForm.from_location || !internalForm.to_location || internalForm.samples.length === 0}
       >
         <CheckCircleIcon />
-        完成转入
+        转移完成
       </Button>
     </DialogActions>
   </Dialog>

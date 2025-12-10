@@ -1,4 +1,4 @@
-from typing import List, Annotated, Optional
+from typing import List, Annotated, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.global_params import Organization, SampleType
+from app.models.global_params import Organization, SampleType, GlobalConfiguration
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
@@ -72,6 +72,16 @@ class SampleTypeResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
+class GlobalConfigurationResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: Optional[str] = None
+    config_data: Dict[str, Any]
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 
@@ -103,6 +113,16 @@ async def create_audit_log(
     )
     db.add(audit_log)
     await db.commit()
+
+
+@router.get("/configurations", response_model=List[GlobalConfigurationResponse])
+async def read_configurations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取全局配置模板列表"""
+    result = await db.execute(select(GlobalConfiguration).where(GlobalConfiguration.is_active == True))
+    return result.scalars().all()
 
 
 @router.post("/organizations", response_model=OrganizationResponse)

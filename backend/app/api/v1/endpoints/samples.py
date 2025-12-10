@@ -1,5 +1,5 @@
 from typing import List, Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +10,7 @@ from io import BytesIO
 
 from app.core.database import get_db
 from app.models.sample import Sample, SampleStatus, SampleReceiveRecord, SampleBorrowRequest, SampleBorrowItem, SampleTransferRecord, SampleTransferItem, SampleDestroyRequest, SampleDestroyItem, SampleArchiveRequest, SampleArchiveItem
+from app.models.storage import StorageFreezer, StorageShelf, StorageRack, StorageBox
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.schemas.sample import SampleCreate, SampleUpdate, SampleResponse
@@ -73,42 +74,42 @@ async def get_storage_structure(
     db: AsyncSession = Depends(get_db)
 ):
     """获取存储结构（冰箱->层->架->盒）"""
-    # 1. 获取所有唯一的 freezer_id
+    # 使用 selectinload 预加载关联数据
+    from sqlalchemy.orm import selectinload
+    
+    # 获取所有冰箱及其层级结构
     result = await db.execute(
-        select(Sample.freezer_id).distinct().where(Sample.freezer_id.isnot(None))
+        select(StorageFreezer).options(
+            selectinload(StorageFreezer.shelves)
+            .selectinload(StorageShelf.racks)
+            .selectinload(StorageRack.boxes)
+        )
     )
-    freezers = [f for f in result.scalars().all() if f]
-    freezers.sort()
-
-    # 2. 构建层级结构
-    # 为了性能，我们一次性获取所有样本的位置信息，然后在内存中构建树
-    # 或者针对每个冰箱查询。如果样本量巨大，应该优化。
-    # 这里为了简单，查询所有非空的存储位置组合
-    result = await db.execute(
-        select(Sample.freezer_id, Sample.shelf_level, Sample.rack_position, Sample.box_code)
-        .distinct()
-        .where(Sample.freezer_id.isnot(None))
-    )
-    locations = result.all()
-
+    freezers_db = result.scalars().all()
+    
+    freezer_names = []
     hierarchy = {}
-    for f, s, r, b in locations:
-        if not f or not s or not r:
-            continue
+    
+    for f in freezers_db:
+        freezer_names.append(f.name)
+        hierarchy[f.name] = {}
         
-        if f not in hierarchy:
-            hierarchy[f] = {}
-        if s not in hierarchy[f]:
-            hierarchy[f][s] = {}
-        if r not in hierarchy[f][s]:
-            hierarchy[f][s][r] = []
+        # 按 level_order 排序
+        sorted_shelves = sorted(f.shelves, key=lambda s: s.level_order)
         
-        if b and b not in hierarchy[f][s][r]:
-            hierarchy[f][s][r].append(b)
-            hierarchy[f][s][r].sort()
+        for s in sorted_shelves:
+            hierarchy[f.name][s.name] = {}
+            
+            # 按 name 排序 rack
+            sorted_racks = sorted(s.racks, key=lambda r: r.name)
+            
+            for r in sorted_racks:
+                # 获取该架子上的盒子名称列表
+                box_names = sorted([b.name for b in r.boxes])
+                hierarchy[f.name][s.name][r.name] = box_names
 
     return {
-        "freezers": freezers,
+        "freezers": sorted(freezer_names),
         "hierarchy": hierarchy
     }
 
@@ -342,14 +343,42 @@ async def get_box_content(
     db: AsyncSession = Depends(get_db)
 ):
     """获取指定盒子内的样本"""
-    query = select(Sample).where(
-        Sample.freezer_id == freezer_id,
-        Sample.shelf_level == shelf_level,
-        Sample.rack_position == rack_position,
-        Sample.box_code == box_code
+    # 1. 查找对应的 box_id
+    # 这里我们通过名称链查找。如果重名可能由问题，但假设名称组合是唯一的。
+    # 更严谨的做法是前端传递 ID，但前端目前使用的是名称。
+    
+    # 查找 Box
+    stmt = (
+        select(StorageBox)
+        .join(StorageRack, StorageBox.rack_id == StorageRack.id)
+        .join(StorageShelf, StorageRack.shelf_id == StorageShelf.id)
+        .join(StorageFreezer, StorageShelf.freezer_id == StorageFreezer.id)
+        .where(
+            StorageFreezer.name == freezer_id,
+            StorageShelf.name == shelf_level,
+            StorageRack.name == rack_position,
+            StorageBox.name == box_code
+        )
     )
-    result = await db.execute(query)
-    samples = result.scalars().all()
+    result = await db.execute(stmt)
+    box = result.scalar_one_or_none()
+    
+    if not box:
+        # Fallback to legacy search (string matching on Sample table)
+        # 防止旧数据无法读取
+        query = select(Sample).where(
+            Sample.freezer_id == freezer_id,
+            Sample.shelf_level == shelf_level,
+            Sample.rack_position == rack_position,
+            Sample.box_code == box_code
+        )
+        result = await db.execute(query)
+        samples = result.scalars().all()
+    else:
+        # 使用 box_id 查询
+        query = select(Sample).where(Sample.box_id == box.id)
+        result = await db.execute(query)
+        samples = result.scalars().all()
     
     return [
         {
@@ -471,18 +500,35 @@ async def list_receive_records(
 async def read_samples(
     project_id: int = None,
     status: SampleStatus = None,
+    cycles: List[str] = Query(None),
+    test_types: List[str] = Query(None),
+    subject_codes: List[str] = Query(None),
+    collection_times: List[str] = Query(None),
+    is_primary: Optional[bool] = None,
     skip: int = 0,
     limit: int = 100,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """获取样本列表"""
+    """获取样本列表 (支持多维度筛选)"""
     query = select(Sample)
     
     if project_id:
         query = query.where(Sample.project_id == project_id)
     if status:
         query = query.where(Sample.status == status)
+    
+    # 矩阵筛选条件
+    if cycles:
+        query = query.where(Sample.cycle_group.in_(cycles))
+    if test_types:
+        query = query.where(Sample.test_type.in_(test_types))
+    if subject_codes:
+        query = query.where(Sample.subject_code.in_(subject_codes))
+    if collection_times:
+        query = query.where(Sample.collection_time.in_(collection_times))
+    if is_primary is not None:
+        query = query.where(Sample.is_primary == is_primary)
     
     result = await db.execute(query.offset(skip).limit(limit))
     samples = result.scalars().all()
@@ -1477,6 +1523,8 @@ async def get_transfers(
                 "sponsor_project_code": record.project.sponsor_project_code if record.project else ""
             },
             "requested_by": {
+                "id": record.requester.id if record.requester else None,
+                "username": record.requester.username if record.requester else "",
                 "full_name": record.requester.full_name if record.requester else ""
             },
             "sample_count": len(record.samples),

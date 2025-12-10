@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, JSON
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -34,6 +34,22 @@ class SampleType(Base):
     transport_method = Column(String, nullable=True)  # 运输方式 (临床用)
     status = Column(String, nullable=True)  # 状态 (临床用)
     special_notes = Column(Text, nullable=True)  # 特殊事项 (通用)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class GlobalConfiguration(Base):
+    """全局配置模型 - 供项目选择的配置集"""
+    __tablename__ = "global_configurations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False) # 配置名称，如 "默认临床试验配置"
+    category = Column(String, nullable=False) # e.g. "sample_meta", "workflow", "label_template"
+    
+    # 配置内容
+    config_data = Column(JSON, nullable=False)
+    
+    description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

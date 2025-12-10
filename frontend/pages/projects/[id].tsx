@@ -773,6 +773,7 @@ export default function ProjectDetailPage() {
               display: grid; 
               grid-template-columns: repeat(auto-fill, 50mm); 
               gap: 5mm; 
+              gap: 5mm; 
             }
             .label {
               width: 50mm;
@@ -946,23 +947,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // 复选框辅助函数
-  const toggleSelection = (list: string[], item: string, setter: (l: string[]) => void) => {
-    if (list.includes(item)) {
-        setter(list.filter(i => i !== item));
-    } else {
-        setter([...list, item]);
-    }
-  };
 
-  const toggleAll = (options: string[], currentList: string[], setter: (l: string[]) => void) => {
-      if (currentList.length === options.length) {
-          setter([]);
-      } else {
-          setter([...options]);
-      }
-  };
-  
   const toggleSampleSelection = (id: string) => {
       const newSet = new Set(selectedSamples);
       if (newSet.has(id)) newSet.delete(id);
@@ -976,116 +961,6 @@ export default function ProjectDetailPage() {
       } else {
           setSelectedSamples(new Set(generatedSamples.map(s => s.id)));
       }
-  };
-
-  // 辅助函数：处理临时添加选项
-  const handleAddOption = (option: string, options: string[], setter: (l: string[]) => void) => {
-    if (!option) return;
-    if (!options.includes(option)) {
-        // 这里实际上应该更新到 dictionaries 并保存到后端，
-        // 但为了快速响应，我们先更新当前的选择列表
-        // 理想情况是 update dictionaries
-        // 由于 dictionaries 是从 project.sample_code_rule 初始化来的，
-        // 我们可以临时添加到 batchForm 对应的 options 列表里，
-        // 但 renderMatrixColumn 的 options 参数是传进来的
-        
-        // 我们需要更新 dictionaries 状态
-        // 这里的 setter 只是更新 selected 列表
-        // 所以我们需要传入一个能更新 options 的函数
-        // 下面 renderMatrixColumn 调用时会改进
-    }
-  };
-
-  // 渲染矩阵选择列
-  const renderMatrixColumn = (
-    title: string, 
-    options: string[], 
-    selected: string[], 
-    setSelected: (l: string[]) => void, 
-    addOption?: (opt: string) => void,
-    action?: React.ReactNode, // 新增 action 属性，用于放置“导入”按钮
-    emptyText = "暂无选项"
-  ) => {
-    const [isAdding, setIsAdding] = useState(false);
-    const [newOption, setNewOption] = useState('');
-
-    const onAdd = () => {
-        if (newOption.trim() && addOption) {
-            addOption(newOption.trim());
-            setNewOption('');
-            setIsAdding(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-full border border-zinc-200 rounded-lg overflow-hidden bg-white shadow-sm">
-            <div className="bg-zinc-50 border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0">
-                <span className="font-medium text-sm text-zinc-700">{title}</span>
-                <div className="flex items-center gap-2">
-                    {addOption && (
-                        <button 
-                            onClick={() => setIsAdding(!isAdding)} 
-                            className="text-zinc-400 hover:text-zinc-700 transition-colors"
-                            title="添加选项"
-                        >
-                            <PlusIcon className="w-4 h-4" />
-                        </button>
-                    )}
-                    <Checkbox 
-                        checked={options.length > 0 && selected.length === options.length}
-                        indeterminate={selected.length > 0 && selected.length < options.length}
-                        onChange={() => toggleAll(options, selected, setSelected)}
-                        disabled={options.length === 0}
-                    />
-        </div>
-            </div>
-            
-            {isAdding && (
-                <div className="p-2 border-b border-zinc-100 bg-zinc-50 flex gap-1">
-                    <input 
-                        autoFocus
-                        className="flex-1 px-2 py-1 text-sm border border-zinc-300 rounded focus:outline-none focus:border-blue-500"
-                        value={newOption}
-                        onChange={e => setNewOption(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && onAdd()}
-                        placeholder="输入并回车"
-                    />
-                    <button onClick={onAdd} className="text-blue-600 px-1 hover:text-blue-800"><CheckCircleIcon className="w-5 h-5"/></button>
-                </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-[150px]">
-                {options.length > 0 ? (
-                    options.map((opt, idx) => (
-                        <div key={idx} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded text-sm transition-colors cursor-pointer" onClick={() => toggleSelection(selected, opt, setSelected)}>
-                             <Checkbox 
-                                checked={selected.includes(opt)}
-                                onChange={() => {}} // handled by parent div click
-                                className="pointer-events-none"
-                             />
-                             <span className="truncate select-none text-zinc-700" title={opt}>{opt}</span>
-                        </div>
-                    ))
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full py-8 text-zinc-400 text-xs">
-                        <span>{emptyText}</span>
-                        {addOption && (
-                            <button onClick={() => setIsAdding(true)} className="mt-2 text-blue-500 hover:text-blue-600 underline">
-                                点击添加
-                            </button>
-                        )}
-                    </div>
-                )}
-            </div>
-            
-            {/* 底部操作栏 (例如导入按钮) */}
-            {action && (
-                <div className="border-t border-zinc-100 bg-zinc-50 p-2 flex justify-center">
-                    {action}
-                </div>
-            )}
-        </div>
-    );
   };
 
   if (loading) return <AppLayout><div className="flex justify-center items-center h-64"><Text>加载中...</Text></div></AppLayout>;
@@ -1321,68 +1196,70 @@ export default function ProjectDetailPage() {
                     {/* Matrix Selection Grid */}
                     <Text className="font-semibold border-b border-zinc-100 pb-2">选择生成条件 (生成所选组合的样本编号)</Text>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 h-[400px]">
-                        {renderMatrixColumn(
-                            '周期/组别', 
-                            batchForm.cycles, 
-                            batchForm.selectedCycles, 
-                            (l) => setBatchForm({...batchForm, selectedCycles: l}),
-                            (opt) => {
+                        <MatrixColumn
+                            title='周期/组别'
+                            options={batchForm.cycles}
+                            selected={batchForm.selectedCycles}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedCycles: l})}
+                            onAddOption={(opt) => {
                                 setDictionaries(d => ({...d, cycles: [...d.cycles, opt]}));
                                 setBatchForm(prev => ({...prev, cycles: [...prev.cycles, opt], selectedCycles: [...prev.selectedCycles, opt]}));
-                            }
-                        )}
-                        {renderMatrixColumn(
-                            '检测类型', 
-                            batchForm.testTypes, 
-                            batchForm.selectedTestTypes, 
-                            (l) => setBatchForm({...batchForm, selectedTestTypes: l}),
-                            (opt) => {
+                            }}
+                        />
+                        <MatrixColumn
+                            title='检测类型'
+                            options={batchForm.testTypes}
+                            selected={batchForm.selectedTestTypes}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedTestTypes: l})}
+                            onAddOption={(opt) => {
                                 setDictionaries(d => ({...d, test_types: [...d.test_types, opt]}));
                                 setBatchForm(prev => ({...prev, testTypes: [...prev.testTypes, opt], selectedTestTypes: [...prev.selectedTestTypes, opt]}));
-                            }
-                        )}
-                        {renderMatrixColumn(
-                            '正份 (套)', 
-                            batchForm.primary, 
-                            batchForm.selectedPrimary, 
-                            (l) => setBatchForm({...batchForm, selectedPrimary: l}),
-                            (opt) => {
+                            }}
+                        />
+                        <MatrixColumn
+                            title='正份 (套)'
+                            options={batchForm.primary}
+                            selected={batchForm.selectedPrimary}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedPrimary: l})}
+                            onAddOption={(opt) => {
                                 setDictionaries(d => ({...d, primary_types: [...d.primary_types, opt]}));
                                 setBatchForm(prev => ({...prev, primary: [...prev.primary, opt], selectedPrimary: [...prev.selectedPrimary, opt]}));
-                            }
-                        )}
-                        {renderMatrixColumn(
-                            '备份 (套)', 
-                            batchForm.backup, 
-                            batchForm.selectedBackup, 
-                            (l) => setBatchForm({...batchForm, selectedBackup: l}),
-                            (opt) => {
+                            }}
+                        />
+                        <MatrixColumn
+                            title='备份 (套)'
+                            options={batchForm.backup}
+                            selected={batchForm.selectedBackup}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedBackup: l})}
+                            onAddOption={(opt) => {
                                 setDictionaries(d => ({...d, backup_types: [...d.backup_types, opt]}));
                                 setBatchForm(prev => ({...prev, backup: [...prev.backup, opt], selectedBackup: [...prev.selectedBackup, opt]}));
+                            }}
+                        />
+                        <MatrixColumn
+                            title='采血序号, 时间'
+                            options={batchForm.seqTimePairs.map(p => `${p.seq}|${p.time}`)}
+                            selected={batchForm.selectedTimepoints}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedTimepoints: l})}
+                            action={
+                                <Button plain className="!w-full !justify-center text-xs !py-1" onClick={() => document.getElementById('seqtime-file')?.click()}>
+                                    <ArrowUpOnSquareIcon className="w-3 h-3 mr-1"/>导入 Excel
+                                </Button>
                             }
-                        )}
-                        {renderMatrixColumn(
-                            '采血序号, 时间', 
-                            batchForm.seqTimePairs.map(p => `${p.seq}|${p.time}`), 
-                            batchForm.selectedTimepoints, 
-                            (l) => setBatchForm({...batchForm, selectedTimepoints: l}), 
-                            undefined, 
-                            <Button plain className="!w-full !justify-center text-xs !py-1" onClick={() => document.getElementById('seqtime-file')?.click()}>
-                                <ArrowUpOnSquareIcon className="w-3 h-3 mr-1"/>导入 Excel
-                            </Button>,
-                            "请点击下方按钮导入数据"
-                        )}
-                        {renderMatrixColumn(
-                            '受试者编号', 
-                            batchForm.clinicSubjectPairs.map(p => `${p.clinic}|${p.subject}`), 
-                            batchForm.selectedSubjects, 
-                            (l) => setBatchForm({...batchForm, selectedSubjects: l}), 
-                            undefined, 
-                            <Button plain className="!w-full !justify-center text-xs !py-1" onClick={() => document.getElementById('clinic-subject-file')?.click()}>
-                                <ArrowUpOnSquareIcon className="w-3 h-3 mr-1"/>导入 Excel
-                            </Button>,
-                            "请点击下方按钮导入数据"
-                        )}
+                            emptyText="请点击下方按钮导入数据"
+                        />
+                        <MatrixColumn
+                            title='受试者编号'
+                            options={batchForm.clinicSubjectPairs.map(p => `${p.clinic}|${p.subject}`)}
+                            selected={batchForm.selectedSubjects}
+                            onSelectionChange={(l) => setBatchForm({...batchForm, selectedSubjects: l})}
+                            action={
+                                <Button plain className="!w-full !justify-center text-xs !py-1" onClick={() => document.getElementById('clinic-subject-file')?.click()}>
+                                    <ArrowUpOnSquareIcon className="w-3 h-3 mr-1"/>导入 Excel
+                                </Button>
+                            }
+                            emptyText="请点击下方按钮导入数据"
+                        />
             </div>
 
                     <div className="flex justify-end mt-4">
@@ -1413,7 +1290,7 @@ export default function ProjectDetailPage() {
                             </Button>
                             <Button outline onClick={() => triggerPrint(generatedSamples.filter(s => selectedSamples.has(s.id)), 'label')} disabled={selectedSamples.size === 0} className="!py-1.5">
                                 <PrinterIcon className="w-4 h-4 mr-1"/>打印标签
-                </Button>
+                            </Button>
               </div>
             </div>
 

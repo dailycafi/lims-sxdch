@@ -536,8 +536,8 @@ export default function LoginPage() {
                       transition={{ delay: 0.1 }}
                     >
                       <div>
-                        <div className="font-medium text-gray-800">管理员</div>
-                        <div className="text-gray-600 font-mono text-xs">admin / admin123</div>
+                        <div className="font-medium text-gray-800">项目负责人</div>
+                        <div className="text-gray-600 font-mono text-xs">project_lead / project123</div>
                       </div>
                     </motion.div>
                     <motion.div 
@@ -547,8 +547,52 @@ export default function LoginPage() {
                       transition={{ delay: 0.2 }}
                     >
                       <div>
+                        <div className="font-medium text-gray-800">分析测试主管</div>
+                        <div className="text-gray-600 font-mono text-xs">test_manager / test123</div>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-800">研究室主任</div>
+                        <div className="text-gray-600 font-mono text-xs">lab_director / director123</div>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <div>
                         <div className="font-medium text-gray-800">样本管理员</div>
                         <div className="text-gray-600 font-mono text-xs">sample_admin / sample123</div>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-800">分析员 (实验人员)</div>
+                        <div className="text-gray-600 font-mono text-xs">analyst / analyst123</div>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex justify-between items-center p-3 bg-white rounded-lg border"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 }}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-800">系统管理员</div>
+                        <div className="text-gray-600 font-mono text-xs">admin / admin123</div>
                       </div>
                     </motion.div>
                   </div>

@@ -125,6 +125,7 @@ export function ESignatureDialog({
               }}
               placeholder="请输入您的账户密码"
               autoFocus
+              autoComplete="new-password"
             />
           </div>
 
