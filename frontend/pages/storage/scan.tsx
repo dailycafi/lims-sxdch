@@ -85,14 +85,33 @@ export default function StorageScanPage() {
 
         if (entity.type === 'box') {
            // Operation Logic: 
-           // If we are in a Rack context, maybe we want to Assign this box to this rack?
-           // Or just show info.
            if (context.rack) {
-               // Assign Box to Rack logic (Need API for this)
-               // For now, just show match
-               setScanResult({ type: 'box', data: entity.data, message: `扫描到盒子: ${entity.data.name}`, contextMatch: true });
+               // Assign Box to Rack logic
+               try {
+                   // Call API to move box
+                   await api.post(`/storage/boxes/${entity.id}/move`, {
+                       rack_id: context.rack.id
+                   });
+                   
+                   setScanResult({ 
+                       type: 'success', 
+                       message: `盒子 ${entity.data.name} 已入库`, 
+                       detail: `位置: ${context.freezer?.name} > ${context.shelf?.name} > ${context.rack?.name}`,
+                       contextMatch: true 
+                   });
+               } catch (err) {
+                   setScanResult({ type: 'error', message: '入库失败', detail: '无法移动盒子到当前架子' });
+               }
            } else {
-               setScanResult({ type: 'box', data: entity.data, message: `扫描到盒子: ${entity.data.name}`, contextMatch: false });
+               // Check if box has location
+               const locationStr = entity.data.rack_id ? "已入库 (查看详情)" : "未入库";
+               setScanResult({ 
+                   type: 'box', 
+                   data: entity.data, 
+                   message: `扫描到盒子: ${entity.data.name}`, 
+                   detail: locationStr,
+                   contextMatch: false 
+               });
            }
            return;
         }
@@ -175,10 +194,13 @@ export default function StorageScanPage() {
                   ref={inputRef}
                   value={barcode}
                   onChange={e => setBarcode(e.target.value)}
-                  placeholder="扫描条码..."
-                  className="text-lg h-12 font-mono"
+                  placeholder="扫描或手动输入条码..."
+                  className="text-lg h-12 font-mono flex-1"
                   autoComplete="off"
                 />
+                <Button type="submit" className="h-12 !px-6 whitespace-nowrap shrink-0 min-w-fit" disabled={loading}>
+                  {loading ? '查询中...' : '确认'}
+                </Button>
               </div>
             </div>
           </form>
@@ -224,16 +246,14 @@ export default function StorageScanPage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <Badge color="purple">盒子</Badge>
-                    <Text className="text-xl font-bold font-mono">{scanResult.data.code || scanResult.data.name}</Text>
+                    <Text className="text-xl font-bold font-mono">{scanResult.data?.code || scanResult.data?.name || '未知'}</Text>
                   </div>
                   <Text>{scanResult.message}</Text>
-                  {scanResult.contextMatch ? (
-                      <div className="bg-green-100 text-green-800 p-2 rounded text-sm text-center font-bold">
-                          ✓ 已匹配当前架子位置 (模拟操作)
-                      </div>
-                  ) : (
-                      <div className="bg-yellow-100 text-yellow-800 p-2 rounded text-sm text-center">
-                          注意：当前未选定架子上下文，仅查看信息
+                  <Text className="text-sm text-zinc-500">{scanResult.detail}</Text>
+                  
+                  {!scanResult.contextMatch && !scanResult.data?.rack_id && (
+                      <div className="bg-amber-100 text-amber-800 p-3 rounded text-sm text-center font-bold mt-2">
+                          ⚠️ 该盒子尚未入库，请先扫描架子条码以进行入库操作
                       </div>
                   )}
                 </div>

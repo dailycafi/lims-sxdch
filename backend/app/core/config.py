@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "LIMS System"
     DEBUG: bool = False
     
+    # 七牛云配置
+    QINIU_ACCESS_KEY: Optional[str] = None
+    QINIU_SECRET_KEY: Optional[str] = None
+    QINIU_BUCKET_NAME: Optional[str] = None
+    QINIU_BUCKET_DOMAIN: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

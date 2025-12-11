@@ -339,6 +339,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <ClipboardDocumentListIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>清点入库</SidebarLabel>
                   </SidebarItem>
+                  <SidebarItem href="/storage" current={isCurrentPath('/storage')}>
+                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>存储设备</SidebarLabel>
+                  </SidebarItem>
                   <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
                     <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本作业</SidebarLabel>

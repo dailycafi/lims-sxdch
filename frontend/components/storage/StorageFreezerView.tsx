@@ -13,12 +13,17 @@ export interface StorageStructure {
 interface StorageFreezerViewProps {
   structure: StorageStructure;
   onBoxSelect: (freezer: string, shelf: string, rack: string, box: string) => void;
+  // 是否允许选择架子位置（而不是必须选择已有盒子）
+  allowRackSelect?: boolean;
+  onRackSelect?: (freezer: string, shelf: string, rack: string) => void;
   className?: string;
 }
 
 export function StorageFreezerView({
   structure,
   onBoxSelect,
+  allowRackSelect = false,
+  onRackSelect,
   className
 }: StorageFreezerViewProps) {
   const [selectedFreezer, setSelectedFreezer] = useState<string>(structure.freezers[0] || '');
@@ -86,20 +91,57 @@ export function StorageFreezerView({
         ) : !selectedShelf ? (
           <div className="space-y-4">
             <Text className="font-medium">冰箱 {selectedFreezer} 概览</Text>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {shelves.map(shelf => (
-                <div 
-                  key={shelf}
-                  onClick={() => setSelectedShelf(shelf)}
-                  className="p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-zinc-50 hover:bg-blue-50 transition-colors"
-                >
-                  <Text className="font-bold text-lg mb-1">{shelf}</Text>
-                  <Text className="text-xs text-zinc-500">
-                    {Object.keys(structure.hierarchy[selectedFreezer][shelf] || {}).length} 个架子
-                  </Text>
-                </div>
-              ))}
-            </div>
+            {shelves.length === 0 ? (
+              <div className="text-center py-8 bg-amber-50 border border-amber-200 rounded-lg">
+                <Text className="text-amber-800 mb-2">该冰箱暂无层</Text>
+                {allowRackSelect && (
+                  <div className="mt-4">
+                    <Text className="text-sm text-amber-700 mb-2">输入新层名称：</Text>
+                    <div className="flex gap-2 justify-center">
+                      <input
+                        type="text"
+                        placeholder="如：Layer 1"
+                        className="px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const value = (e.target as HTMLInputElement).value.trim();
+                            if (value) {
+                              setSelectedShelf(value);
+                            }
+                          }
+                        }}
+                      />
+                      <Button 
+                        onClick={(e) => {
+                          const input = (e.target as HTMLElement).parentElement?.querySelector('input');
+                          const value = input?.value?.trim();
+                          if (value) {
+                            setSelectedShelf(value);
+                          }
+                        }}
+                      >
+                        确定
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {shelves.map(shelf => (
+                  <div 
+                    key={shelf}
+                    onClick={() => setSelectedShelf(shelf)}
+                    className="p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-zinc-50 hover:bg-blue-50 transition-colors"
+                  >
+                    <Text className="font-bold text-lg mb-1">{shelf}</Text>
+                    <Text className="text-xs text-zinc-500">
+                      {Object.keys(structure.hierarchy[selectedFreezer][shelf] || {}).length} 个架子
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : !selectedRack ? (
           <div className="space-y-4">
@@ -107,20 +149,57 @@ export function StorageFreezerView({
                <Button plain onClick={() => setSelectedShelf('')}>← 返回冰箱</Button>
                <Text className="font-medium">{selectedFreezer} / {selectedShelf} 概览</Text>
              </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {racks.map(rack => (
-                <div 
-                  key={rack}
-                  onClick={() => setSelectedRack(rack)}
-                  className="p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-zinc-50 hover:bg-blue-50 transition-colors"
-                >
-                  <Text className="font-bold text-lg mb-1">{rack}</Text>
-                  <Text className="text-xs text-zinc-500">
-                    {(structure.hierarchy[selectedFreezer][selectedShelf][rack] || []).length} 个盒子
-                  </Text>
-                </div>
-              ))}
-            </div>
+            {racks.length === 0 ? (
+              <div className="text-center py-8 bg-amber-50 border border-amber-200 rounded-lg">
+                <Text className="text-amber-800 mb-2">该层暂无架子</Text>
+                {allowRackSelect && (
+                  <div className="mt-4">
+                    <Text className="text-sm text-amber-700 mb-2">输入新架子名称：</Text>
+                    <div className="flex gap-2 justify-center">
+                      <input
+                        type="text"
+                        placeholder="如：Rack A"
+                        className="px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const value = (e.target as HTMLInputElement).value.trim();
+                            if (value) {
+                              setSelectedRack(value);
+                            }
+                          }
+                        }}
+                      />
+                      <Button 
+                        onClick={(e) => {
+                          const input = (e.target as HTMLElement).parentElement?.querySelector('input');
+                          const value = input?.value?.trim();
+                          if (value) {
+                            setSelectedRack(value);
+                          }
+                        }}
+                      >
+                        确定
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {racks.map(rack => (
+                  <div 
+                    key={rack}
+                    onClick={() => setSelectedRack(rack)}
+                    className="p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-zinc-50 hover:bg-blue-50 transition-colors"
+                  >
+                    <Text className="font-bold text-lg mb-1">{rack}</Text>
+                    <Text className="text-xs text-zinc-500">
+                      {(structure.hierarchy[selectedFreezer][selectedShelf][rack] || []).length} 个盒子
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -128,23 +207,46 @@ export function StorageFreezerView({
                <Button plain onClick={() => setSelectedRack('')}>← 返回层</Button>
                <Text className="font-medium">{selectedFreezer} / {selectedShelf} / {selectedRack} - 盒子列表</Text>
              </div>
-            {boxes.length === 0 ? (
-              <div className="text-zinc-400 py-8 text-center">该位置没有盒子</div>
-            ) : (
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-                {boxes.map(box => (
-                  <div 
-                    key={box}
-                    onClick={() => onBoxSelect(selectedFreezer, selectedShelf, selectedRack, box)}
-                    className="aspect-square flex items-center justify-center p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-white shadow-sm hover:shadow-md transition-all"
-                  >
-                    <div className="text-center">
-                      <div className="mb-1">📦</div>
-                      <Text className="font-medium text-sm truncate px-1">{box}</Text>
-                    </div>
-                  </div>
-                ))}
+            
+            {/* 允许选择架子位置放置新盒子 */}
+            {allowRackSelect && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                <div>
+                  <Text className="font-medium text-green-800">选择此架子位置</Text>
+                  <Text className="text-sm text-green-600">
+                    将样本盒放置到 {selectedFreezer} / {selectedShelf} / {selectedRack}
+                  </Text>
+                </div>
+                <Button 
+                  onClick={() => onRackSelect?.(selectedFreezer, selectedShelf, selectedRack)}
+                >
+                  确认放置
+                </Button>
               </div>
+            )}
+
+            {boxes.length === 0 ? (
+              <div className="text-zinc-400 py-8 text-center">
+                {allowRackSelect ? '此位置暂无盒子，可放置新盒子' : '该位置没有盒子'}
+              </div>
+            ) : (
+              <>
+                <Text className="text-sm text-zinc-500">已有盒子（可选择）：</Text>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+                  {boxes.map(box => (
+                    <div 
+                      key={box}
+                      onClick={() => onBoxSelect(selectedFreezer, selectedShelf, selectedRack, box)}
+                      className="aspect-square flex items-center justify-center p-4 border border-zinc-200 rounded-lg hover:border-blue-500 cursor-pointer bg-white shadow-sm hover:shadow-md transition-all"
+                    >
+                      <div className="text-center">
+                        <div className="mb-1">📦</div>
+                        <Text className="font-medium text-sm truncate px-1">{box}</Text>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

@@ -66,6 +66,12 @@ export function StorageLocationPicker({ onSelect, onCancel }: StorageLocationPic
     setSelectedBox({ freezer, shelf, rack, box });
   };
 
+  // 选择架子位置（放置新盒子）
+  const handleRackSelect = (freezer: string, shelf: string, rack: string) => {
+    // 直接调用 onSelect，box 参数为 'new'（表示放置新盒子）
+    onSelect({ freezer, shelf, rack, box: 'new' });
+  };
+
   const handleConfirmBox = () => {
     if (selectedBox) {
       onSelect(selectedBox);
@@ -83,6 +89,8 @@ export function StorageLocationPicker({ onSelect, onCancel }: StorageLocationPic
           <StorageFreezerView 
             structure={structure} 
             onBoxSelect={handleBoxSelect}
+            allowRackSelect={true}
+            onRackSelect={handleRackSelect}
           />
         </div>
       ) : (

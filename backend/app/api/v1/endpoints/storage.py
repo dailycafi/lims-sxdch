@@ -188,3 +188,38 @@ async def create_box(
     await db.refresh(db_box)
     return db_box
 
+@router.post("/boxes/{box_id}/move")
+async def move_box(
+    box_id: int,
+    location_data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)] = None
+):
+    """Move box to a new rack"""
+    rack_id = location_data.get("rack_id")
+    if not rack_id:
+        raise HTTPException(status_code=400, detail="Target rack_id is required")
+
+    # Find box
+    result = await db.execute(select(StorageBox).where(StorageBox.id == box_id))
+    box = result.scalar_one_or_none()
+    if not box:
+        raise HTTPException(status_code=404, detail="Box not found")
+
+    # Find rack
+    result = await db.execute(select(StorageRack).where(StorageRack.id == rack_id))
+    rack = result.scalar_one_or_none()
+    if not rack:
+        raise HTTPException(status_code=404, detail="Target rack not found")
+
+    # Update location
+    box.rack_id = rack_id
+    
+    # Also update all samples in this box to reflect the new location
+    # Find freezer/shelf info from rack relation
+    # Note: This requires complex join or just update sample denormalized fields if we keep them synced
+    # For now, let's assume sample location is derived from box relation or we update it here
+    
+    await db.commit()
+    
+    return {"message": "Box moved successfully"}

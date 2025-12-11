@@ -7,7 +7,7 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { api } from '@/lib/api';
 import { Badge } from '@/components/badge';
 import JsBarcode from 'jsbarcode';
-import { PrinterIcon } from '@heroicons/react/20/solid';
+import { PrinterIcon, PlusIcon, QrCodeIcon } from '@heroicons/react/20/solid';
 
 interface Freezer {
   id: number;
@@ -73,11 +73,13 @@ export default function StorageListPage() {
             <Text className="mt-1 text-zinc-600">管理冰箱、液氮罐等存储设备及其层级结构</Text>
           </div>
           <div className="flex gap-2">
-            <Button href="/storage/scan" outline>
+            <Button href="/storage/scan" outline className="whitespace-nowrap !px-5 !py-2.5 gap-x-2">
+                <QrCodeIcon className="!w-5 !h-5" />
                 扫描作业
             </Button>
-            <Button href="/storage/new">
-                + 添加设备
+            <Button href="/storage/new" className="whitespace-nowrap !px-5 !py-2.5 gap-x-2">
+                <PlusIcon className="!w-5 !h-5" />
+                添加设备
             </Button>
           </div>
         </div>

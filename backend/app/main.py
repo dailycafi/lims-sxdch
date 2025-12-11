@@ -5,11 +5,13 @@ if not hasattr(bcrypt, '__about__'):
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.database import engine
 from app.models.auth import RefreshToken
 import logging
+import os
 
 # 配置日志级别 - 调试时改为 WARNING 以查看认证日志
 logging.basicConfig(level=logging.WARNING)
@@ -31,6 +33,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 确保上传目录存在
+os.makedirs("uploads", exist_ok=True)
+
+# 挂载静态文件服务，用于访问上传的文件（兜底方案）
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # 注册API路由
 app.include_router(api_router, prefix="/api/v1")

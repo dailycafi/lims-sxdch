@@ -135,10 +135,10 @@ export default function FreezerDetailPage() {
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); handlePrintBarcode(shelf.barcode || `${freezer.name}-${shelf.name}`, shelf.name); }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 rounded"
+                    className="p-1 text-zinc-400 hover:text-blue-600 hover:bg-zinc-100 rounded ml-2"
                     title="打印层条码"
                   >
-                    <PrinterIcon className="w-4 h-4 text-zinc-500"/>
+                    <PrinterIcon className="w-4 h-4"/>
                   </button>
                 </div>
               ))}
@@ -173,10 +173,10 @@ export default function FreezerDetailPage() {
                         </div>
                         
                         {/* Print Rack Barcode */}
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-2 right-2">
                             <button 
                                 onClick={(e) => { e.stopPropagation(); handlePrintBarcode(rack.barcode || rack.name, rack.name); }}
-                                className="p-1 hover:bg-zinc-100 rounded text-zinc-400 hover:text-blue-600"
+                                className="p-1 text-zinc-400 hover:text-blue-600 hover:bg-zinc-100 rounded"
                                 title="打印架子条码"
                             >
                                 <PrinterIcon className="w-4 h-4"/>

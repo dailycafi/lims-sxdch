@@ -209,6 +209,61 @@ async def get_boxes(
     return boxes
 
 
+@router.get("/storage/boxes/available")
+async def get_available_boxes(
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取有剩余容量的样本盒列表（用于清点时选择）"""
+    from app.models.storage import StorageBox
+    
+    # 查询每个盒子已使用的槽位数（从 Sample 表）
+    used_query = select(
+        Sample.box_code,
+        func.count(Sample.id).label('used_slots')
+    ).where(
+        Sample.box_code.isnot(None)
+    ).group_by(Sample.box_code)
+    
+    used_result = await db.execute(used_query)
+    used_map = {row.box_code: row.used_slots for row in used_result.all()}
+    
+    available_boxes = []
+    seen_barcodes = set()
+    
+    # 1. 从 StorageBox 表获取正式注册的盒子
+    result = await db.execute(select(StorageBox))
+    storage_boxes = result.scalars().all()
+    
+    for box in storage_boxes:
+        used_slots = used_map.get(box.barcode, 0)
+        capacity = box.rows * box.cols if box.rows and box.cols else 100
+        
+        # 只返回有剩余容量的盒子
+        if used_slots < capacity:
+            available_boxes.append({
+                "id": box.id,
+                "barcode": box.barcode,
+                "capacity": capacity,
+                "usedSlots": used_slots
+            })
+            seen_barcodes.add(box.barcode)
+    
+    # 2. 从 Sample.box_code 获取扫描过程中创建的盒子（未在 StorageBox 中注册的）
+    for box_code, used_slots in used_map.items():
+        if box_code not in seen_barcodes:
+            capacity = 100  # 默认容量
+            if used_slots < capacity:
+                available_boxes.append({
+                    "id": hash(box_code) % 1000000,  # 生成一个伪ID
+                    "barcode": box_code,
+                    "capacity": capacity,
+                    "usedSlots": used_slots
+                })
+    
+    return available_boxes
+
+
 @router.post("/storage/boxes")
 async def create_box(
     box_data: dict,
@@ -611,41 +666,62 @@ async def receive_samples(
         )
     
     import os
+    from app.services.qiniu_service import qiniu_service
     
     # 保存温度文件
     temperature_file_path = None
     if temperature_file:
-        # 创建上传目录
-        upload_dir = "uploads/temperature"
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # 生成唯一文件名
         file_extension = os.path.splitext(temperature_file.filename)[1]
-        file_name = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{file_extension}"
-        file_path = os.path.join(upload_dir, file_name)
+        # 使用统一的文件名格式
+        file_name_base = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        file_name = f"{file_name_base}{file_extension}"
         
-        # 保存文件
-        with open(file_path, "wb") as f:
-            content = await temperature_file.read()
-            f.write(content)
+        file_content = await temperature_file.read()
         
-        temperature_file_path = file_path
+        # 优先尝试上传到七牛云
+        qiniu_key = f"temperature/{file_name}"
+        qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
+        
+        if qiniu_url:
+            temperature_file_path = qiniu_url
+        else:
+            # 回退到本地存储
+            upload_dir = "uploads/temperature"
+            os.makedirs(upload_dir, exist_ok=True)
+            file_path = os.path.join(upload_dir, file_name)
+            
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+            
+            # 保存为相对URL
+            temperature_file_path = f"/uploads/temperature/{file_name}"
     
     # 保存快递单照片
     express_photo_paths = []
     if express_photos:
-        upload_dir = "uploads/express_photos"
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        for photo in express_photos:
+        for idx, photo in enumerate(express_photos):
             file_extension = os.path.splitext(photo.filename)[1]
-            file_name = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(express_photo_paths)}{file_extension}"
-            file_path = os.path.join(upload_dir, file_name)
+            file_name_base = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{idx}"
+            file_name = f"{file_name_base}{file_extension}"
             
-            with open(file_path, "wb") as f:
-                content = await photo.read()
-                f.write(content)
-            express_photo_paths.append(file_path)
+            file_content = await photo.read()
+            
+            # 优先尝试上传到七牛云
+            qiniu_key = f"express_photos/{file_name}"
+            qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
+            
+            if qiniu_url:
+                express_photo_paths.append(qiniu_url)
+            else:
+                # 回退到本地存储
+                upload_dir = "uploads/express_photos"
+                os.makedirs(upload_dir, exist_ok=True)
+                file_path = os.path.join(upload_dir, file_name)
+                
+                with open(file_path, "wb") as f:
+                    f.write(file_content)
+                # 保存为相对URL
+                express_photo_paths.append(f"/uploads/express_photos/{file_name}")
     
     # 创建接收记录
     receive_record = SampleReceiveRecord(
@@ -726,14 +802,49 @@ async def get_expected_samples(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """获取应该清点的样本编号列表"""
+    """获取应该清点的样本编号列表（包含已清点状态）"""
+    # 获取接收记录
+    result = await db.execute(
+        select(SampleReceiveRecord).where(SampleReceiveRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+    
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="接收记录不存在"
+        )
+    
     # TODO: 根据接收记录和项目配置，生成应该清点的样本编号列表
     # 这里返回模拟数据
-    sample_codes = []
+    expected_codes = []
     for i in range(1, 11):  # 模拟10个样本
-        sample_codes.append(f"L2501-CHH-001-PK-{i:02d}-2h-A-a1")
+        expected_codes.append(f"L2501-CHH-001-PK-{i:02d}-2h-A-a1")
     
-    return sample_codes
+    # 查询这些样本在数据库中的实际状态
+    existing_result = await db.execute(
+        select(Sample).where(Sample.sample_code.in_(expected_codes))
+    )
+    existing_samples = {s.sample_code: s for s in existing_result.scalars().all()}
+    
+    # 构建返回数据，包含状态信息
+    samples_with_status = []
+    for code in expected_codes:
+        if code in existing_samples:
+            sample = existing_samples[code]
+            samples_with_status.append({
+                "code": code,
+                "status": "scanned",  # 已存在于数据库，视为已扫描
+                "boxCode": sample.box_code,
+                "specialNotes": sample.special_notes
+            })
+        else:
+            samples_with_status.append({
+                "code": code,
+                "status": "pending"
+            })
+    
+    return samples_with_status
 
 
 @router.post("/receive-records/{record_id}/complete-inventory")
@@ -762,42 +873,73 @@ async def complete_inventory(
             detail="接收记录不存在"
         )
     
-    # 更新状态
-    record.status = "completed"
+    # 检查是否已经完成过清点（允许重新清点 in_progress 状态的记录）
+    if record.status == "completed":
+        # 如果已完成，直接返回成功（幂等操作）
+        return {"message": "该接收记录已完成清点", "already_completed": True}
+    
+    # 先更新状态为 in_progress
+    record.status = "in_progress"
+    await db.commit()
     
     # 保存清点的样本信息
-    samples = inventory_data.get("samples", [])
+    samples_data = inventory_data.get("samples", [])
     boxes = inventory_data.get("boxes", [])
     
     # 辅助字典：记录每个盒子已使用的位置计数
     box_counters = {}  # box_code -> current_count
 
-    # 创建样本记录，关联样本盒
-    for sample_data in samples:
-        if sample_data["status"] == "scanned":
-            box_code = sample_data.get("boxCode")
-            
-            # 计算盒内位置
-            if box_code:
-                if box_code not in box_counters:
-                    box_counters[box_code] = 0
-                box_counters[box_code] += 1
-                position = str(box_counters[box_code])
-            else:
-                position = None
+    try:
+        # 创建或更新样本记录，关联样本盒
+        for sample_data in samples_data:
+            if sample_data["status"] == "scanned":
+                box_code = sample_data.get("boxCode")
+                
+                # 计算盒内位置
+                if box_code:
+                    if box_code not in box_counters:
+                        box_counters[box_code] = 0
+                    box_counters[box_code] += 1
+                    position = str(box_counters[box_code])
+                else:
+                    position = None
 
-            sample = Sample(
-                sample_code=sample_data["code"],
-                project_id=record.project_id,
-                status=SampleStatus.IN_STORAGE,
-                box_code=box_code,
-                position_in_box=position,
-                special_notes=sample_data.get("specialNotes"),
-                created_at=datetime.utcnow()
-            )
-            db.add(sample)
-    
-    await db.commit()
+                # 检查样本是否已存在
+                existing_result = await db.execute(
+                    select(Sample).where(Sample.sample_code == sample_data["code"])
+                )
+                existing_sample = existing_result.scalar_one_or_none()
+                
+                if existing_sample:
+                    # 更新已存在的样本
+                    existing_sample.status = SampleStatus.IN_STORAGE
+                    existing_sample.box_code = box_code
+                    existing_sample.position_in_box = position
+                    existing_sample.special_notes = sample_data.get("specialNotes")
+                    existing_sample.updated_at = datetime.utcnow()
+                else:
+                    # 创建新样本
+                    sample = Sample(
+                        sample_code=sample_data["code"],
+                        project_id=record.project_id,
+                        status=SampleStatus.IN_STORAGE,
+                        box_code=box_code,
+                        position_in_box=position,
+                        special_notes=sample_data.get("specialNotes"),
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(sample)
+        
+        # 所有样本处理完成，更新状态为 completed
+        record.status = "completed"
+        await db.commit()
+    except Exception as e:
+        # 样本处理失败，状态保持 in_progress，下次可以重试
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"样本处理失败: {str(e)}"
+        )
     
     # 创建审计日志
     audit_log = AuditLog(
@@ -902,6 +1044,10 @@ async def assign_storage(
         )
     
     assignments = storage_data.get("assignments", [])
+    receive_record_id = storage_data.get("receive_record_id")
+    # 确保 receive_record_id 是整数
+    if receive_record_id is not None:
+        receive_record_id = int(receive_record_id)
     
     # 更新样本的存储位置
     for assignment in assignments:
@@ -922,7 +1068,7 @@ async def assign_storage(
     audit_log = AuditLog(
         user_id=current_user.id,
         entity_type="storage_assignment",
-        entity_id=storage_data.get("receive_record_id"),
+        entity_id=receive_record_id,
         action="assign",
         details={
             "assignments": assignments

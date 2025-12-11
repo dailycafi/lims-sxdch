@@ -10,6 +10,7 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
 import { 
   QrCodeIcon, 
   CheckCircleIcon, 
@@ -17,9 +18,11 @@ import {
   ArchiveBoxIcon,
   BeakerIcon,
   ExclamationTriangleIcon,
-  CheckIcon
+  CheckIcon,
+  PrinterIcon
 } from '@heroicons/react/20/solid';
 import { clsx } from 'clsx';
+import JsBarcode from 'jsbarcode';
 
 import { StorageLocationPicker } from '@/components/storage/StorageLocationPicker';
 
@@ -85,29 +88,222 @@ export default function SampleInventoryPage() {
   const [scannerActive, setScannerActive] = useState(true);
   const [currentAssigningBox, setCurrentAssigningBox] = useState<SampleBox | null>(null);
   const [assignedBoxes, setAssignedBoxes] = useState<Array<{boxCode: string, location: {freezer: string, shelf: string, rack: string, position: string}}>>([]);
+  const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set());
+  const [availableBoxes, setAvailableBoxes] = useState<Array<{id: number, barcode: string, capacity: number, usedSlots: number}>>([]);
+  const [boxInputMode, setBoxInputMode] = useState<'scan' | 'select'>('scan');
   
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 生成条码图片
+  const generateBarcodeDataUrl = (text: string): string => {
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, text, {
+        format: 'CODE128',
+        width: 2,
+        height: 50,
+        displayValue: true,
+        fontSize: 12,
+        margin: 5
+      });
+      return canvas.toDataURL('image/png');
+    } catch (e) {
+      console.error('Barcode generation failed:', text, e);
+      return '';
+    }
+  };
+
+  // 打印样本条码标签
+  const printSampleBarcodes = () => {
+    const selectedList = samples.filter(s => selectedSamples.has(s.id));
+    if (selectedList.length === 0) {
+      toast.error('请先选择要打印的样本');
+      return;
+    }
+
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (!printWindow) {
+      toast.error('无法打开打印窗口，请检查浏览器设置');
+      return;
+    }
+
+    const projectCode = receiveRecord?.project?.lab_project_code || receiveRecord?.project?.sponsor_project_code || '';
+    const generatedAt = new Date().toLocaleString('zh-CN');
+    
+    // 生成条码
+    const barcodes = selectedList.map(s => ({
+      code: s.code,
+      src: generateBarcodeDataUrl(s.code)
+    }));
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>样本条码标签 - ${projectCode}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 10px; }
+    .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+    .header h2 { font-size: 16px; margin-bottom: 5px; }
+    .header p { font-size: 12px; color: #666; }
+    .labels { 
+      display: grid; 
+      grid-template-columns: repeat(3, 1fr); 
+      gap: 10px;
+    }
+    .label {
+      border: 1px dashed #ccc;
+      padding: 8px;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .label img { max-width: 100%; height: auto; }
+    .label .code { font-size: 10px; color: #333; margin-top: 3px; }
+    @media print {
+      body { padding: 5mm; }
+      .header { border-bottom: 1px solid #000; }
+      .label { border: 1px dashed #999; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>样本条码标签</h2>
+    <p>项目：${projectCode} | 数量：${selectedList.length} | 打印时间：${generatedAt}</p>
+  </div>
+  <div class="labels">
+    ${barcodes.map(item => `
+      <div class="label">
+        <img src="${item.src}" alt="${item.code}"/>
+      </div>
+    `).join('')}
+  </div>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`);
+    printWindow.document.close();
+  };
+
+  // 待清点的样本
+  const pendingSamples = samples.filter(s => s.status === 'pending');
+  
+  // 全选/取消全选 - 勾选用于批量打印等操作
+  const toggleSelectAll = () => {
+    if (selectedSamples.size === samples.length) {
+      setSelectedSamples(new Set());
+    } else {
+      setSelectedSamples(new Set(samples.map(s => s.id)));
+    }
+  };
+
+  // 切换单个样本选择
+  const toggleSampleSelection = (sampleId: string) => {
+    const newSelected = new Set(selectedSamples);
+    if (newSelected.has(sampleId)) {
+      newSelected.delete(sampleId);
+    } else {
+      newSelected.add(sampleId);
+    }
+    setSelectedSamples(newSelected);
+  };
 
   // 自动聚焦逻辑：只要没有弹窗且扫描激活，就保持焦点在输入框
   useEffect(() => {
     if (!isErrorDialogOpen && !isStorageDialogOpen && scannerActive && inputRef.current) {
-      // 只有当焦点不在其他输入框（如备注）时才强制聚焦
-      if (document.activeElement?.tagName !== 'INPUT' || document.activeElement === document.body) {
+      // 检查当前焦点是否在扫码输入框
+      const isAlreadyFocused = document.activeElement === inputRef.current;
+      // 检查是否在其他需要输入的地方（如备注、特殊事项）
+      const isInOtherInput = document.activeElement?.tagName === 'INPUT' && 
+                             document.activeElement !== inputRef.current &&
+                             (document.activeElement as HTMLInputElement).type === 'text';
+      
+      if (!isAlreadyFocused && !isInOtherInput) {
         inputRef.current.focus();
       }
     }
   }, [samples, currentBox, isErrorDialogOpen, isStorageDialogOpen, scannerActive, scanMode]);
 
+  // 点击页面空白处时自动聚焦到扫码输入框
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // 如果点击的不是输入框、按钮、复选框等交互元素，则聚焦到扫码框
+      if (!isErrorDialogOpen && !isStorageDialogOpen && scannerActive && inputRef.current) {
+        const isInteractiveElement = target.closest('input, button, select, textarea, [role="button"], label');
+        if (!isInteractiveElement) {
+          setTimeout(() => inputRef.current?.focus(), 10);
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [isErrorDialogOpen, isStorageDialogOpen, scannerActive]);
+
+  // 全局键盘监听：捕获扫码枪输入（扫码枪通常快速输入字符+回车）
+  useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = 0;
+    
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // 如果弹窗打开或扫描未激活，不处理
+      if (isErrorDialogOpen || isStorageDialogOpen || !scannerActive) return;
+      
+      // 如果已经在输入框中，不处理（让 Input 的 onChange 处理）
+      if (document.activeElement === inputRef.current) return;
+      
+      // 如果在其他输入框（如备注）中，不处理
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      
+      // 如果输入框被禁用，不处理
+      if (scanMode === 'sample' && !currentBox) return;
+      
+      const now = Date.now();
+      
+      // 如果按下回车键，处理缓冲区中的内容
+      if (e.key === 'Enter' && buffer.length > 0) {
+        handleScan(buffer);
+        buffer = '';
+        return;
+      }
+      
+      // 只接受可打印字符
+      if (e.key.length === 1) {
+        // 如果距离上次按键超过100ms，清空缓冲区（扫码枪输入通常很快）
+        if (now - lastKeyTime > 100) {
+          buffer = '';
+        }
+        buffer += e.key;
+        lastKeyTime = now;
+        
+        // 同时将输入同步到输入框
+        if (inputRef.current) {
+          inputRef.current.focus();
+          setCurrentScanCode(prev => {
+            // 如果距离上次按键超过100ms，重新开始
+            if (now - lastKeyTime > 100) {
+              return e.key;
+            }
+            return prev + e.key;
+          });
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [isErrorDialogOpen, isStorageDialogOpen, scannerActive, scanMode, currentBox]);
+
+  // 页面加载时获取数据（只在 id 变化时执行）
   useEffect(() => {
     if (id) {
       fetchReceiveRecord();
       fetchSampleCodes();
+      fetchAvailableBoxes();
       setScannerActive(true);
-      if (!currentBox) {
-        setScanMode('box');
-      }
+      setScanMode('box'); // 初始进入时默认扫描盒子模式
     }
-  }, [id, currentBox]);
+  }, [id]);
 
   const fetchReceiveRecord = async () => {
     try {
@@ -120,14 +316,37 @@ export default function SampleInventoryPage() {
     }
   };
 
+  // 获取可用的样本盒列表
+  const fetchAvailableBoxes = async () => {
+    try {
+      const response = await api.get('/samples/storage/boxes/available');
+      setAvailableBoxes(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch available boxes:', error);
+    }
+  };
+
   const fetchSampleCodes = async () => {
     try {
       const response = await api.get(`/samples/receive-records/${id}/expected-samples`);
-      setSamples(response.data.map((code: string) => ({
-        id: code,
-        code: code,
-        status: 'pending'
-      })));
+      // 新格式：后端返回包含状态的对象数组
+      setSamples(response.data.map((item: any) => {
+        // 兼容旧格式（字符串数组）和新格式（对象数组）
+        if (typeof item === 'string') {
+          return {
+            id: item,
+            code: item,
+            status: 'pending' as const
+          };
+        }
+        return {
+          id: item.code,
+          code: item.code,
+          status: item.status || 'pending',
+          boxCode: item.boxCode,
+          specialNotes: item.specialNotes
+        };
+      }));
     } catch (error) {
       console.error('Failed to fetch sample codes:', error);
     }
@@ -217,17 +436,43 @@ export default function SampleInventoryPage() {
       return;
     }
 
-    // 创建新盒子 - 恢复容量设置
+    // 检查是否是已有的样本盒
+    const existingBox = availableBoxes.find(b => b.barcode === code);
+    const capacity = existingBox ? existingBox.capacity : 100;
+
+    // 创建新盒子
     const newBox: SampleBox = {
       id: code,
       code: code,
-      capacity: 100, // 默认容量100，可以根据实际需求调整
+      capacity: capacity,
       samples: []
     };
 
     setBoxes([...boxes, newBox]);
     setCurrentBox(newBox);
     setScanMode('sample');
+    toast.success(`已选择样本盒: ${code}`);
+  };
+
+  // 从列表选择已有样本盒
+  const handleSelectExistingBox = (box: {id: number, barcode: string, capacity: number, usedSlots: number}) => {
+    if (boxes.find(b => b.code === box.barcode)) {
+      toast.error('该样本盒已经在使用中');
+      return;
+    }
+
+    const remainingCapacity = box.capacity - box.usedSlots;
+    const newBox: SampleBox = {
+      id: box.barcode,
+      code: box.barcode,
+      capacity: remainingCapacity,
+      samples: []
+    };
+
+    setBoxes([...boxes, newBox]);
+    setCurrentBox(newBox);
+    setScanMode('sample');
+    toast.success(`已选择样本盒: ${box.barcode}，剩余容量: ${remainingCapacity}`);
   };
 
   const handleErrorConfirm = async () => {
@@ -277,13 +522,14 @@ export default function SampleInventoryPage() {
     if (!currentAssigningBox) return;
 
     // Add to assigned list
+    // 如果 box 是 'new'，说明是放置到架子位置，使用样本盒自己的编号
     const newAssignment = {
       boxCode: currentAssigningBox.code,
       location: {
         freezer: location.freezer,
         shelf: location.shelf,
         rack: location.rack,
-        position: location.box
+        position: location.box === 'new' ? currentAssigningBox.code : location.box
       }
     };
     
@@ -687,40 +933,128 @@ export default function SampleInventoryPage() {
             </div>
           </div>
 
-          {/* 扫码模式切换 */}
+          {/* 样本盒选择方式 */}
           <div className="mb-4">
-            <Text className="text-sm font-medium mb-2">扫码模式：</Text>
-            <div className="flex gap-2">
+            <Text className="text-sm font-medium mb-2">选择样本盒：</Text>
+            <div className="flex gap-2 mb-3">
               <Button 
-                onClick={() => setScanMode('box')}
-                className={scanMode === 'box' ? 'bg-blue-600' : 'bg-gray-100 text-gray-700'}
+                onClick={() => {
+                  setBoxInputMode('scan');
+                  setScanMode('box');
+                }}
+                outline={boxInputMode !== 'scan'}
+              >
+                <QrCodeIcon className="h-4 w-4" />
+                扫描新盒子
+              </Button>
+              <Button 
+                onClick={() => {
+                  setBoxInputMode('select');
+                  fetchAvailableBoxes(); // 刷新列表
+                }}
+                outline={boxInputMode !== 'select'}
               >
                 <ArchiveBoxIcon className="h-4 w-4" />
-                扫描盒子
+                选择已有盒子
               </Button>
+              <div className="border-l border-zinc-300 mx-2"></div>
               <Button 
                 onClick={() => {
                   if (currentBox) {
                     setScanMode('sample');
                   } else {
-                    alert('请先扫描样本盒！');
+                    toast.error('请先选择或扫描样本盒！');
                   }
                 }}
                 disabled={!currentBox}
-                className={clsx(
-                  scanMode === 'sample' && currentBox ? 'bg-blue-600' : 'bg-gray-100 text-gray-700',
-                  !currentBox && 'opacity-50 cursor-not-allowed'
-                )}
+                outline={!(scanMode === 'sample' && currentBox)}
               >
                 <BeakerIcon className="h-4 w-4" />
                 扫描样本
               </Button>
             </div>
+
+            {/* 扫描模式：显示输入框 */}
+            {boxInputMode === 'scan' && !currentBox && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <Text className="text-sm text-blue-800 mb-2">请扫描样本盒条码或手动输入：</Text>
+                <div className="flex gap-2">
+                  <Input
+                    value={currentScanCode}
+                    onChange={(e) => setCurrentScanCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && currentScanCode.trim()) {
+                        handleBoxScan(currentScanCode.trim());
+                        setCurrentScanCode('');
+                      }
+                    }}
+                    placeholder="扫描或输入盒子条码..."
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button 
+                    onClick={() => {
+                      if (currentScanCode.trim()) {
+                        handleBoxScan(currentScanCode.trim());
+                        setCurrentScanCode('');
+                      }
+                    }}
+                    outline
+                  >
+                    确认
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 选择模式：显示已有盒子列表 */}
+            {boxInputMode === 'select' && !currentBox && (
+              <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
+                <Text className="text-sm text-zinc-700 mb-3">选择一个有剩余容量的样本盒：</Text>
+                {availableBoxes.length === 0 ? (
+                  <div className="text-center py-4">
+                    <Text className="text-zinc-500">暂无可用的样本盒</Text>
+                    <Text className="text-xs text-zinc-400 mt-1">请先扫描添加新盒子</Text>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+                    {availableBoxes.map(box => (
+                      <div
+                        key={box.id}
+                        onClick={() => {
+                          if (!boxes.find(b => b.code === box.barcode)) {
+                            handleSelectExistingBox(box);
+                          }
+                        }}
+                        className={clsx(
+                          "p-3 border rounded-lg cursor-pointer transition-all text-center",
+                          boxes.find(b => b.code === box.barcode)
+                            ? "border-gray-300 bg-gray-100 opacity-50 cursor-not-allowed"
+                            : "border-zinc-200 hover:border-blue-500 hover:bg-blue-50"
+                        )}
+                      >
+                        <Text className="font-mono text-sm font-medium truncate">{box.barcode}</Text>
+                        <Text className="text-xs text-zinc-500">
+                          剩余: {box.capacity - box.usedSlots}/{box.capacity}
+                        </Text>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 扫码输入框 */}
           <div className="space-y-3">
-            <div className="flex gap-2 max-w-2xl">
+            <div 
+              className="flex gap-2 max-w-2xl cursor-text"
+              onClick={() => {
+                if (inputRef.current && !(scanMode === 'sample' && !currentBox)) {
+                  inputRef.current.focus();
+                }
+              }}
+            >
               <Input
                 ref={inputRef}
                 value={currentScanCode}
@@ -728,8 +1062,8 @@ export default function SampleInventoryPage() {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   scanMode === 'sample' 
-                    ? (currentBox ? '扫描样本条码' : '请先扫描样本盒') 
-                    : '扫描样本盒条码'
+                    ? (currentBox ? '点击此处或直接扫码...' : '请先扫描样本盒') 
+                    : '点击此处或直接扫描样本盒条码...'
                 }
                 disabled={scanMode === 'sample' && !currentBox}
                 autoFocus={!(scanMode === 'sample' && !currentBox)}
@@ -809,15 +1143,18 @@ export default function SampleInventoryPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg text-center h-full flex flex-col justify-center">
-                <ExclamationTriangleIcon className="h-12 w-12 mx-auto mb-3 text-amber-500" />
-                <Text className="font-semibold text-amber-800 mb-2">请先扫描样本盒</Text>
-                <Text className="text-sm text-amber-700 mb-4">
+              <div className="p-6 bg-zinc-50 border border-zinc-200 rounded-lg text-center h-full flex flex-col justify-center">
+                <ArchiveBoxIcon className="h-12 w-12 mx-auto mb-3 text-zinc-400" />
+                <Text className="font-semibold text-zinc-700 mb-2">请先扫描样本盒</Text>
+                <Text className="text-sm text-zinc-500 mb-4">
                   扫描样本盒后才能开始扫描样本
                 </Text>
                 <Button 
-                  onClick={() => setScanMode('box')}
-                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={() => {
+                    setScanMode('box');
+                    toast.success('已切换到盒子扫描模式，请扫描样本盒条码');
+                    setTimeout(() => inputRef.current?.focus(), 100);
+                  }}
                 >
                   <ArchiveBoxIcon className="h-4 w-4" />
                   立即扫描样本盒
@@ -867,14 +1204,73 @@ export default function SampleInventoryPage() {
 
         {/* 样本列表 */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-200 bg-gray-50">
+          <div className="px-6 py-4 border-b border-zinc-200 bg-gray-50 flex items-center justify-between">
             <Text className="text-lg font-semibold text-gray-900">样本清单</Text>
+            <div className="flex items-center gap-3">
+              <Text className="text-sm text-zinc-500">
+                已选择 {selectedSamples.size} 个样本
+              </Text>
+              <Button outline onClick={toggleSelectAll}>
+                {selectedSamples.size === samples.length ? '取消全选' : '全选'}
+              </Button>
+              <Button 
+                outline 
+                onClick={printSampleBarcodes}
+                disabled={selectedSamples.size === 0}
+              >
+                <PrinterIcon className="w-4 h-4" />
+                打印条码
+              </Button>
+              {/* 手动标记：给没有扫码枪的用户用 */}
+              <Button 
+                outline 
+                onClick={() => {
+                  if (!currentBox) {
+                    toast.error('请先选择样本盒');
+                    return;
+                  }
+                  const pendingSelected = samples.filter(
+                    s => selectedSamples.has(s.id) && s.status === 'pending'
+                  );
+                  if (pendingSelected.length === 0) {
+                    toast.error('选中的样本中没有待清点的');
+                    return;
+                  }
+                  // 批量标记为已清点
+                  const newSamples = samples.map(s => {
+                    if (selectedSamples.has(s.id) && s.status === 'pending') {
+                      return { ...s, status: 'scanned' as const, boxCode: currentBox.code };
+                    }
+                    return s;
+                  });
+                  setSamples(newSamples);
+                  // 更新盒子
+                  setCurrentBox({
+                    ...currentBox,
+                    samples: [...currentBox.samples, ...pendingSelected.map(s => s.code)]
+                  });
+                  toast.success(`已手动标记 ${pendingSelected.length} 个样本为已清点`);
+                  setSelectedSamples(new Set());
+                }}
+                disabled={selectedSamples.size === 0 || !currentBox || !samples.some(s => selectedSamples.has(s.id) && s.status === 'pending')}
+                title="无扫码枪时，可手动勾选样本后点此标记为已清点"
+              >
+                <CheckCircleIcon className="w-4 h-4" />
+                手动标记清点
+              </Button>
+            </div>
           </div>
           
           {/* 固定表头 */}
           <div className="bg-white border-b border-zinc-200 sticky top-0 z-10">
-            <div className="grid grid-cols-5 gap-4 px-6 py-3 text-sm font-medium text-zinc-700 bg-zinc-50">
+            <div className="grid grid-cols-6 gap-4 px-6 py-3 text-sm font-medium text-zinc-700 bg-zinc-50">
               <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedSamples.size === samples.length && samples.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 mr-3"
+                />
                 <Text className="font-semibold">样本编号</Text>
               </div>
               <div className="flex items-center justify-center">
@@ -889,6 +1285,9 @@ export default function SampleInventoryPage() {
               <div className="flex items-center justify-center">
                 <Text className="font-semibold">备注</Text>
               </div>
+              <div className="flex items-center justify-center">
+                <Text className="font-semibold">操作</Text>
+              </div>
             </div>
           </div>
           
@@ -897,10 +1296,17 @@ export default function SampleInventoryPage() {
             <div className="divide-y divide-zinc-100">
               {samples.map((sample, index) => (
                 <div key={sample.id} className={clsx(
-                  "grid grid-cols-5 gap-4 px-6 py-4 hover:bg-zinc-50 transition-colors",
-                  index % 2 === 0 ? "bg-white" : "bg-zinc-50/30"
+                  "grid grid-cols-6 gap-4 px-6 py-4 hover:bg-zinc-50 transition-colors",
+                  index % 2 === 0 ? "bg-white" : "bg-zinc-50/30",
+                  selectedSamples.has(sample.id) && "bg-blue-50"
                 )}>
                   <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedSamples.has(sample.id)}
+                      onChange={() => toggleSampleSelection(sample.id)}
+                      className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 mr-3"
+                    />
                     <Text className="font-mono text-sm font-medium">{sample.code}</Text>
                   </div>
                   <div className="flex items-center justify-center">
@@ -946,6 +1352,44 @@ export default function SampleInventoryPage() {
                   <div className="flex items-center justify-center">
                     <Text className="text-sm text-zinc-600">{sample.errorReason || '-'}</Text>
                   </div>
+                  <div className="flex items-center justify-center gap-1">
+                    {/* 手动标记为已清点 */}
+                    {sample.status === 'pending' && currentBox && (
+                      <Button 
+                        plain 
+                        onClick={() => {
+                          const newSamples = [...samples];
+                          newSamples[index] = { 
+                            ...newSamples[index], 
+                            status: 'scanned',
+                            boxCode: currentBox.code
+                          };
+                          setSamples(newSamples);
+                          // 将样本加入盒子
+                          setCurrentBox({
+                            ...currentBox,
+                            samples: [...currentBox.samples, sample.code]
+                          });
+                          toast.success(`已手动标记: ${sample.code}`);
+                        }}
+                        className="text-green-600 hover:text-green-700"
+                        title="手动标记为已清点"
+                      >
+                        <CheckCircleIcon className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <Button 
+                      plain 
+                      onClick={() => {
+                        setSelectedSamples(new Set([sample.id]));
+                        setTimeout(() => printSampleBarcodes(), 100);
+                      }}
+                      className="text-zinc-500 hover:text-zinc-700"
+                      title="打印条码"
+                    >
+                      <PrinterIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -970,7 +1414,6 @@ export default function SampleInventoryPage() {
             <Button 
               onClick={handleInventoryComplete}
               disabled={progress.scanned === 0}
-              className="bg-green-600 hover:bg-green-700"
             >
               清点完成 ({progress.scanned}/{progress.total})
             </Button>
