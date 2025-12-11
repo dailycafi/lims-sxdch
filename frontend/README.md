@@ -16,7 +16,7 @@ npm install
 创建 `.env.local` 文件：
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:8002/api/v1
 ```
 
 ### 3. 运行开发服务器
@@ -25,7 +25,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 npm run dev
 ```
 
-访问 http://localhost:3000 查看应用。
+访问 http://localhost:3002 查看应用。
 
 ## 项目结构
 

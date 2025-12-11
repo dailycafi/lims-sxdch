@@ -17,7 +17,7 @@ const getApiUrl = () => {
   // 在开发环境下，直接请求后端，绕过 Next.js 代理
   // 这样可以避免代理过程中 header 丢失或重写问题
   if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-    return 'http://localhost:8000/api/v1';
+    return 'http://localhost:8002/api/v1';
   }
   
   // 在浏览器端（客户端），始终使用相对路径 '/api/v1'

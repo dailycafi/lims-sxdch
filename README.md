@@ -27,10 +27,10 @@ cp .env.example .env
 python init_db.py
 
 # 启动后端服务
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 ```
 
-访问 http://localhost:8000/docs 查看API文档
+访问 http://localhost:8002/docs 查看API文档
 
 ### 2. 前端设置
 
@@ -44,7 +44,7 @@ npm install
 npm run dev
 ```
 
-访问 http://localhost:3000 查看应用
+访问 http://localhost:3002 查看应用
 
 ## 默认账号
 
