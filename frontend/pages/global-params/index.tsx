@@ -10,6 +10,7 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Textarea } from '@/components/textarea';
 import { Tabs } from '@/components/tabs';
+import { SearchInput } from '@/components/search-input';
 import { api } from '@/lib/api';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
@@ -68,6 +69,7 @@ export default function GlobalParamsPage() {
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
   const [selectedOrgType, setSelectedOrgType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // 组织表单数据
   const [orgForm, setOrgForm] = useState({
@@ -339,13 +341,17 @@ export default function GlobalParamsPage() {
     }
   };
 
-  const filteredOrganizations = selectedOrgType === 'all'
-    ? organizations
-    : organizations.filter(org => org.org_type === selectedOrgType);
+  const filteredOrganizations = organizations.filter(org => {
+    const matchType = selectedOrgType === 'all' || org.org_type === selectedOrgType;
+    const matchSearch = searchQuery === '' || 
+      org.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (org.contact_person && org.contact_person.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchType && matchSearch;
+  });
 
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
           <Heading>全局参数管理</Heading>
           <Text className="mt-1 text-zinc-600">管理系统中的组织信息和样本类型配置</Text>
@@ -369,6 +375,12 @@ export default function GlobalParamsPage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
+                <SearchInput
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索组织名称或联系人..."
+                  className="w-64"
+                />
                 <Select
                   value={selectedOrgType}
                   onChange={(e) => setSelectedOrgType(e.target.value)}
