@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
+import Link from 'next/link';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Select } from '@/components/select';
@@ -29,6 +31,12 @@ export function StorageFreezerView({
   const [selectedFreezer, setSelectedFreezer] = useState<string>(structure.freezers[0] || '');
   const [selectedShelf, setSelectedShelf] = useState<string>('');
   const [selectedRack, setSelectedRack] = useState<string>('');
+  const [inputValue, setInputValue] = useState(''); // 用于新建层/架子的输入框
+
+  // 当切换层级时，清空输入框
+  useEffect(() => {
+    setInputValue('');
+  }, [selectedFreezer, selectedShelf, selectedRack]);
 
   // Reset sub-selections when parent changes
   const handleFreezerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -37,48 +45,64 @@ export function StorageFreezerView({
     setSelectedRack('');
   };
 
-  const shelves = selectedFreezer ? Object.keys(structure.hierarchy[selectedFreezer] || {}) : [];
-  const racks = (selectedFreezer && selectedShelf) ? Object.keys(structure.hierarchy[selectedFreezer]?.[selectedShelf] || {}) : [];
+  // 根据当前选择状态计算列表，如果是新建的层/架子（不在 hierarchy 中），手动加入
+  const rawShelves = selectedFreezer ? Object.keys(structure.hierarchy[selectedFreezer] || {}) : [];
+  const shelves = (selectedShelf && !rawShelves.includes(selectedShelf)) ? [...rawShelves, selectedShelf] : rawShelves;
+
+  const rawRacks = (selectedFreezer && selectedShelf) ? Object.keys(structure.hierarchy[selectedFreezer]?.[selectedShelf] || {}) : [];
+  const racks = (selectedRack && !rawRacks.includes(selectedRack)) ? [...rawRacks, selectedRack] : rawRacks;
+  
   const boxes = (selectedFreezer && selectedShelf && selectedRack) 
     ? (structure.hierarchy[selectedFreezer]?.[selectedShelf]?.[selectedRack] || []) 
     : [];
 
   return (
     <div className={clsx("flex flex-col gap-4", className)}>
-      {/* Filters */}
-      <div className="flex gap-4 items-end bg-white p-4 rounded-lg border border-zinc-200 shadow-sm">
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1">冰箱</label>
-          <Select value={selectedFreezer} onChange={handleFreezerChange} className="w-48">
-            <option value="">请选择冰箱</option>
-            {structure.freezers.map(f => <option key={f} value={f}>{f}</option>)}
-          </Select>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1">层 (Shelf)</label>
-          <Select 
-            value={selectedShelf} 
-            onChange={(e) => { setSelectedShelf(e.target.value); setSelectedRack(''); }} 
-            disabled={!selectedFreezer}
-            className="w-32"
-          >
-            <option value="">请选择层</option>
-            {shelves.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+      {/* 顶部工具栏：过滤器 + 管理按钮 */}
+      <div className="flex items-end justify-between bg-white p-4 rounded-lg border border-zinc-200 shadow-sm">
+        <div className="flex gap-4 items-end">
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">冰箱</label>
+            <Select value={selectedFreezer} onChange={handleFreezerChange} className="w-48">
+              <option value="">请选择冰箱</option>
+              {structure.freezers.map(f => <option key={f} value={f}>{f}</option>)}
+            </Select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">层 (Shelf)</label>
+            <Select 
+              value={selectedShelf} 
+              onChange={(e) => { setSelectedShelf(e.target.value); setSelectedRack(''); }} 
+              disabled={!selectedFreezer}
+              className="w-32"
+            >
+              <option value="">请选择层</option>
+              {shelves.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">架 (Rack)</label>
+            <Select 
+              value={selectedRack} 
+              onChange={(e) => setSelectedRack(e.target.value)} 
+              disabled={!selectedShelf}
+              className="w-32"
+            >
+              <option value="">请选择架</option>
+              {racks.map(r => <option key={r} value={r}>{r}</option>)}
+            </Select>
+          </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1">架 (Rack)</label>
-          <Select 
-            value={selectedRack} 
-            onChange={(e) => setSelectedRack(e.target.value)} 
-            disabled={!selectedShelf}
-            className="w-32"
-          >
-            <option value="">请选择架</option>
-            {racks.map(r => <option key={r} value={r}>{r}</option>)}
-          </Select>
+          <Link href="/storage" target="_blank">
+            <Button outline className="text-sm">
+              <Cog6ToothIcon className="w-4 h-4 mr-1" />
+              管理存储结构
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -102,21 +126,24 @@ export function StorageFreezerView({
                         type="text"
                         placeholder="如：Layer 1"
                         className="px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            const value = (e.target as HTMLInputElement).value.trim();
+                            const value = inputValue.trim();
                             if (value) {
                               setSelectedShelf(value);
+                              setInputValue('');
                             }
                           }
                         }}
                       />
                       <Button 
-                        onClick={(e) => {
-                          const input = (e.target as HTMLElement).parentElement?.querySelector('input');
-                          const value = input?.value?.trim();
+                        onClick={() => {
+                          const value = inputValue.trim();
                           if (value) {
                             setSelectedShelf(value);
+                            setInputValue('');
                           }
                         }}
                       >
@@ -160,21 +187,24 @@ export function StorageFreezerView({
                         type="text"
                         placeholder="如：Rack A"
                         className="px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            const value = (e.target as HTMLInputElement).value.trim();
+                            const value = inputValue.trim();
                             if (value) {
                               setSelectedRack(value);
+                              setInputValue('');
                             }
                           }
                         }}
                       />
                       <Button 
-                        onClick={(e) => {
-                          const input = (e.target as HTMLElement).parentElement?.querySelector('input');
-                          const value = input?.value?.trim();
+                        onClick={() => {
+                          const value = inputValue.trim();
                           if (value) {
                             setSelectedRack(value);
+                            setInputValue('');
                           }
                         }}
                       >

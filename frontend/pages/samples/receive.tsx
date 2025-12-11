@@ -168,16 +168,16 @@ export default function SampleReceivePage() {
       <div className="max-w-4xl mx-auto">
         {/* 页面标题 */}
         <div className="mb-6">
-          <Heading>样本接收</Heading>
+            <Heading>样本接收</Heading>
           <Text className="mt-1 text-zinc-600">录入样本接收信息，生成清点任务</Text>
         </div>
 
         {/* 表单主体 */}
         <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
           <div className="p-6 md:p-8 space-y-8">
-            
+
             {/* 第一部分：基础信息 */}
-            <div>
+                    <div>
               <h3 className="text-base font-semibold text-zinc-900 mb-4 flex items-center gap-2">
                 <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
                 基础信息
@@ -187,13 +187,13 @@ export default function SampleReceivePage() {
               {!selectedProjectId ? (
                 <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
                   <InformationCircleIcon className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                  <div>
+                    <div>
                     <h4 className="text-sm font-medium text-amber-800">未选择项目</h4>
                     <p className="text-sm text-amber-700 mt-1">
                       请在页面右上角的项目选择器中选择当前要操作的项目，然后继续填写接收信息。
                     </p>
                   </div>
-                </div>
+                      </div>
               ) : (
                 <div className="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center gap-3">
                   <InformationCircleIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
@@ -207,64 +207,64 @@ export default function SampleReceivePage() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    临床机构/分中心 <span className="text-red-500">*</span>
-                  </label>
-                  <Select
-                    value={formData.clinical_site}
-                    onChange={(e) => setFormData({ ...formData, clinical_site: e.target.value })}
-                    required
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  临床机构/分中心 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.clinical_site}
+                  onChange={(e) => setFormData({ ...formData, clinical_site: e.target.value })}
+                  required
                     className="w-full"
                     disabled={!selectedProjectId}
-                  >
-                    <option value="">请选择临床机构</option>
-                    {clinicalOrgs.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                >
+                  <option value="">请选择临床机构</option>
+                  {clinicalOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    运输单位/部门 <span className="text-red-500">*</span>
-                  </label>
-                  <Select
-                    value={formData.transport_company}
-                    onChange={(e) => setFormData({ ...formData, transport_company: e.target.value })}
-                    required
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  运输单位/部门 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.transport_company}
+                  onChange={(e) => setFormData({ ...formData, transport_company: e.target.value })}
+                  required
                     className="w-full"
                     disabled={!selectedProjectId}
-                  >
-                    <option value="">请选择运输单位</option>
-                    {transportOrgs.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                >
+                  <option value="">请选择运输单位</option>
+                  {transportOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    运输方式 <span className="text-red-500">*</span>
-                  </label>
-                  <Select
-                    value={formData.transport_method}
-                    onChange={(e) => setFormData({ ...formData, transport_method: e.target.value })}
-                    required
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  运输方式 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.transport_method}
+                  onChange={(e) => setFormData({ ...formData, transport_method: e.target.value })}
+                  required
                     className="w-full"
                     disabled={!selectedProjectId}
-                  >
-                    <option value="">请选择运输方式</option>
-                    <option value="cold_chain">冷链运输（2-8℃）</option>
-                    <option value="frozen">冷冻运输（-20℃）</option>
-                    <option value="ultra_frozen">超低温运输（-80℃）</option>
-                    <option value="room_temp">常温运输</option>
-                  </Select>
-                </div>
+                >
+                  <option value="">请选择运输方式</option>
+                  <option value="cold_chain">冷链运输（2-8℃）</option>
+                  <option value="frozen">冷冻运输（-20℃）</option>
+                  <option value="ultra_frozen">超低温运输（-80℃）</option>
+                  <option value="room_temp">常温运输</option>
+                </Select>
+              </div>
               </div>
             </div>
 
@@ -277,46 +277,46 @@ export default function SampleReceivePage() {
                 温度监控
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    温度记录仪编号/序列号 <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    value={formData.temperature_monitor_id}
-                    onChange={(e) => setFormData({ ...formData, temperature_monitor_id: e.target.value })}
-                    placeholder="输入温度记录仪编号"
-                    required
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  温度记录仪编号/序列号 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={formData.temperature_monitor_id}
+                  onChange={(e) => setFormData({ ...formData, temperature_monitor_id: e.target.value })}
+                  placeholder="输入温度记录仪编号"
+                  required
                     className="w-full"
                     disabled={!selectedProjectId}
-                  />
-                </div>
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    温度数据文件
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  温度数据文件
+                </label>
                   <div className="flex items-center gap-3">
                     <label className={!selectedProjectId ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
-                      <input
-                        type="file"
-                        accept=".csv,.xlsx,.xls,.txt,.pdf"
-                        onChange={handleTemperatureFileChange}
-                        className="hidden"
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls,.txt,.pdf"
+                      onChange={handleTemperatureFileChange}
+                      className="hidden"
                         disabled={!selectedProjectId}
-                      />
+                    />
                       <div className="inline-flex items-center justify-center gap-x-2 rounded-lg border px-4 py-2 text-sm font-semibold border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 shadow-sm transition-colors cursor-pointer">
                         <CloudArrowUpIcon className="w-4 h-4 text-zinc-500" />
                         上传文件
-                      </div>
-                    </label>
-                    {temperatureFile ? (
+                    </div>
+                  </label>
+                  {temperatureFile ? (
                       <div className="flex flex-col">
                         <Text className="text-sm font-medium text-zinc-900">{temperatureFile.name}</Text>
                         <Text className="text-xs text-zinc-500">{(temperatureFile.size / 1024).toFixed(1)} KB</Text>
                       </div>
-                    ) : (
-                      <Text className="text-sm text-zinc-500">支持 CSV, Excel, TXT, PDF</Text>
-                    )}
+                  ) : (
+                    <Text className="text-sm text-zinc-500">支持 CSV, Excel, TXT, PDF</Text>
+                  )}
                   </div>
                 </div>
               </div>
@@ -331,103 +331,103 @@ export default function SampleReceivePage() {
                 样本信息
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    样本数量 <span className="text-red-500">*</span>
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  样本数量 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  value={formData.sample_count}
+                  onChange={(e) => setFormData({ ...formData, sample_count: e.target.value })}
+                  placeholder="输入样本数量"
+                  required
+                    className="w-full"
+                    disabled={!selectedProjectId}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  样本状态 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.sample_status}
+                  onChange={(e) => setFormData({ ...formData, sample_status: e.target.value })}
+                  required
+                    className="w-full"
+                    disabled={!selectedProjectId}
+                >
+                  <option value="">请选择样本状态</option>
+                  <option value="good">完好</option>
+                  <option value="damaged">包装破损</option>
+                  <option value="thawed">疑似解冻</option>
+                  <option value="other">其他异常</option>
+                </Select>
+            </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  暂存位置
+                </label>
+                <div className="flex gap-2">
                   <Input
-                    type="number"
-                    value={formData.sample_count}
-                    onChange={(e) => setFormData({ ...formData, sample_count: e.target.value })}
-                    placeholder="输入样本数量"
-                    required
-                    className="w-full"
-                    disabled={!selectedProjectId}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    样本状态 <span className="text-red-500">*</span>
-                  </label>
-                  <Select
-                    value={formData.sample_status}
-                    onChange={(e) => setFormData({ ...formData, sample_status: e.target.value })}
-                    required
-                    className="w-full"
-                    disabled={!selectedProjectId}
-                  >
-                    <option value="">请选择样本状态</option>
-                    <option value="good">完好</option>
-                    <option value="damaged">包装破损</option>
-                    <option value="thawed">疑似解冻</option>
-                    <option value="other">其他异常</option>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    暂存位置
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={formData.storage_location}
-                      onChange={(e) => setFormData({ ...formData, storage_location: e.target.value })}
-                      placeholder="扫描冰箱条码或手动输入"
+                    value={formData.storage_location}
+                    onChange={(e) => setFormData({ ...formData, storage_location: e.target.value })}
+                    placeholder="扫描冰箱条码或手动输入"
                       className="flex-1"
                       disabled={!selectedProjectId}
-                    />
+                  />
                     <Button plain className="px-3" disabled={!selectedProjectId}>
                       <QrCodeIcon className="w-5 h-5" />
-                    </Button>
-                  </div>
+                  </Button>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    快递单及其他照片
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  快递单及其他照片
+                </label>
                   <div className="flex items-center gap-3">
                     <label className={!selectedProjectId ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png"
-                        multiple
-                        onChange={handleExpressPhotosChange}
-                        className="hidden"
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png"
+                      multiple
+                      onChange={handleExpressPhotosChange}
+                      className="hidden"
                         disabled={!selectedProjectId}
-                      />
+                    />
                       <div className="inline-flex items-center justify-center gap-x-2 rounded-lg border px-4 py-2 text-sm font-semibold border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 shadow-sm transition-colors cursor-pointer">
                         <CloudArrowUpIcon className="w-4 h-4 text-zinc-500" />
-                        上传照片
-                      </div>
-                    </label>
-                    {expressPhotos.length > 0 ? (
+                      上传照片
+                    </div>
+                  </label>
+                  {expressPhotos.length > 0 ? (
                       <div className="flex flex-col">
                         <Text className="text-sm font-medium text-green-600">已选择 {expressPhotos.length} 个文件</Text>
                       </div>
-                    ) : (
-                      <Text className="text-sm text-zinc-500">支持 JPG, PNG 格式</Text>
-                    )}
-                  </div>
+                  ) : (
+                    <Text className="text-sm text-zinc-500">支持 JPG, PNG 格式</Text>
+                  )}
                 </div>
               </div>
             </div>
+          </div>
 
           </div>
           
           {/* 底部操作栏 */}
           <div className="bg-zinc-50 px-6 py-4 border-t border-zinc-200 flex items-center justify-end gap-3">
             <Button plain onClick={() => router.back()}>
-              取消
-            </Button>
-            <Button 
-              onClick={handleReceive}
+            取消
+          </Button>
+          <Button 
+            onClick={handleReceive}
               disabled={submitting}
               className="min-w-[120px]"
-            >
+          >
               {submitting ? '提交中...' : '接收完成'}
-            </Button>
+          </Button>
           </div>
         </div>
       </div>

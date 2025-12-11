@@ -599,9 +599,13 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveCodeRule = async () => {
-    // 校验：必须配置至少一个插槽
-    if (!slots.some(s => s !== null)) {
-      toast.error('请至少配置一项编号规则');
+    // 允许仅保存选项配置，不强制要求编号规则插槽
+    // 如果全空则提示
+    const hasSlots = slots.some(s => s !== null);
+    const hasOptions = Object.values(dictionaries).some(arr => arr && arr.length > 0);
+
+    if (!hasSlots && !hasOptions) {
+      toast.error('配置为空，请至少配置一项规则或选项');
       return;
     }
 
@@ -1126,7 +1130,7 @@ export default function ProjectDetailPage() {
         </DialogBody>
         <DialogActions>
           <Button plain onClick={() => setIsConfigDialogOpen(false)}>取消</Button>
-          <Button color="dark" onClick={handleSaveCodeRule} disabled={!slots.some(s => s !== null)} className="shadow-md">保存配置</Button>
+          <Button color="dark" onClick={handleSaveCodeRule} className="shadow-md">保存配置</Button>
         </DialogActions>
       </Dialog>
 

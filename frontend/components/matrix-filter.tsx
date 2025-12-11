@@ -10,7 +10,7 @@ export interface MatrixFilterProps {
   onChange: (selected: string[]) => void;
   onAddOption?: (opt: string) => void;
   action?: React.ReactNode;
-  emptyText?: string;
+  emptyText?: React.ReactNode;
   className?: string;
   height?: string;
 }

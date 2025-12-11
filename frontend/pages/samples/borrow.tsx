@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -74,6 +75,17 @@ function CheckoutTab({ projectId, initialSamples }: { projectId: number | null, 
     target_date: '',
     notes: ''
   });
+
+  const EmptyConfigLink = ({ label }: { label: string }) => (
+    <div className="flex flex-col items-center gap-1">
+      <span>暂无{label}</span>
+      {projectId && (
+        <Link href={`/projects/${projectId}`} className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer">
+          去配置
+        </Link>
+      )}
+    </div>
+  );
 
   // 处理从外部传入的初始样本
   useEffect(() => {
@@ -196,24 +208,28 @@ function CheckoutTab({ projectId, initialSamples }: { projectId: number | null, 
                     options={matrixData.cycles} 
                     selected={selection.cycles} 
                     onChange={(v) => setSelection({...selection, cycles: v})}
+                    emptyText={<EmptyConfigLink label="周期" />}
                  />
                  <MatrixFilter 
                     title="检测类型" 
                     options={matrixData.testTypes} 
                     selected={selection.testTypes} 
                     onChange={(v) => setSelection({...selection, testTypes: v})}
+                    emptyText={<EmptyConfigLink label="检测类型" />}
                  />
                  <MatrixFilter 
                     title="正份 (套)" 
                     options={matrixData.primary} 
                     selected={selection.primary} 
                     onChange={(v) => setSelection({...selection, primary: v})}
+                    emptyText={<EmptyConfigLink label="正份" />}
                  />
                  <MatrixFilter 
                     title="备份 (套)" 
                     options={matrixData.backup} 
                     selected={selection.backup} 
                     onChange={(v) => setSelection({...selection, backup: v})}
+                    emptyText={<EmptyConfigLink label="备份" />}
                  />
             </div>
             <div className="flex justify-end mt-4">
