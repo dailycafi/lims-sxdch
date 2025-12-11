@@ -375,12 +375,13 @@ export default function GlobalParamsPage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
-                <SearchInput
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索组织名称或联系人..."
-                  className="w-64"
-                />
+                <div className="w-96">
+                  <SearchInput
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="搜索组织名称或联系人..."
+                  />
+                </div>
                 <Select
                   value={selectedOrgType}
                   onChange={(e) => setSelectedOrgType(e.target.value)}

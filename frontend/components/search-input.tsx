@@ -7,13 +7,16 @@ export const SearchInput = forwardRef<HTMLInputElement, React.ComponentPropsWith
       <div className="relative">
         <input
           ref={ref}
-          type="search"
+          type="text"
+          data-mode="search"
           {...props}
           className={clsx(
-            'w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm',
+            'w-full rounded-xl border border-gray-200 bg-white text-sm',
+            'data-[mode=search]:!pl-12 data-[mode=search]:!pr-4 data-[mode=search]:!py-2.5',
             'placeholder:text-gray-400',
             'focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20',
             'hover:border-gray-300',
+            // Hide native search UI
             className
           )}
         />
