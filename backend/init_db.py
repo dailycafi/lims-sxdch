@@ -11,7 +11,7 @@ from app.core.security import get_password_hash
 from app.models import *  # 导入所有模型
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import random
 
 
@@ -291,7 +291,7 @@ async def init_db(drop_existing=False):
             sample_status="完好",
             storage_location="临时冷库A区",
             received_by=sample_admin.id,
-            received_at=datetime.utcnow() - timedelta(days=2),
+            received_at=datetime.now(UTC) - timedelta(days=2),
             status="pending"
         )
         
@@ -305,7 +305,7 @@ async def init_db(drop_existing=False):
             sample_status="完好",
             storage_location="临时存储B区",
             received_by=sample_admin.id,
-            received_at=datetime.utcnow() - timedelta(days=1),
+            received_at=datetime.now(UTC) - timedelta(days=1),
             status="completed"
         )
         

@@ -3,20 +3,59 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_BCRYPT_MAX_PASSWORD_BYTES = 72
+_BCRYPT_ROUNDS = 12
+
+
+def _bcrypt_password_bytes(password: str) -> bytes:
+    """
+    bcrypt 仅使用前 72 bytes；bcrypt 4.x 对更长输入会抛 ValueError。
+    为兼容并避免运行时崩溃，这里统一截断到 72 bytes。
+    """
+    if password is None:
+        return b""
+    pw = password.encode("utf-8")
+    return pw[:_BCRYPT_MAX_PASSWORD_BYTES]
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            _bcrypt_password_bytes(plain_password),
+            hashed_password.encode("utf-8"),
+        )
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """获取密码哈希值"""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
+    hashed = bcrypt.hashpw(_bcrypt_password_bytes(password), salt)
+    return hashed.decode("utf-8")
+
+
+class _PwdContextCompat:
+    """
+    向后兼容：历史代码通过 `pwd_context.hash()` / `pwd_context.verify()` 调用。
+    这里提供同名接口，内部委托给当前模块的 bcrypt 实现。
+    """
+
+    def hash(self, secret: str, **kwargs) -> str:  # noqa: ARG002
+        return get_password_hash(secret)
+
+    def verify(self, secret: str, hash: str, **kwargs) -> bool:  # noqa: A002,ARG002
+        return verify_password(secret, hash)
+
+
+# 兼容旧代码导入：from app.core.security import pwd_context
+pwd_context = _PwdContextCompat()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
