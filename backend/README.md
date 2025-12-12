@@ -28,6 +28,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 python init_db.py
 ```
 
+如果你遇到 `passlib/bcrypt` 相关报错（常见于安装了 `bcrypt 4.x`），请按以下方式重装依赖（建议在虚拟环境中执行）：
+
+```bash
+pip uninstall -y bcrypt
+pip install -r requirements.txt --upgrade
+```
+
 这将创建所有数据表并添加默认用户：
 - 管理员: admin / admin123
 - 样本管理员: sample_admin / sample123

@@ -60,6 +60,13 @@ CREATE DATABASE lims_db;
 python init_db.py
 ```
 
+如果你遇到 `passlib/bcrypt` 相关报错（常见于安装了 `bcrypt 4.x`），请按以下方式重装依赖（建议在虚拟环境中执行）：
+
+```bash
+pip uninstall -y bcrypt
+pip install -r requirements.txt --upgrade
+```
+
 这将创建所有必要的数据表并添加默认用户。
 
 ## 常见问题
