@@ -2,7 +2,7 @@
 
 import * as Headless from '@headlessui/react'
 import clsx from 'clsx'
-import { LayoutGroup, motion } from 'framer-motion'
+import { LayoutGroup, motion, type HTMLMotionProps } from 'framer-motion'
 import React, { forwardRef, useId, createContext, useContext, useState, useCallback } from 'react'
 import { TouchTarget } from './button'
 import { Link } from './link'
@@ -95,7 +95,7 @@ export function SidebarSpacer({ className, ...props }: React.ComponentPropsWitho
   return <div aria-hidden="true" {...props} className={clsx(className, 'mt-8 flex-1')} />
 }
 
-export function SidebarHeading({ className, ...props }: React.ComponentPropsWithoutRef<'h3'>) {
+export function SidebarHeading({ className, ...props }: HTMLMotionProps<'h3'>) {
   const { isCollapsed } = useSidebar()
   return (
     <motion.h3 
@@ -112,7 +112,7 @@ export function SidebarHeading({ className, ...props }: React.ComponentPropsWith
   )
 }
 
-export function SidebarContent({ className, children, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+export function SidebarContent({ className, children, ...props }: HTMLMotionProps<'div'>) {
   const { isCollapsed } = useSidebar()
   return (
     <motion.div 
@@ -195,7 +195,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
   )
 })
 
-export function SidebarLabel({ className, ...props }: React.ComponentPropsWithoutRef<'span'>) {
+export function SidebarLabel({ className, ...props }: HTMLMotionProps<'span'>) {
   const { isCollapsed } = useSidebar()
   return (
     <motion.span 

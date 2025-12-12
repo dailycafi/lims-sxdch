@@ -937,37 +937,38 @@ export default function SampleInventoryPage() {
           <div className="mb-4">
             <Text className="text-sm font-medium mb-2">选择样本盒：</Text>
             <div className="flex gap-2 mb-3">
-              <Button 
+              <Button
+                {...(boxInputMode !== 'scan' ? { outline: true as const } : { color: 'dark/zinc' as const })}
                 onClick={() => {
-                  setBoxInputMode('scan');
-                  setScanMode('box');
+                  setBoxInputMode('scan')
+                  setScanMode('box')
                 }}
-                outline={boxInputMode !== 'scan'}
               >
                 <QrCodeIcon className="h-4 w-4" />
                 扫描新盒子
               </Button>
-              <Button 
+
+              <Button
+                {...(boxInputMode !== 'select' ? { outline: true as const } : { color: 'dark/zinc' as const })}
                 onClick={() => {
-                  setBoxInputMode('select');
-                  fetchAvailableBoxes(); // 刷新列表
+                  setBoxInputMode('select')
+                  fetchAvailableBoxes() // 刷新列表
                 }}
-                outline={boxInputMode !== 'select'}
               >
                 <ArchiveBoxIcon className="h-4 w-4" />
                 选择已有盒子
               </Button>
               <div className="border-l border-zinc-300 mx-2"></div>
-              <Button 
+              <Button
+                {...(!(scanMode === 'sample' && currentBox) ? { outline: true as const } : { color: 'dark/zinc' as const })}
                 onClick={() => {
                   if (currentBox) {
-                    setScanMode('sample');
+                    setScanMode('sample')
                   } else {
-                    toast.error('请先选择或扫描样本盒！');
+                    toast.error('请先选择或扫描样本盒！')
                   }
                 }}
                 disabled={!currentBox}
-                outline={!(scanMode === 'sample' && currentBox)}
               >
                 <BeakerIcon className="h-4 w-4" />
                 扫描样本

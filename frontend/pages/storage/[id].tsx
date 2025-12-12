@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
+import { Badge } from '@/components/badge';
 import { api } from '@/lib/api';
 import { Dialog, DialogTitle, DialogBody, DialogActions } from '@/components/dialog';
 import { Input } from '@/components/input';
