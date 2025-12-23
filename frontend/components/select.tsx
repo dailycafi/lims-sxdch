@@ -31,7 +31,7 @@ export const Select = forwardRef(function Select(
         {...props}
         className={clsx([
           // Basic layout - 增加圆角
-          'relative block w-full appearance-none rounded-xl py-[calc(--spacing(2.5)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
+          'relative block w-full appearance-none rounded-xl py-[calc(0.625rem-1px)] sm:py-[calc(0.375rem-1px)]',
           // Horizontal padding - 确保文字有适当的左边距
           multiple
             ? 'px-4 sm:px-3'

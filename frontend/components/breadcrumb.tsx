@@ -22,7 +22,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         <li className="flex-shrink-0">
           <Link
             href="/"
-            className="flex items-center text-zinc-500 hover:text-zinc-700 transition-colors p-1 rounded"
+            className="flex items-center text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors p-1 rounded"
           >
             <HomeIcon className="h-4 w-4" />
             <span className="sr-only">主页</span>
@@ -32,15 +32,15 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         {/* 面包屑项目 */}
         {items.map((item, index) => (
           <li key={index} className="flex items-center flex-shrink-0">
-            <ChevronRightIcon className="h-3 w-3 sm:h-4 sm:w-4 text-zinc-400 mx-1 sm:mx-2 flex-shrink-0" />
+            <ChevronRightIcon className="h-3 w-3 sm:h-4 sm:w-4 text-zinc-400 dark:text-zinc-500 mx-1 sm:mx-2 flex-shrink-0" />
             {item.current || !item.href ? (
-              <span className="text-zinc-900 font-medium text-sm truncate max-w-32 sm:max-w-none">
+              <span className="text-zinc-900 dark:text-white font-medium text-sm truncate max-w-32 sm:max-w-none">
                 {item.label}
               </span>
             ) : (
               <Link
                 href={item.href}
-                className="text-zinc-500 hover:text-zinc-700 transition-colors text-sm truncate max-w-32 sm:max-w-none"
+                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors text-sm truncate max-w-32 sm:max-w-none"
               >
                 {item.label}
               </Link>

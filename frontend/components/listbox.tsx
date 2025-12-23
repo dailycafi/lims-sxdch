@@ -46,11 +46,11 @@ export function Listbox<T>({
           placeholder={placeholder && <span className="block truncate text-zinc-500">{placeholder}</span>}
           className={clsx([
             // Basic layout
-            'relative block w-full appearance-none rounded-lg py-[calc(--spacing(2.5)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
+            'relative block w-full appearance-none rounded-lg py-[calc(0.625rem-1px)] sm:py-[calc(0.375rem-1px)]',
             // Set minimum height for when no value is selected
             'min-h-11 sm:min-h-9',
             // Horizontal padding
-            'pr-[calc(--spacing(7)-1px)] pl-[calc(--spacing(3.5)-1px)] sm:pl-[calc(--spacing(3)-1px)]',
+            'pr-[calc(1.75rem-1px)] pl-[calc(0.875rem-1px)] sm:pl-[calc(0.75rem-1px)]',
             // Typography
             'text-left text-base/6 text-zinc-950 placeholder:text-zinc-500 sm:text-sm/6 dark:text-white forced-colors:text-[CanvasText]',
             // Border
@@ -80,7 +80,7 @@ export function Listbox<T>({
         anchor="selection start"
         className={clsx(
           // Anchor positioning
-          '[--anchor-offset:-1.625rem] [--anchor-padding:--spacing(4)] sm:[--anchor-offset:-1.375rem]',
+          '[--anchor-offset:-1.625rem] [--anchor-padding:1rem] sm:[--anchor-offset:-1.375rem]',
           // Base styles
           'isolate w-max min-w-[calc(var(--button-width)+1.75rem)] scroll-py-1 rounded-xl p-1 select-none',
           // Invisible border that is only visible in `forced-colors` mode for accessibility purposes
@@ -131,7 +131,7 @@ export function ListboxOption<T>({
           <div
             className={clsx(
               // Basic layout
-              'group/option grid cursor-default grid-cols-[--spacing(5)_1fr] items-baseline gap-x-2 rounded-lg py-2.5 pr-3.5 pl-2 sm:grid-cols-[--spacing(4)_1fr] sm:py-1.5 sm:pr-3 sm:pl-1.5',
+              'group/option grid cursor-default grid-cols-[1.25rem_1fr] items-baseline gap-x-2 rounded-lg py-2.5 pr-3.5 pl-2 sm:grid-cols-[1rem_1fr] sm:py-1.5 sm:pr-3 sm:pl-1.5',
               // Typography
               'text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white forced-colors:text-[CanvasText]',
               // Focus

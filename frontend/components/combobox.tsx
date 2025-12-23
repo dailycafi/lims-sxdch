@@ -64,9 +64,9 @@ export function Combobox<T>({
           className={clsx([
             className,
             // Basic layout
-            'relative block w-full appearance-none rounded-lg py-[calc(--spacing(2.5)-1px)] sm:py-[calc(--spacing(1.5)-1px)]',
+            'relative block w-full appearance-none rounded-lg py-[calc(0.625rem-1px)] sm:py-[calc(0.375rem-1px)]',
             // Horizontal padding
-            'pr-[calc(--spacing(10)-1px)] pl-[calc(--spacing(3.5)-1px)] sm:pr-[calc(--spacing(9)-1px)] sm:pl-[calc(--spacing(3)-1px)]',
+            'pr-[calc(2.5rem-1px)] pl-[calc(0.875rem-1px)] sm:pr-[calc(2.25rem-1px)] sm:pl-[calc(0.75rem-1px)]',
             // Typography
             'text-base/6 text-zinc-950 placeholder:text-zinc-500 sm:text-sm/6 dark:text-white',
             // Border
@@ -100,7 +100,7 @@ export function Combobox<T>({
         anchor={anchor}
         className={clsx(
           // Anchor positioning
-          '[--anchor-gap:--spacing(2)] [--anchor-padding:--spacing(4)] sm:data-[anchor~=start]:[--anchor-offset:-4px]',
+          '[--anchor-gap:0.5rem] [--anchor-padding:1rem] sm:data-[anchor~=start]:[--anchor-offset:-4px]',
           // Base styles,
           'isolate min-w-[calc(var(--input-width)+8px)] scroll-py-1 rounded-xl p-1 select-none empty:invisible',
           // Invisible border that is only visible in `forced-colors` mode for accessibility purposes
@@ -145,7 +145,7 @@ export function ComboboxOption<T>({
       {...props}
       className={clsx(
         // Basic layout
-        'group/option grid w-full cursor-default grid-cols-[1fr_--spacing(5)] items-baseline gap-x-2 rounded-lg py-2.5 pr-2 pl-3.5 sm:grid-cols-[1fr_--spacing(4)] sm:py-1.5 sm:pr-2 sm:pl-3',
+        'group/option grid w-full cursor-default grid-cols-[1fr_1.25rem] items-baseline gap-x-2 rounded-lg py-2.5 pr-2 pl-3.5 sm:grid-cols-[1fr_1rem] sm:py-1.5 sm:pr-2 sm:pl-3',
         // Typography
         'text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white forced-colors:text-[CanvasText]',
         // Focus

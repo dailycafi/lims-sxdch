@@ -132,10 +132,10 @@ function SidebarLayoutContent({
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         {/* Navbar on mobile - 调整按钮大小 */}
-        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-200 bg-white/80 backdrop-blur-md px-2 py-2 lg:hidden supports-[backdrop-filter]:bg-white/60">
+        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-200 bg-white/80 dark:bg-zinc-900/80 dark:border-zinc-800 backdrop-blur-md px-2 py-2 lg:hidden supports-[backdrop-filter]:bg-white/60">
           <motion.button
             onClick={() => setShowSidebar(true)}
-            className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-700 transition-all duration-200 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 active:bg-zinc-100"
+            className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 transition-all duration-200 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white active:bg-zinc-100"
             aria-label="打开导航"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -146,7 +146,7 @@ function SidebarLayoutContent({
         </header>
 
         {/* Navbar on desktop - 大屏幕顶部导航栏 */}
-        <header className="sticky top-0 z-20 hidden lg:flex items-center justify-center border-b border-gray-200 bg-white px-6 py-3">
+        <header className="sticky top-0 z-20 hidden lg:flex items-center justify-center border-b border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-6 py-3">
           <div className="flex w-full max-w-7xl items-center">{navbar}</div>
         </header>
 

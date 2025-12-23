@@ -431,10 +431,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         </Sidebar>
       }
     >
-      <main className="flex-1 overflow-y-auto bg-white">
+      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
         {/* 面包屑导航 */}
         {currentBreadcrumb.length > 0 && (
-          <div className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
+          <div className="border-b border-gray-200 bg-white dark:bg-zinc-900 dark:border-zinc-800 px-4 py-3 sm:px-6">
             <Breadcrumb items={currentBreadcrumb} />
           </div>
         )}

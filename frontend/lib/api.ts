@@ -29,7 +29,7 @@ const getApiUrl = () => {
   
   // 在服务端渲染 (SSR) 时，必须使用完整的绝对路径
   // 因为 SSR 是在 Node.js 容器内执行，无法像浏览器那样自动推断域名
-  return 'http://localhost:8000/api/v1';
+  return 'http://localhost:8002/api/v1';
 };
 
 const API_URL = getApiUrl();
