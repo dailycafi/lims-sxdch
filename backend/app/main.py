@@ -61,3 +61,9 @@ async def root():
 async def health_check():
     """健康检查"""
     return {"status": "healthy"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    # 允许通过 python app/main.py 直接运行，默认端口 8002
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8002, reload=True)
