@@ -9,6 +9,8 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
+import { Alert, AlertTitle, AlertDescription, AlertActions } from '@/components/alert';
 import { 
   QrCodeIcon, 
   CheckCircleIcon, 
@@ -47,6 +49,7 @@ export default function BorrowExecutePage() {
   const [samples, setSamples] = useState<SampleItem[]>([]);
   const [currentScanCode, setCurrentScanCode] = useState('');
   const [scanErrors, setScanErrors] = useState<string[]>([]);
+  const [isCompleteConfirmOpen, setIsCompleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -105,21 +108,24 @@ export default function BorrowExecutePage() {
     const totalCount = samples.length;
 
     if (scannedCount < totalCount) {
-      if (!confirm(`还有 ${totalCount - scannedCount} 个样本未扫描，确定要完成领用吗？`)) {
-        return;
-      }
+      setIsCompleteConfirmOpen(true);
+      return;
     }
 
+    executeComplete();
+  };
+
+  const executeComplete = async () => {
     try {
       await api.post(`/samples/borrow-request/${id}/execute`, {
         samples: samples
       });
 
-      alert('领用完成！');
+      toast.success('领用完成！');
       router.push('/samples/borrow');
     } catch (error) {
       console.error('Failed to complete borrow:', error);
-      alert('领用失败，请重试');
+      toast.error('领用失败，请重试');
     }
   };
 
@@ -322,6 +328,20 @@ export default function BorrowExecutePage() {
           </Button>
         </div>
       </div>
+
+      <Alert open={isCompleteConfirmOpen} onClose={setIsCompleteConfirmOpen}>
+        <AlertTitle>确认完成领用</AlertTitle>
+        <AlertDescription>
+          还有 {samples.length - samples.filter(s => s.status === 'scanned').length} 个样本未扫描，确定要完成领用吗？
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => setIsCompleteConfirmOpen(false)}>取消</Button>
+          <Button color="dark/zinc" onClick={() => {
+            setIsCompleteConfirmOpen(false);
+            executeComplete();
+          }}>确认完成</Button>
+        </AlertActions>
+      </Alert>
     </AppLayout>
   );
 }

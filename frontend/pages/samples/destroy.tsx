@@ -271,7 +271,7 @@ export default function SampleDestroyPage() {
         await api.post(`/samples/destroy-request/${pendingAction.id}/execute`, {
           e_signature_reason: reason
         });
-        alert('样本销毁执行成功');
+        toast.success('样本销毁执行成功');
         fetchRequests();
       }
 

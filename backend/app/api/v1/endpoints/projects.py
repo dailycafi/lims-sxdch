@@ -22,6 +22,7 @@ from app.models.audit import AuditLog
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.security import pwd_context
+from app.services.sample_service import generate_sample_codes_logic
 
 router = APIRouter()
 
@@ -200,8 +201,14 @@ async def update_project(
     
     # 检查是否已有样本，如果有则不能修改编号规则
     if project_update.sample_code_rule is not None:
-        # TODO: 检查是否有样本
-        pass
+        sample_count_res = await db.execute(
+            select(func.count()).select_from(Sample).where(Sample.project_id == project_id)
+        )
+        if sample_count_res.scalar_one() > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="项目已有样本，无法修改编号规则"
+            )
     
     update_data = project_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -439,122 +446,7 @@ async def generate_sample_codes(
             detail="请先配置样本编号规则"
         )
     
-    # 解析参数（容错：字符串以逗号分隔也支持）
-    def _parse_list(value):
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return [str(v).strip() for v in value if str(v).strip()]
-        if isinstance(value, str):
-            return [v.strip() for v in value.split(',') if v.strip()]
-        return []
-
-    cycles = _parse_list(generation_params.get("cycles"))
-    test_types = _parse_list(generation_params.get("test_types"))
-    primary = _parse_list(generation_params.get("primary"))  # a1,a2
-    backup = _parse_list(generation_params.get("backup"))    # b1,b2
-    
-    # 新版：临床机构-受试者配对 e.g. [{"clinic":"01","subject":"003"}]
-    clinic_subject_pairs = generation_params.get("clinic_subject_pairs") or []
-    if isinstance(clinic_subject_pairs, list):
-        norm_pairs = []
-        for p in clinic_subject_pairs:
-            if isinstance(p, dict):
-                clinic = str(p.get("clinic", "")).strip()
-                subject = str(p.get("subject", "")).strip()
-                if clinic or subject:
-                    norm_pairs.append({"clinic": clinic, "subject": subject})
-        clinic_subject_pairs = norm_pairs
-    
-    # 兼容旧版：如果没有配对数据，尝试使用旧的 subjects 和 clinic_codes
-    if not clinic_subject_pairs:
-        subjects = _parse_list(generation_params.get("subjects"))
-        clinic_codes = _parse_list(generation_params.get("clinic_codes")) or [""]
-        # 笛卡尔积方式（旧逻辑兼容）
-        for cc in clinic_codes:
-            for subj in (subjects or [""]):
-                clinic_subject_pairs.append({"clinic": cc, "subject": subj})
-    
-    # 如果仍为空，使用默认空值
-    if not clinic_subject_pairs:
-        clinic_subject_pairs = [{"clinic": "", "subject": ""}]
-
-    # 采血序号/时间对 e.g. [{"seq":"01","time":"0h"}]
-    seq_time_pairs = generation_params.get("seq_time_pairs") or []
-    if isinstance(seq_time_pairs, str):
-        # 支持 "01/0h,02/2h"
-        pairs = []
-        for token in seq_time_pairs.split(','):
-            token = token.strip()
-            if not token:
-                continue
-            parts = token.split('/')
-            seq = parts[0].strip() if len(parts) > 0 else ""
-            tm = parts[1].strip() if len(parts) > 1 else ""
-            pairs.append({"seq": seq, "time": tm})
-        seq_time_pairs = pairs
-    else:
-        # 规范化键
-        norm = []
-        for p in seq_time_pairs:
-            if isinstance(p, dict):
-                norm.append({"seq": str(p.get("seq", "")).strip(), "time": str(p.get("time", "")).strip()})
-        seq_time_pairs = norm
-
-    # 元素顺序来自项目规则
-    rule = project.sample_code_rule or {}
-    elements = rule.get("elements", [])
-    order_map = rule.get("order", {})
-    elements = sorted([e for e in elements], key=lambda x: order_map.get(x, 0))
-
-    # 组装可迭代维度（缺省则使用空串以便不参与组合）
-    cycles = cycles or [""]
-    test_types = test_types or [""]
-    primary = primary or []
-    backup = backup or []
-    seq_time_pairs = seq_time_pairs or [{"seq": "", "time": ""}]
-
-    # 辅助：根据元素ID返回该部分的字符串
-    def _part(el: str, clinic_code: str, subject: str, tt: str, st: dict, cycle: str, stype: str) -> str:
-        if el == 'sponsor_code':
-            return project.sponsor_project_code or ''
-        if el == 'lab_code':
-            return project.lab_project_code or ''
-        if el == 'clinic_code':
-            return clinic_code
-        if el == 'subject_id':
-            return subject
-        if el == 'test_type':
-            return tt
-        if el == 'sample_seq':
-            return st.get('seq', '')
-        if el == 'sample_time':
-            return st.get('time', '')
-        if el == 'cycle_group':
-            return cycle
-        if el == 'sample_type':
-            return stype
-        return ''
-
-    generated_codes: list[str] = []
-
-    # 组合：clinic_subject_pair × test_type × seq/time × cycle × sample_type(primary/backup)
-    # 注意：临床机构和受试者是配对关系，不做笛卡尔积
-    sample_types = primary + backup if (primary or backup) else [""]
-    for cs_pair in clinic_subject_pairs:
-        clinic_code = cs_pair.get("clinic", "")
-        subject = cs_pair.get("subject", "")
-        for tt, st, cycle, stype in product(test_types, seq_time_pairs, cycles, sample_types):
-            parts = [_part(el, clinic_code, subject, tt, st, cycle, stype) for el in elements]
-            # 过滤空段（未选择的A-G不显示）
-            parts = [p for p in parts if p != ""]
-            if not parts:
-                continue
-            code = "-".join(parts)
-            generated_codes.append(code)
-
-    # 去重并限制数量
-    unique_codes = list(dict.fromkeys(generated_codes))
+    unique_codes = generate_sample_codes_logic(project, generation_params)
     max_count = int(generation_params.get("max_count", 5000))
     unique_codes = unique_codes[:max_count]
     
@@ -566,14 +458,7 @@ async def generate_sample_codes(
         entity_id=project.id,
         action="generate_sample_codes",
         details={
-            "parameters": {
-                "cycles": cycles,
-                "test_types": test_types,
-                "primary": primary,
-                "backup": backup,
-                "clinic_subject_pairs_count": len(clinic_subject_pairs),
-                "seq_time_pairs": seq_time_pairs,
-            },
+            "parameters": generation_params,
             "count": len(unique_codes)
         }
     )

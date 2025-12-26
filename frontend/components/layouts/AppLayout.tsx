@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { Image } from '@/components/image';
@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import { SidebarLayout } from '@/components/sidebar-layout';
 import { TasksService } from '@/services/tasks.service';
+import { SettingsService } from '@/services/settings.service';
 import { tokenManager } from '@/lib/token-manager';
 import { Breadcrumb, BreadcrumbItem } from '@/components/breadcrumb';
 import { 
@@ -81,6 +82,7 @@ import {
   ClipboardDocumentCheckIcon,
   PlusIcon,
   UserIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -153,10 +155,6 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
     { label: '系统管理', href: '/global-params' },
     { label: '全局参数', current: true }
   ],
-  '/users': [
-    { label: '系统管理', href: '/users' },
-    { label: '用户管理', current: true }
-  ],
   '/audit': [
     { label: '系统管理', href: '/audit' },
     { label: '审计日志', current: true }
@@ -175,6 +173,62 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuthStore();
   const { selectedProjectId } = useProjectStore();
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
+  const lastActivityRef = useRef<number>(Date.now());
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 处理活动检测
+  useEffect(() => {
+    if (!user) return;
+
+    const handleActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    // 监听各种用户活动事件
+    window.addEventListener('mousedown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('scroll', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+
+    // 获取并启动自动登出检查
+    const setupAutoLogout = async () => {
+      try {
+        const timeoutSetting = await SettingsService.getSetting('session_timeout');
+        const timeoutMinutes = timeoutSetting.value || 30;
+        const timeoutMs = timeoutMinutes * 60 * 1000;
+
+        const checkInactivity = () => {
+          const now = Date.now();
+          const inactiveTime = now - lastActivityRef.current;
+
+          if (inactiveTime >= timeoutMs) {
+            console.log(`[AutoLogout] Inactive for ${timeoutMinutes} minutes. Logging out...`);
+            handleLogout();
+          } else {
+            // 继续下一次检查，检查频率为 1 分钟或剩余时间的较小值
+            const nextCheck = Math.min(60000, timeoutMs - inactiveTime);
+            timeoutIdRef.current = setTimeout(checkInactivity, nextCheck);
+          }
+        };
+
+        timeoutIdRef.current = setTimeout(checkInactivity, 60000);
+      } catch (error) {
+        console.error('Failed to setup auto logout:', error);
+      }
+    };
+
+    setupAutoLogout();
+
+    return () => {
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+    };
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -271,22 +325,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* 中间：项目选择器 - 仅在非主页显示 */}
           {router.pathname !== '/' && (
-            <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
-              <div className="w-full max-w-[180px] sm:max-w-xs">
+            <div className="flex flex-1 min-w-0 justify-end overflow-hidden mr-2">
+              <div className="w-full max-w-[200px] sm:max-w-xs">
                 <ProjectSwitcher />
               </div>
-            </div>
-          )}
-
-          {/* 右侧：新建项目按钮 */}
-          {user && (user.role === 'system_admin' || user.role === 'sample_admin') && (
-            <div className="hidden flex-shrink-0 sm:flex">
-              <Link href="/projects/new">
-                <Button color="dark">
-                  <PlusIcon className="h-4 w-4" />
-                  新建项目
-                </Button>
-              </Link>
             </div>
           )}
         </div>
@@ -324,6 +366,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目管理</SidebarLabel>
                   </SidebarItem>
+                  {/* 新建项目移动到这里 */}
+                  {user && (user.role === 'system_admin' || user.role === 'sample_admin') && (
+                    <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
+                      <PlusIcon data-slot="icon" className="!w-4 !h-4" />
+                      <SidebarLabel>新建项目</SidebarLabel>
+                    </SidebarItem>
+                  )}
                 </div>
               </div>
 
@@ -398,10 +447,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <SidebarItem href="/global-params" current={isCurrentPath('/global-params')}>
                       <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>全局参数</SidebarLabel>
-                    </SidebarItem>
-                    <SidebarItem href="/users" current={isCurrentPath('/users')}>
-                      <UsersIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>用户管理</SidebarLabel>
                     </SidebarItem>
                     <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
                       <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />

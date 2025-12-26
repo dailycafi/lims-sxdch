@@ -18,6 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
+from app.models.global_params import SystemSetting
 from app.models.audit import AuditLog
 from app.models.auth import RefreshToken
 from app.schemas.token import LogoutRequest, RefreshTokenRequest, Token
@@ -80,21 +81,31 @@ async def get_current_active_superuser(
 
 # Helpers
 
-ACCESS_TOKEN_EXPIRE_DELTA = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-ACCESS_TOKEN_EXPIRE_SECONDS = int(ACCESS_TOKEN_EXPIRE_DELTA.total_seconds())
 REFRESH_TOKEN_EXPIRE_SECONDS = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+
+
+async def get_token_expiration(db: AsyncSession) -> tuple[timedelta, int]:
+    """从数据库获取访问令牌过期时间，默认为配置文件的设置"""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == "session_timeout"))
+    setting = result.scalar_one_or_none()
+    
+    minutes = setting.value if setting and isinstance(setting.value, int) else settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    delta = timedelta(minutes=minutes)
+    return delta, int(delta.total_seconds())
 
 
 async def _issue_token_pair(
     db: AsyncSession,
     user: User,
     parent_token: Optional[RefreshToken] = None,
-) -> tuple[str, str]:
+) -> tuple[str, str, int]:
     """Create a new access/refresh token pair and persist refresh token state."""
+    
+    expire_delta, expires_in = await get_token_expiration(db)
 
     access_token = create_access_token(
         data={"sub": user.username, "user_id": user.id, "role": user.role.value},
-        expires_delta=ACCESS_TOKEN_EXPIRE_DELTA,
+        expires_delta=expire_delta,
     )
 
     refresh_token_plain = generate_refresh_token()
@@ -112,7 +123,7 @@ async def _issue_token_pair(
     db.add(refresh_token_record)
     await db.flush()
 
-    return access_token, refresh_token_plain
+    return access_token, refresh_token_plain, expires_in
 
 
 @router.post("/login", response_model=Token)
@@ -121,7 +132,7 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     """用户登录"""
-    # 查找用户
+    # ... existing user lookup code ...
     result = await db.execute(select(User).where(User.username == form_data.username))
     user = result.scalar_one_or_none()
     
@@ -146,7 +157,7 @@ async def login(
         token_record.revoked = True
         token_record.revoked_at = datetime.now(timezone.utc)
 
-    access_token, refresh_token = await _issue_token_pair(db, user)
+    access_token, refresh_token, expires_in = await _issue_token_pair(db, user)
 
     await db.commit()
 
@@ -154,7 +165,7 @@ async def login(
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
+        "expires_in": expires_in,
         "refresh_expires_in": REFRESH_TOKEN_EXPIRE_SECONDS,
     }
 
@@ -282,7 +293,7 @@ async def refresh_access_token(
             detail="用户已被禁用"
         )
 
-    access_token, refresh_token = await _issue_token_pair(db, user, parent_token=stored_refresh)
+    access_token, refresh_token, expires_in = await _issue_token_pair(db, user, parent_token=stored_refresh)
 
     await db.commit()
 
@@ -290,7 +301,7 @@ async def refresh_access_token(
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
+        "expires_in": expires_in,
         "refresh_expires_in": REFRESH_TOKEN_EXPIRE_SECONDS,
     }
 

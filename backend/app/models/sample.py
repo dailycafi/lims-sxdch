@@ -79,6 +79,7 @@ class SampleReceiveRecord(Base):
     transport_method = Column(String, nullable=False)
     temperature_monitor_id = Column(String, nullable=False)
     temperature_file_path = Column(String, nullable=True)  # 温度数据文件路径
+    is_over_temperature = Column(Boolean, default=False)  # 是否存在超温情况
     sample_count = Column(Integer, nullable=False)
     sample_status = Column(String, nullable=False)  # 样本状态：完好、破损等
     storage_location = Column(String, nullable=True)  # 暂存位置

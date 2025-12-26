@@ -7,7 +7,9 @@ import { Button } from '@/components/button';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
 import { Dialog, DialogTitle, DialogBody, DialogActions } from '@/components/dialog';
+import { Alert, AlertTitle, AlertDescription, AlertActions } from '@/components/alert';
 import { Textarea } from '@/components/textarea';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/20/solid';
 
@@ -30,7 +32,8 @@ export default function SampleArchivePage() {
   const [isCreateDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [archiveReason, setArchiveReason] = useState('');
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]); // Sample codes
-  // Mock selection for now, ideally use a sample picker component
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -59,20 +62,30 @@ export default function SampleArchivePage() {
       setIsRequestDialogOpen(false);
       setArchiveReason('');
       fetchRequests();
+      toast.success('归档申请已提交');
     } catch (e) {
       console.error('Failed to create request', e);
-      alert('申请失败');
+      toast.error('申请失败');
     }
   };
 
   const handleExecuteArchive = async (id: number) => {
-    if (!confirm('确认执行归档？样本状态将被更新为"已归档"。')) return;
+    setPendingArchiveId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const executeArchive = async () => {
+    if (!pendingArchiveId) return;
     try {
-      await api.post(`/samples/archive-request/${id}/execute`);
+      await api.post(`/samples/archive-request/${pendingArchiveId}/execute`);
       fetchRequests();
+      toast.success('归档已执行');
     } catch (e) {
       console.error('Failed to execute archive', e);
-      alert('执行失败');
+      toast.error('执行失败');
+    } finally {
+      setIsConfirmOpen(false);
+      setPendingArchiveId(null);
     }
   };
 
@@ -159,6 +172,17 @@ export default function SampleArchivePage() {
           <Button onClick={handleCreateRequest}>提交申请</Button>
         </DialogActions>
       </Dialog>
+
+      <Alert open={isConfirmOpen} onClose={setIsConfirmOpen}>
+        <AlertTitle>确认执行归档</AlertTitle>
+        <AlertDescription>
+          确认执行归档操作吗？样本状态将被更新为“已归档”，此操作不可撤销。
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => setIsConfirmOpen(false)}>取消</Button>
+          <Button color="dark/zinc" onClick={executeArchive}>确认归档</Button>
+        </AlertActions>
+      </Alert>
     </AppLayout>
   );
 }

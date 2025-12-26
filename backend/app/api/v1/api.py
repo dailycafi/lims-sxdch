@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, projects, samples, audit, global_params, statistics, deviations_v2 as deviations, archive, tasks, user_access, storage
+from app.api.v1.endpoints import auth, users, projects, samples, audit, global_params, statistics, deviations_v2 as deviations, archive, tasks, user_access, storage, roles
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["认证"])
 api_router.include_router(users.router, prefix="/users", tags=["用户管理"])
+api_router.include_router(roles.router, prefix="/roles", tags=["角色管理"])
 api_router.include_router(projects.router, prefix="/projects", tags=["项目管理"])
 api_router.include_router(samples.router, prefix="/samples", tags=["样本管理"])
 api_router.include_router(storage.router, prefix="/storage", tags=["存储管理"])

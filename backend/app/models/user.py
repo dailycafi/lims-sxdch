@@ -6,7 +6,7 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    """用户角色枚举"""
+    """用户角色枚举（保留用于向后兼容）"""
     SUPER_ADMIN = "super_admin"  # 超级管理员（调试用，可删除任何记录）
     SYSTEM_ADMIN = "system_admin"  # 系统管理员
     LAB_DIRECTOR = "lab_director"  # 研究室主任
@@ -26,7 +26,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False)
+    role = Column(Enum(UserRole), nullable=True)  # 保留用于向后兼容，可为空
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -40,3 +40,4 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
+    roles = relationship("Role", secondary="user_roles", back_populates="users", lazy="selectin")

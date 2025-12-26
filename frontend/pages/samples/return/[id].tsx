@@ -10,6 +10,8 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
+import { Alert, AlertTitle, AlertDescription, AlertActions } from '@/components/alert';
 import { 
   QrCodeIcon, 
   CheckCircleIcon, 
@@ -56,6 +58,10 @@ export default function SampleReturnPage() {
   const [currentBox, setCurrentBox] = useState<SampleBox | null>(null);
   const [boxes, setBoxes] = useState<SampleBox[]>([]);
   const [returnMode, setReturnMode] = useState<'full' | 'partial'>('full');
+  
+  // 新增弹窗确认状态
+  const [isCompleteConfirmOpen, setIsCompleteConfirmOpen] = useState(false);
+  const [isReportPrintConfirmOpen, setIsReportPrintConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -111,17 +117,17 @@ export default function SampleReturnPage() {
     const sampleIndex = samples.findIndex(s => s.sample_code === code);
     
     if (sampleIndex === -1) {
-      alert('样本不在归还清单中');
+      toast.error('样本不在归还清单中');
       return;
     }
 
     if (samples[sampleIndex].status === 'scanned') {
-      alert('该样本已经扫描过了');
+      toast.error('该样本已经扫描过了');
       return;
     }
 
     if (samples[sampleIndex].status !== 'pending_return') {
-      alert('该样本未选择归还');
+      toast.error('该样本未选择归还');
       return;
     }
 
@@ -165,11 +171,14 @@ export default function SampleReturnPage() {
     const selectedCount = samples.filter(s => s.status === 'pending_return' || s.status === 'scanned').length;
 
     if (returningCount < selectedCount) {
-      if (!confirm(`还有 ${selectedCount - returningCount} 个样本未扫描，确定要完成归还吗？`)) {
-        return;
-      }
+      setIsCompleteConfirmOpen(true);
+      return;
     }
 
+    executeComplete();
+  };
+
+  const executeComplete = async () => {
     try {
       await api.post(`/samples/return`, {
         borrow_record_id: id,
@@ -177,15 +186,11 @@ export default function SampleReturnPage() {
         boxes: boxes
       });
 
-      // 询问是否打印样本跟踪表
-      if (confirm('归还完成！是否打印样本跟踪表？')) {
-        printTrackingForm();
-      }
-      
-      router.push('/samples/borrow');
+      // 弹出确认框询问是否打印
+      setIsReportPrintConfirmOpen(true);
     } catch (error) {
       console.error('Failed to complete return:', error);
-      alert('归还失败，请重试');
+      toast.error('归还失败，请重试');
     }
   };
 
@@ -723,6 +728,40 @@ export default function SampleReturnPage() {
           </Button>
         </div>
       </div>
+
+      {/* 归还完成确认 */}
+      <Alert open={isCompleteConfirmOpen} onClose={setIsCompleteConfirmOpen}>
+        <AlertTitle>确认完成归还</AlertTitle>
+        <AlertDescription>
+          还有 {samples.filter(s => s.status === 'pending_return' || s.status === 'scanned').length - samples.filter(s => s.status === 'scanned').length} 个待归还样本未扫描，确定要完成归还吗？
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => setIsCompleteConfirmOpen(false)}>取消</Button>
+          <Button color="dark/zinc" onClick={() => {
+            setIsCompleteConfirmOpen(false);
+            executeComplete();
+          }}>确认完成</Button>
+        </AlertActions>
+      </Alert>
+
+      {/* 归还完成及打印确认 */}
+      <Alert open={isReportPrintConfirmOpen} onClose={() => {}}>
+        <AlertTitle>归还完成</AlertTitle>
+        <AlertDescription>
+          样本已成功归还。是否现在打印样本跟踪表？
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => {
+            setIsReportPrintConfirmOpen(false);
+            router.push('/samples/borrow');
+          }}>暂不打印</Button>
+          <Button color="blue" onClick={() => {
+            setIsReportPrintConfirmOpen(false);
+            printTrackingForm();
+            router.push('/samples/borrow');
+          }}>立即打印</Button>
+        </AlertActions>
+      </Alert>
     </AppLayout>
   );
 }

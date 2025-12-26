@@ -16,13 +16,21 @@ export interface PaginatedResponse<T> {
 }
 
 // 用户相关类型
+export interface RoleSimple {
+  id: number;
+  code: string;
+  name: string;
+}
+
 export interface User {
   id: number;
   username: string;
   full_name: string;
   email: string;
   role: string;
+  roles?: RoleSimple[];  // 新增：用户的角色列表
   is_active: boolean;
+  is_superuser?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +48,60 @@ export interface LoginResponse {
   refresh_expires_in?: number;
   user?: User;
 }
+
+// 角色和权限相关类型
+export interface Permission {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  module: string;
+  created_at: string;
+}
+
+export interface Role {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+  permissions?: Permission[];
+  permission_count?: number;
+}
+
+export interface RoleCreate {
+  code: string;
+  name: string;
+  description?: string;
+  is_active?: boolean;
+  permission_ids: number[];
+}
+
+export interface RoleUpdate {
+  name?: string;
+  description?: string;
+  is_active?: boolean;
+  permission_ids?: number[];
+}
+
+export interface UserCreate {
+  username: string;
+  full_name: string;
+  email: string;
+  password: string;
+  role_ids: number[];
+}
+
+export interface UserUpdate {
+  full_name?: string;
+  email?: string;
+  role_ids?: number[];
+  is_active?: boolean;
+}
+
 
 // 项目相关类型
 export interface Project {
@@ -180,22 +242,29 @@ export interface AuditLog {
 // 偏差管理类型
 export interface Deviation {
   id: number;
-  code: string;
+  deviation_code: string;
   title: string;
   description: string;
-  type: string;
-  severity: 'low' | 'medium' | 'high';
+  category: string;
+  severity: 'minor' | 'major' | 'critical';
   status: string;
-  created_by: number;
+  reported_by: number;
+  impact_assessment: string;
+  immediate_action?: string;
+  project_id?: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface DeviationCreate {
   title: string;
+  severity: 'minor' | 'major' | 'critical';
+  category: string;
   description: string;
-  type: string;
-  severity: 'low' | 'medium' | 'high';
+  impact_assessment: string;
+  immediate_action?: string;
+  project_id?: number | null;
+  sample_ids?: number[];
 }
 
 // 任务中心

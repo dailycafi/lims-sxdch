@@ -24,6 +24,7 @@ import {
 import { clsx } from 'clsx';
 import JsBarcode from 'jsbarcode';
 
+import { Alert, AlertTitle, AlertDescription, AlertBody, AlertActions } from '@/components/alert';
 import { StorageLocationPicker } from '@/components/storage/StorageLocationPicker';
 
 interface ReceiveRecord {
@@ -91,6 +92,10 @@ export default function SampleInventoryPage() {
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set());
   const [availableBoxes, setAvailableBoxes] = useState<Array<{id: number, barcode: string, capacity: number, usedSlots: number}>>([]);
   const [boxInputMode, setBoxInputMode] = useState<'scan' | 'select'>('scan');
+  
+  // 新增弹窗确认状态
+  const [isCompleteConfirmOpen, setIsCompleteConfirmOpen] = useState(false);
+  const [isReportPrintConfirmOpen, setIsReportPrintConfirmOpen] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -362,7 +367,7 @@ export default function SampleInventoryPage() {
 
   const handleSampleScan = (code: string) => {
     if (!currentBox) {
-      alert('请先扫描样本盒，再扫描样本！');
+      toast.error('请先扫描样本盒，再扫描样本！');
       setScanMode('box');
       return;
     }
@@ -382,13 +387,13 @@ export default function SampleInventoryPage() {
     }
 
     if (samples[sampleIndex].status === 'scanned') {
-      alert('该样本已经扫描过了');
+      toast.error('该样本已经扫描过了');
       return;
     }
 
     // 检查盒子容量
     if (currentBox.samples.length >= currentBox.capacity) {
-      alert(`当前样本盒 ${currentBox.code} 已满（${currentBox.capacity}个）！请扫描新的样本盒。`);
+      toast.error(`当前样本盒 ${currentBox.code} 已满（${currentBox.capacity}个）！请扫描新的样本盒。`);
       setScanMode('box');
       setCurrentBox(null);
       return;
@@ -422,17 +427,17 @@ export default function SampleInventoryPage() {
     // 容量警告提示
     const newCount = updatedBox.samples.length;
     if (newCount >= updatedBox.capacity) {
-      alert(`样本盒 ${updatedBox.code} 已满 (${newCount}/${updatedBox.capacity})！下一个样本需要新的样本盒。`);
+      toast.success(`样本盒 ${updatedBox.code} 已满 (${newCount}/${updatedBox.capacity})！下一个样本需要新的样本盒。`);
       setScanMode('box');
       setCurrentBox(null);
     } else if (newCount >= updatedBox.capacity * 0.9) {
-      alert(`注意：样本盒 ${updatedBox.code} 即将满了 (${newCount}/${updatedBox.capacity})！`);
+      toast.success(`注意：样本盒 ${updatedBox.code} 即将满了 (${newCount}/${updatedBox.capacity})！`);
     }
   };
 
   const handleBoxScan = (code: string) => {
     if (boxes.find(box => box.code === code)) {
-      alert('该样本盒已经使用过了');
+      toast.error('该样本盒已经使用过了');
       return;
     }
 
@@ -494,18 +499,21 @@ export default function SampleInventoryPage() {
     const totalCount = samples.filter(s => s.status !== 'error').length;
 
     if (scannedCount < totalCount) {
-      if (!confirm(`还有 ${totalCount - scannedCount} 个样本未清点，确定要完成清点吗？`)) {
-        return;
-      }
+      setIsCompleteConfirmOpen(true);
+      return;
     }
 
+    executeInventoryComplete();
+  };
+
+  const executeInventoryComplete = async () => {
     try {
       await api.post(`/samples/receive-records/${id}/complete-inventory`, {
         samples: samples,
         boxes: boxes
       });
 
-      alert('清点完成，请开始分配存储位置！');
+      toast.success('清点完成，请开始分配存储位置！');
       setIsStorageDialogOpen(true);
       // Reset assignment state
       setAssignedBoxes([]);
@@ -514,7 +522,7 @@ export default function SampleInventoryPage() {
       }
     } catch (error) {
       console.error('Failed to complete inventory:', error);
-      alert('清点失败，请重试');
+      toast.error('清点失败，请重试');
     }
   };
 
@@ -547,7 +555,7 @@ export default function SampleInventoryPage() {
 
   const handleStorageConfirm = async () => {
     if (assignedBoxes.length < boxes.length) {
-      alert('还有样本盒未分配位置！');
+      toast.error('还有样本盒未分配位置！');
       return;
     }
 
@@ -564,15 +572,11 @@ export default function SampleInventoryPage() {
         assignments: storageAssignments
       });
 
-      // 询问是否打印样本清单表
-      if (confirm('入库完成！是否打印样本清单表？')) {
-        printSampleListReport();
-      }
-      
-      router.push('/samples');
+      // 弹出确认框询问是否打印
+      setIsReportPrintConfirmOpen(true);
     } catch (error) {
       console.error('Failed to assign storage:', error);
-      alert('入库失败，请重试');
+      toast.error('入库失败，请重试');
     }
   };
 
@@ -1514,6 +1518,40 @@ export default function SampleInventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* 清点完成确认 */}
+      <Alert open={isCompleteConfirmOpen} onClose={setIsCompleteConfirmOpen}>
+        <AlertTitle>确认完成清点</AlertTitle>
+        <AlertDescription>
+          还有 {samples.filter(s => s.status !== 'error').length - samples.filter(s => s.status === 'scanned').length} 个样本未清点，确定要完成清点并进入入库环节吗？
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => setIsCompleteConfirmOpen(false)}>取消</Button>
+          <Button color="dark/zinc" onClick={() => {
+            setIsCompleteConfirmOpen(false);
+            executeInventoryComplete();
+          }}>确认完成</Button>
+        </AlertActions>
+      </Alert>
+
+      {/* 入库完成及打印确认 */}
+      <Alert open={isReportPrintConfirmOpen} onClose={() => {}}>
+        <AlertTitle>入库完成</AlertTitle>
+        <AlertDescription>
+          所有样本已成功分配存储位置并入库。是否现在打印样本清单表？
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => {
+            setIsReportPrintConfirmOpen(false);
+            router.push('/samples');
+          }}>暂不打印</Button>
+          <Button color="blue" onClick={() => {
+            setIsReportPrintConfirmOpen(false);
+            printSampleListReport();
+            router.push('/samples');
+          }}>立即打印</Button>
+        </AlertActions>
+      </Alert>
     </AppLayout>
   );
 }

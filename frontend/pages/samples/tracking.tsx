@@ -25,94 +25,97 @@ export default function TrackingFormPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('请输入查询内容');
+      return;
+    }
     setLoading(true);
     try {
-      // In real app, we would search borrow/return records
-      // Mock data for demonstration
-      setRecords([
-        {
-          id: 1,
-          request_code: 'BR-20231125-0001',
-          project_code: 'L2501',
-          requester: '张三',
-          type: 'borrow',
-          sample_count: 5,
-          created_at: '2023-11-25T10:00:00'
-        },
-        {
-          id: 2,
-          request_code: 'RR-20231126-0002',
-          project_code: 'L2501',
-          requester: '李四',
-          type: 'return',
-          sample_count: 3,
-          created_at: '2023-11-26T14:30:00'
-        }
-      ]);
+      const response = await api.get(`/samples/tracking/search?query=${searchQuery}`);
+      setRecords(response.data);
+      if (response.data.length === 0) {
+        toast.error('未找到匹配记录');
+      }
     } catch (e) {
       console.error(e);
+      toast.error('查询失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePrint = (record: TrackingRecord) => {
-    const printWindow = window.open('', '', 'width=800,height=600');
-    if (!printWindow) return;
+  const handlePrint = async (record: TrackingRecord) => {
+    // 获取记录详情
+    setLoading(true);
+    try {
+      const response = await api.get(`/samples/borrow-request/${record.id}`);
+      const detail = response.data;
+      const samplesList = detail.samples || [];
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>样本跟踪表 - ${record.request_code}</title>
-          <style>
-            body { font-family: sans-serif; padding: 40px; }
-            h1 { text-align: center; margin-bottom: 30px; }
-            .header { margin-bottom: 20px; line-height: 1.6; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: center; }
-            .footer { margin-top: 40px; display: flex; justify-content: space-between; }
-          </style>
-        </head>
-        <body>
-          <h1>样本跟踪表</h1>
-          <div class="header">
-            <div>项目编号: ${record.project_code}</div>
-            <div>申请单号: ${record.request_code}</div>
-            <div>类型: ${record.type === 'borrow' ? '领用' : '归还'}</div>
-            <div>申请人: ${record.requester}</div>
-            <div>日期: ${new Date(record.created_at).toLocaleDateString()}</div>
-          </div>
-          
-          <table>
-            <thead>
-              <tr>
-                <th>序号</th>
-                <th>样本编号</th>
-                <th>状态</th>
-                <th>备注</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${Array.from({ length: record.sample_count }).map((_, i) => `
+      const printWindow = window.open('', '', 'width=800,height=600');
+      if (!printWindow) return;
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>样本跟踪表 - ${record.request_code}</title>
+            <style>
+              body { font-family: sans-serif; padding: 40px; }
+              h1 { text-align: center; margin-bottom: 30px; }
+              .header { margin-bottom: 20px; line-height: 1.6; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+              th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+              .footer { margin-top: 40px; display: flex; justify-content: space-between; }
+            </style>
+          </head>
+          <body>
+            <h1>样本跟踪表</h1>
+            <div class="header">
+              <div>项目编号: ${record.project_code}</div>
+              <div>申请单号: ${record.request_code}</div>
+              <div>类型: ${record.type === 'borrow' ? '领用' : '归还'}</div>
+              <div>申请人: ${record.requester}</div>
+              <div>日期: ${new Date(record.created_at).toLocaleDateString()}</div>
+            </div>
+            
+            <table>
+              <thead>
                 <tr>
-                  <td>${i + 1}</td>
-                  <td>L2501-SAMPLE-${String(i + 1).padStart(3, '0')}</td>
-                  <td>正常</td>
-                  <td></td>
+                  <th>序号</th>
+                  <th>样本编号</th>
+                  <th>受试者</th>
+                  <th>时间点</th>
+                  <th>备注</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${samplesList.map((s: any, i: number) => `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td style="font-family: monospace;">${s.sample_code}</td>
+                    <td>${s.subject_code || '-'}</td>
+                    <td>${s.collection_time || '-'}</td>
+                    <td></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
 
-          <div class="footer">
-            <div>申请人签名: ______________</div>
-            <div>管理员签名: ______________</div>
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+            <div class="footer">
+              <div>申请人签名: ______________</div>
+              <div>管理员签名: ______________</div>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    } catch (error) {
+      console.error(error);
+      toast.error('获取详情失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

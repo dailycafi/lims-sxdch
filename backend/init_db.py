@@ -18,8 +18,30 @@ import random
 async def drop_all_tables(engine):
     """删除所有表"""
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    print("⚠️  已删除所有数据表")
+        # 对于 PostgreSQL，使用 cascade 或者是临时禁用外键检查
+        try:
+            # 尝试禁用外键触发器 (针对 PostgreSQL)
+            await conn.execute(text("SET session_replication_role = 'replica';"))
+            
+            # 获取所有表名
+            from sqlalchemy import inspect
+            def get_table_names(sync_conn):
+                return inspect(sync_conn).get_table_names()
+            
+            tables = await conn.run_sync(get_table_names)
+            if tables:
+                for table in tables:
+                    await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE;'))
+            
+            await conn.execute(text("SET session_replication_role = 'origin';"))
+            print("⚠️  已删除所有数据表 (使用 CASCADE)")
+        except Exception as e:
+            print(f"尝试高级删除失败: {e}，尝试标准删除...")
+            await conn.run_sync(Base.metadata.drop_all)
+    print("⚠️  已完成数据表清理")
+
+
+from sqlalchemy import text
 
 
 async def init_db(drop_existing=False):
@@ -40,7 +62,49 @@ async def init_db(drop_existing=False):
     async with async_session() as session:
         print("Creating Organizations...")
         # 1. 创建组织机构
-        from app.models.global_params import Organization, GlobalConfiguration
+        from app.models.global_params import Organization, GlobalConfiguration, SystemSetting
+        
+        print("Creating System Settings...")
+        # 0. 创建系统设置
+        session.add_all([
+            SystemSetting(key="session_timeout", value=30, description="自动登出时间（分钟）"),
+            SystemSetting(key="password_complexity_enabled", value=True, description="是否启用密码复杂度校验")
+        ])
+        await session.flush()
+
+        print("Initializing Roles and Permissions...")
+        # 0.1 初始化角色和权限 (逻辑提取自 init_roles.py)
+        from app.models.role import Role, Permission
+        from init_roles import PERMISSIONS, ROLES
+        
+        # 创建或更新权限
+        permission_map = {}
+        for perm_data in PERMISSIONS:
+            permission = Permission(**perm_data)
+            session.add(permission)
+            permission_map[perm_data["code"]] = permission
+        
+        await session.flush()
+        
+        # 创建或更新角色
+        role_objects_map = {}
+        for role_data in ROLES:
+            role_permissions = [
+                permission_map[code] 
+                for code in role_data["permissions"] 
+                if code in permission_map
+            ]
+            role = Role(
+                code=role_data["code"],
+                name=role_data["name"],
+                description=role_data["description"],
+                is_system=role_data["is_system"]
+            )
+            role.permissions = role_permissions
+            session.add(role)
+            role_objects_map[role_data["code"]] = role
+        
+        await session.flush()
         
         # 申办方
         sponsor1 = Organization(
@@ -187,6 +251,8 @@ async def init_db(drop_existing=False):
             role=UserRole.SYSTEM_ADMIN,
             is_superuser=True
         )
+        if 'system_admin' in role_objects_map:
+            admin_user.roles = [role_objects_map['system_admin']]
         
         # 样本管理员
         sample_admin = User(
@@ -196,6 +262,8 @@ async def init_db(drop_existing=False):
             hashed_password=get_password_hash("sample123"),
             role=UserRole.SAMPLE_ADMIN
         )
+        if 'sample_admin' in role_objects_map:
+            sample_admin.roles = [role_objects_map['sample_admin']]
         
         # 项目负责人
         project_lead = User(
@@ -205,6 +273,8 @@ async def init_db(drop_existing=False):
             hashed_password=get_password_hash("project123"),
             role=UserRole.PROJECT_LEAD
         )
+        if 'project_lead' in role_objects_map:
+            project_lead.roles = [role_objects_map['project_lead']]
         
         # 分析测试主管
         test_manager = User(
@@ -214,6 +284,8 @@ async def init_db(drop_existing=False):
             hashed_password=get_password_hash("test123"),
             role=UserRole.TEST_MANAGER
         )
+        if 'test_manager' in role_objects_map:
+            test_manager.roles = [role_objects_map['test_manager']]
         
         # 研究室主任
         lab_director = User(
@@ -223,6 +295,8 @@ async def init_db(drop_existing=False):
             hashed_password=get_password_hash("director123"),
             role=UserRole.LAB_DIRECTOR
         )
+        if 'lab_director' in role_objects_map:
+            lab_director.roles = [role_objects_map['lab_director']]
         
         # 分析员
         analyst = User(
@@ -232,6 +306,8 @@ async def init_db(drop_existing=False):
             hashed_password=get_password_hash("analyst123"),
             role=UserRole.ANALYST
         )
+        if 'analyst' in role_objects_map:
+            analyst.roles = [role_objects_map['analyst']]
         
         session.add_all([admin_user, sample_admin, project_lead, test_manager, lab_director, analyst])
         await session.flush()

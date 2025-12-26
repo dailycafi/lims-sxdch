@@ -37,8 +37,8 @@ export function ProjectSwitcher() {
   const canCreateProject = user?.role === 'system_admin' || user?.role === 'sample_admin';
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="hidden text-sm text-zinc-600 lg:block whitespace-nowrap">当前项目</span>
+    <div className="flex items-center gap-2">
+      <span className="hidden text-xs font-medium text-zinc-500 lg:block whitespace-nowrap">当前项目</span>
       <Select
         value={selectedProjectId ? String(selectedProjectId) : ''}
         onChange={(event) => {
@@ -46,7 +46,7 @@ export function ProjectSwitcher() {
           setSelectedProject(value ? Number(value) : null);
         }}
         disabled={isLoading || projects.length === 0}
-        className="w-full min-w-[120px] sm:min-w-[240px] text-sm"
+        className="w-full min-w-[140px] sm:min-w-[180px] text-xs h-9"
       >
         <option value="">请选择项目</option>
         {projectOptions.map((option) => (

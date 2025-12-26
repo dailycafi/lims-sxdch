@@ -6,6 +6,7 @@ import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Badge } from '@/components/badge';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
 import { Dialog, DialogTitle, DialogBody, DialogActions } from '@/components/dialog';
 import { Input } from '@/components/input';
 import { Field, Label } from '@/components/fieldset';
@@ -62,8 +63,9 @@ export default function FreezerDetailPage() {
       setIsRackDialogOpen(false);
       setRackName('');
       fetchFreezer(); // Refresh
+      toast.success('架子已添加');
     } catch (e) {
-      alert('Failed to add rack');
+      toast.error('添加失败，请重试');
     }
   };
 

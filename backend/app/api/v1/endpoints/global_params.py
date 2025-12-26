@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.global_params import Organization, SampleType, GlobalConfiguration
+from app.models.global_params import Organization, SampleType, GlobalConfiguration, SystemSetting
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
@@ -18,15 +18,31 @@ router = APIRouter()
 class OrganizationCreate(BaseModel):
     name: str
     org_type: str
+    project_id: Optional[int] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
-    contact_email: Optional[EmailStr] = None
+    contact_email: Optional[str] = None
+
+    @field_validator("contact_email")
+    @classmethod
+    def empty_string_to_none(cls, v: Optional[str]) -> Optional[str]:
+        if v == "":
+            return None
+        return v
 
 class OrganizationUpdate(OrganizationCreate):
     audit_reason: str  # 修改理由
 
+    @field_validator("audit_reason")
+    @classmethod
+    def reason_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("修改理由不能为空")
+        return v
+
 class SampleTypeCreate(BaseModel):
+    project_id: Optional[int] = None
     category: str = "clinical"  # clinical, stability, qc
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
@@ -41,14 +57,22 @@ class SampleTypeCreate(BaseModel):
 class SampleTypeUpdate(SampleTypeCreate):
     audit_reason: str  # 修改理由
 
+    @field_validator("audit_reason")
+    @classmethod
+    def reason_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("修改理由不能为空")
+        return v
+
 class OrganizationResponse(BaseModel):
     id: int
+    project_id: Optional[int] = None
     name: str
     org_type: str
     address: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
-    contact_email: Optional[EmailStr] = None
+    contact_email: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -58,6 +82,7 @@ class OrganizationResponse(BaseModel):
 
 class SampleTypeResponse(BaseModel):
     id: int
+    project_id: Optional[int] = None
     category: str
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
@@ -84,6 +109,20 @@ class GlobalConfigurationResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class SystemSettingResponse(BaseModel):
+    key: str
+    value: Any
+    description: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SystemSettingUpdate(BaseModel):
+    value: Any
 
 
 def check_global_params_permission(user: User) -> bool:
@@ -123,6 +162,77 @@ async def read_configurations(
     """获取全局配置模板列表"""
     result = await db.execute(select(GlobalConfiguration).where(GlobalConfiguration.is_active == True))
     return result.scalars().all()
+
+
+@router.get("/settings", response_model=List[SystemSettingResponse])
+async def read_system_settings(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有系统设置"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限查看系统设置"
+        )
+    result = await db.execute(select(SystemSetting))
+    return result.scalars().all()
+
+
+@router.get("/settings/{key}", response_model=SystemSettingResponse)
+async def read_system_setting(
+    key: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取单个系统设置（公开，部分设置可能需要权限，但目前这些都可以公开）"""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        raise HTTPException(status_code=404, detail="设置未找到")
+    return setting
+
+
+@router.put("/settings/{key}", response_model=SystemSettingResponse)
+async def update_system_setting(
+    key: str,
+    setting_data: SystemSettingUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新系统设置"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理系统设置"
+        )
+    
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        raise HTTPException(status_code=404, detail="设置未找到")
+    
+    original_value = setting.value
+    setting.value = setting_data.value
+    setting.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(setting)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="system_setting",
+        entity_id=setting.id,
+        action="update",
+        details={
+            "key": key,
+            "original_value": original_value,
+            "new_value": setting_data.value
+        }
+    )
+    
+    return setting
 
 
 @router.post("/organizations", response_model=OrganizationResponse)
@@ -166,6 +276,7 @@ async def create_organization(
 @router.get("/organizations", response_model=List[OrganizationResponse])
 async def read_organizations(
     org_type: Optional[str] = None,
+    project_id: Optional[int] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -174,6 +285,13 @@ async def read_organizations(
     
     if org_type:
         query = query.where(Organization.org_type == org_type)
+    
+    if project_id:
+        query = query.where(Organization.project_id == project_id)
+    else:
+        # 如果没有 project_id，默认只返回全局组织 (project_id is None)
+        # 或者根据业务需求，可能返回所有。这里我们根据用户需求，改为允许过滤。
+        pass
     
     result = await db.execute(query.order_by(Organization.name))
     orgs = result.scalars().all()
@@ -321,6 +439,7 @@ async def create_sample_type(
 @router.get("/sample-types", response_model=List[SampleTypeResponse])
 async def read_sample_types(
     category: Optional[str] = None,
+    project_id: Optional[int] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -329,6 +448,9 @@ async def read_sample_types(
     
     if category:
         query = query.where(SampleType.category == category)
+    
+    if project_id:
+        query = query.where(SampleType.project_id == project_id)
         
     query = query.order_by(SampleType.id)
     

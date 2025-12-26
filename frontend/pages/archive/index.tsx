@@ -141,7 +141,14 @@ export default function ArchivePage() {
   const handleRequestArchive = async () => {
     try {
       const response = await api.post('/archive/request', archiveForm);
-      setRequests([response.data, ...requests]);
+      // Backend now returns the created request object
+      if (response.data && response.data.id) {
+        setRequests([response.data, ...requests]);
+      } else {
+        // Fallback: refetch if the response isn't what we expect
+        fetchPendingRequests();
+      }
+      
       setIsRequestDialogOpen(false);
       setArchiveForm({
         project_id: '',
@@ -149,14 +156,19 @@ export default function ArchivePage() {
         completion_summary: '',
         final_report_path: ''
       });
-    } catch (error) {
-      console.error('Failed to request archive:', error);
+    } catch (error: any) {
+      // The error is already shown via global toast in api.ts
+      // We log it as a warning here to avoid triggering the development error overlay
+      console.warn('Archive request prevented by business logic:', error.response?.data || error.message);
     }
   };
 
   const handleApproveRequest = async (requestId: number) => {
     try {
-      await api.post(`/archive/approve/${requestId}`);
+      await api.post(`/archive/request/${requestId}/approve`, {
+        action: 'approve',
+        comments: '批准归档申请'
+      });
       fetchPendingRequests();
     } catch (error) {
       console.error('Failed to approve request:', error);
@@ -165,7 +177,10 @@ export default function ArchivePage() {
 
   const handleRejectRequest = async (requestId: number) => {
     try {
-      await api.post(`/archive/reject/${requestId}`);
+      await api.post(`/archive/request/${requestId}/approve`, {
+        action: 'reject',
+        comments: '驳回归档申请'
+      });
       fetchPendingRequests();
     } catch (error) {
       console.error('Failed to reject request:', error);
@@ -174,7 +189,7 @@ export default function ArchivePage() {
 
   const handleViewProjectDetail = async (project: any) => {
     try {
-      const response = await api.get(`/archive/project-summary/${project.id}`);
+      const response = await api.get(`/archive/projects/${project.id}/archive-summary`);
       setProjectSummary(response.data);
       setSelectedProject(project);
       setIsDetailDialogOpen(true);

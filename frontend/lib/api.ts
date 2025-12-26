@@ -222,23 +222,32 @@ const createSilentAuthError = (error: AxiosError<any>) => ({
 });
 
 // 提取后端返回的可读错误信息（兼容 FastAPI/通用后端返回格式）
-const extractDetailMessage = (data: any): string | null => {
+export const extractDetailMessage = (data: any): string | null => {
   if (!data) return null;
   if (typeof data === 'string') return data;
-  if (typeof data.detail === 'string') return data.detail;
-  if (Array.isArray(data.detail) && data.detail.length > 0) {
-    const first = data.detail[0];
-    if (typeof first === 'string') return first;
-    if (first?.msg) return first.msg;
-    if (first?.message) return first.message;
-    if (Array.isArray(first?.loc)) {
-      const locStr = first.loc.join('.')
-      const text = first.msg || first.message || '';
-      return text ? `${locStr}: ${text}` : locStr;
+  
+  // 处理 FastAPI 标准的 detail 格式
+  if (data.detail) {
+    if (typeof data.detail === 'string') return data.detail;
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      const first = data.detail[0];
+      if (typeof first === 'string') return first;
+      if (typeof first === 'object' && first !== null) {
+        if (first.msg) return first.msg;
+        if (first.message) return first.message;
+        if (Array.isArray(first.loc)) {
+          const locStr = first.loc.filter((l: any) => l !== 'body').join('.');
+          return first.msg || first.message || locStr || '验证错误';
+        }
+      }
     }
   }
-  if (data.message) return data.message;
-  if (data.error) return data.error;
+  
+  // 处理直接返回的错误对象 (Pydantic 格式)
+  if (data.msg && typeof data.msg === 'string') return data.msg;
+  if (data.message && typeof data.message === 'string') return data.message;
+  if (data.error && typeof data.error === 'string') return data.error;
+  
   return null;
 };
 

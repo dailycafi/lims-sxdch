@@ -14,10 +14,7 @@ export class DeviationsService {
    */
   static async getDeviations(params?: {
     status?: string;
-    severity?: 'low' | 'medium' | 'high';
-    type?: string;
-    skip?: number;
-    limit?: number;
+    my_pending?: boolean;
   }): Promise<Deviation[]> {
     const response = await api.get<Deviation[]>('/deviations', { params });
     return response.data;

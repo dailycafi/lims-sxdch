@@ -145,25 +145,9 @@ export default function DeviationManagement() {
     try {
       const params = {
         status: filters.status !== 'all' ? filters.status : undefined,
-        severity: filters.severity !== 'all' ? 
-          (filters.severity === 'minor' ? 'low' : 
-           filters.severity === 'major' ? 'medium' : 
-           'high') as 'low' | 'medium' | 'high' : undefined,
-        type: filters.type !== 'all' ? filters.type : undefined,
       };
       const deviations = await DeviationsService.getDeviations(params);
-      // Transform API response to match local Deviation type
-      const transformedDeviations = deviations.map(d => ({
-        ...d,
-        deviation_code: d.code, // API uses 'code' instead of 'deviation_code'
-        category: d.type || '', // API uses 'type' instead of 'category'
-        reporter: {
-          full_name: (d.created_by as any)?.full_name || 'Unknown' // Adjust based on actual API response
-        },
-        project: undefined, // Add if needed
-        current_step: undefined // Add if needed
-      }));
-      setDeviations(transformedDeviations);
+      setDeviations(deviations);
     } catch (error) {
       console.error('Failed to fetch deviations:', error);
     } finally {
@@ -191,10 +175,11 @@ export default function DeviationManagement() {
 
   const handleCreateDeviation = async () => {
     try {
+      // Ensure data matches backend DeviationCreate schema
+      const { type, ...rest } = reportForm;
       await DeviationsService.createDeviation({
-        ...reportForm,
-        severity: reportForm.severity === 'minor' ? 'low' : 
-                  reportForm.severity === 'major' ? 'medium' : 'high'
+        ...rest,
+        project_id: reportForm.project_id
       });
       setIsReportDialogOpen(false);
       resetReportForm();
@@ -218,7 +203,7 @@ export default function DeviationManagement() {
     if (!selectedDeviation) return;
     
     try {
-      await api.post(`/deviations/${selectedDeviation.id}/process`, approvalForm);
+      await api.post(`/deviations/${selectedDeviation.id}/approve`, approvalForm);
       setIsApprovalDialogOpen(false);
       setIsDetailDialogOpen(false);
       fetchDeviations();

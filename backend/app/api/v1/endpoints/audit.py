@@ -83,7 +83,7 @@ async def get_audit_logs(
             "action": log.action,
             "details": log.details,
             "reason": log.reason,
-            "timestamp": log.timestamp.isoformat()
+            "timestamp": log.timestamp.replace(tzinfo=None).isoformat() + "Z" if log.timestamp.tzinfo is None else log.timestamp.isoformat()
         })
     
     return {

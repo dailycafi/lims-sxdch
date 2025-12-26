@@ -244,7 +244,7 @@ async def get_exposure_records(
             "start_time": item.borrowed_at.isoformat(),
             "end_time": item.returned_at.isoformat() if item.returned_at else None,
             "duration": duration,
-            "max_temperature": -20,  # TODO: 从温度监控系统获取
+            "max_temperature": None,  # 待集成温度监控系统
             "reason": f"领用用途: {item.request.purpose if item.request else '未知'}"
         }
         exposure_records.append(record)

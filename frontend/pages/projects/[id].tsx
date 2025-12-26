@@ -13,7 +13,7 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
-import { api } from '@/lib/api';
+import { api, extractDetailMessage } from '@/lib/api';
 import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
@@ -112,17 +112,18 @@ function TagInput({
 
   return (
     <div className="w-full">
-      <div className="flex flex-wrap gap-2 mb-2">
+      <div className="flex flex-col gap-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
         {values.map((tag, index) => (
-          <span key={index} className="inline-flex items-center pl-2 pr-1 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-            {tag}
+          <div key={index} className="flex items-center justify-between px-3 py-1.5 bg-white border border-zinc-200 rounded-md text-sm shadow-sm group hover:border-blue-400 transition-colors">
+            <span className="text-zinc-700 font-medium">{tag}</span>
             <button 
               onClick={() => removeTag(index)} 
-              className="appearance-none border-none bg-transparent p-0 ml-1 text-blue-400 hover:text-blue-600 focus:outline-none focus:ring-0"
+              className="appearance-none border-none bg-transparent p-1 text-zinc-400 hover:text-red-500 focus:outline-none focus:ring-0 transition-colors"
+              title="删除"
             >
-              <XMarkIcon className="w-3 h-3" />
+              <XMarkIcon className="w-4 h-4" />
             </button>
-          </span>
+          </div>
         ))}
       </div>
       <div className="flex gap-2">
@@ -133,7 +134,7 @@ function TagInput({
           placeholder={placeholder}
           className="flex-1"
         />
-        <Button plain onClick={() => {
+        <Button color="dark" onClick={() => {
           if (inputValue.trim()) {
             if (!values.includes(inputValue.trim())) {
               onChange([...values, inputValue.trim()]);
@@ -141,7 +142,6 @@ function TagInput({
             setInputValue('');
           }
         }}>
-          <PlusIcon className="w-4 h-4" />
           添加
         </Button>
       </div>
@@ -467,14 +467,45 @@ function MatrixColumn({
   );
 }
 
+interface Organization {
+  id: number;
+  name: string;
+  org_type: string;
+  address?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  is_active: boolean;
+}
+
+interface SampleType {
+  id: number;
+  category: string;
+  cycle_group?: string;
+  test_type?: string;
+  code?: string;
+  primary_count: number;
+  backup_count: number;
+  purpose?: string;
+  transport_method?: string;
+  status?: string;
+  special_notes?: string;
+}
+
 export default function ProjectDetailPage() {
   const router = useRouter();
   const { id } = router.query;
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // 参数配置相关状态
+  const [projectOrgs, setProjectOrgs] = useState<Organization[]>([]);
+  const [clinicalSampleTypes, setClinicalSampleTypes] = useState<SampleType[]>([]);
+  const [qcSampleTypes, setQCSampleTypes] = useState<SampleType[]>([]);
+  
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isBatchGenerateDialogOpen, setIsBatchGenerateDialogOpen] = useState(false);
-  const [configTab, setConfigTab] = useState('rules'); // 'rules' | 'options'
+  const [configTab, setConfigTab] = useState('rules'); // 'rules' | 'options' | 'organizations' | 'samples'
   const [activeGenerationTab, setActiveGenerationTab] = useState('clinical'); // 'clinical' | 'result' | 'stability'
   
   // 新的插槽状态，长度为7 (A-G)
@@ -517,11 +548,168 @@ export default function ProjectDetailPage() {
   // 生成结果状态
   const [generatedSamples, setGeneratedSamples] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set());
+  
+  // 快速添加状态
+  const [quickAddForm, setQuickAddForm] = useState({
+    subject: '',
+    cycle: '',
+    testType: '',
+    seq: '',
+    time: '',
+    stype: ''
+  });
+  const [quickAddPreview, setQuickAddPreview] = useState('');
+
+  const handleQuickAdd = async () => {
+    // 构造一个临时的生成参数，复用后端逻辑
+    const payload = {
+        cycles: [quickAddForm.cycle],
+        test_types: [quickAddForm.testType],
+        primary: dictionaries.primary_types.includes(quickAddForm.stype) ? [quickAddForm.stype] : [],
+        backup: dictionaries.backup_types.includes(quickAddForm.stype) ? [quickAddForm.stype] : [],
+        subjects: [quickAddForm.subject],
+        seq_time_pairs: [{ seq: quickAddForm.seq, time: quickAddForm.time }],
+        clinic_codes: [project?.clinical_org?.name || '']
+    };
+    
+    try {
+        const response = await api.post(`/projects/${id}/generate-sample-codes`, payload);
+        if (response.data?.sample_codes?.length > 0) {
+            setQuickAddPreview(response.data.sample_codes[0]);
+        }
+    } catch (e) {
+        toast.error('生成预览失败');
+    }
+  };
+
+  const addQuickAddToList = () => {
+    if (!quickAddPreview) return;
+    
+    const newSample = {
+        id: `GEN-${Date.now()}-QA`,
+        code: quickAddPreview,
+        originalCode: quickAddPreview,
+        sponsor_project_code: project?.sponsor_project_code,
+        lab_project_code: project?.lab_project_code,
+    };
+    
+    setGeneratedSamples(prev => [newSample, ...prev]);
+    setActiveGenerationTab('result');
+    setQuickAddPreview('');
+    setQuickAddForm({ subject: '', cycle: '', testType: '', seq: '', time: '', stype: '' });
+    toast.success('已添加到结果列表');
+  };
+
   const [editingSample, setEditingSample] = useState<any | null>(null);
   
   // 编辑状态
   const [isEditInputOpen, setIsEditInputOpen] = useState(false);
   const [isEditVerifyOpen, setIsEditVerifyOpen] = useState(false);
+
+  // --- 项目专属组织管理 ---
+  const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+  const [orgForm, setOrgForm] = useState({
+    name: '',
+    org_type: '',
+    address: '',
+    contact_person: '',
+    contact_phone: '',
+    contact_email: '',
+  });
+
+  const handleOrgSubmit = async () => {
+    if (!orgForm.name || !orgForm.org_type) {
+      toast.error('请填写必填项');
+      return;
+    }
+    try {
+      const payload = { ...orgForm, project_id: parseInt(id as string) };
+      if (editingOrg) {
+        if (!auditReason.trim()) {
+          toast.error('请输入修改理由');
+          return;
+        }
+        await api.put(`/global-params/organizations/${editingOrg.id}`, {
+          ...payload,
+          audit_reason: auditReason.trim()
+        });
+        toast.success('更新成功');
+      } else {
+        await api.post('/global-params/organizations', payload);
+        toast.success('创建成功');
+      }
+      setIsOrgDialogOpen(false);
+      setAuditReason('');
+      fetchProject();
+    } catch (error: any) {
+      toast.error(extractDetailMessage(error.response?.data) || '操作失败');
+    }
+  };
+
+  const deleteOrg = async (orgId: number) => {
+    if (!confirm('确定要删除此组织吗？')) return;
+    try {
+      await api.delete(`/global-params/organizations/${orgId}`);
+      toast.success('删除成功');
+      fetchProject();
+    } catch (error) {
+      toast.error('删除失败');
+    }
+  };
+
+  // --- 项目专属临床样本配置 ---
+  const [isSampleTypeDialogOpen, setIsSampleTypeDialogOpen] = useState(false);
+  const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
+  const [sampleTypeForm, setSampleTypeForm] = useState({
+    category: 'clinical',
+    cycle_group: '',
+    test_type: '',
+    primary_count: 1,
+    backup_count: 1,
+    purpose: '',
+    transport_method: '',
+    status: '',
+    special_notes: '',
+  });
+
+  const handleSampleTypeSubmit = async () => {
+    try {
+      const payload = { ...sampleTypeForm, project_id: parseInt(id as string) };
+      if (editingSampleType) {
+        if (!auditReason.trim()) {
+          toast.error('请输入修改理由');
+          return;
+        }
+        await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
+          ...payload,
+          audit_reason: auditReason.trim()
+        });
+        toast.success('更新成功');
+      } else {
+        await api.post('/global-params/sample-types', payload);
+        toast.success('创建成功');
+      }
+      setIsSampleTypeDialogOpen(false);
+      setAuditReason('');
+      fetchProject();
+    } catch (error: any) {
+      toast.error(extractDetailMessage(error.response?.data) || '操作失败');
+    }
+  };
+
+  const deleteSampleType = async (stId: number) => {
+    if (!confirm('确定要删除此配置吗？')) return;
+    try {
+      await api.delete(`/global-params/sample-types/${stId}`);
+      toast.success('删除成功');
+      fetchProject();
+    } catch (error) {
+      toast.error('删除失败');
+    }
+  };
+
+  const [auditReason, setAuditReason] = useState('');
 
   // 稳定性及质控样本
   const [stabilityQCParams, setStabilityQCParams] = useState({
@@ -591,8 +779,19 @@ export default function ProjectDetailPage() {
       setProject(response.data);
       // 初始化 slots
       initSlotsFromRule(response.data.sample_code_rule);
+      
+      // 获取项目专属参数
+      const [orgsRes, sampleTypesRes] = await Promise.all([
+        api.get(`/global-params/organizations?project_id=${id}`),
+        api.get(`/global-params/sample-types?project_id=${id}`),
+      ]);
+      setProjectOrgs(orgsRes.data);
+      const allSamples = sampleTypesRes.data as SampleType[];
+      setClinicalSampleTypes(allSamples.filter(s => s.category === 'clinical'));
+      setQCSampleTypes(allSamples.filter(s => s.category === 'qc_stability'));
+      
     } catch (error) {
-      console.error('Failed to fetch project:', error);
+      console.error('Failed to fetch project details:', error);
     } finally {
       setLoading(false);
     }
@@ -672,7 +871,7 @@ export default function ProjectDetailPage() {
       setIsEditVerifyOpen(false);
       toast.success('样本编号已修改');
     } catch (error: any) {
-       throw new Error(error.response?.data?.detail || '验证失败');
+       throw new Error(extractDetailMessage(error.response?.data) || '验证失败');
     }
   }
 
@@ -944,7 +1143,7 @@ export default function ProjectDetailPage() {
       setIsDeleteDialogOpen(false);
       router.push('/projects');
     } catch (error: any) {
-      const message = error?.response?.data?.detail || '删除项目失败';
+      const message = extractDetailMessage(error?.response?.data) || '删除项目失败';
       toast.error(message);
     } finally {
       setIsDeleting(false);
@@ -1063,10 +1262,20 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Config Dialog */}
-      <Dialog open={isConfigDialogOpen} onClose={setIsConfigDialogOpen} size="3xl">
-        <DialogTitle>配置样本编号规则</DialogTitle>
+      <Dialog open={isConfigDialogOpen} onClose={setIsConfigDialogOpen} size="5xl">
+        <DialogTitle>项目配置 - {project.lab_project_code}</DialogTitle>
         <DialogBody>
-          <Tabs tabs={[{ key: 'rules', label: '编号结构' }, { key: 'options', label: '选项配置' }]} activeTab={configTab} onChange={setConfigTab} className="mb-6"/>
+          <Tabs 
+            tabs={[
+              { key: 'rules', label: '编号结构' }, 
+              { key: 'options', label: '选项配置' },
+              { key: 'organizations', label: '组织管理' },
+              { key: 'samples', label: '临床样本配置' }
+            ]} 
+            activeTab={configTab} 
+            onChange={setConfigTab} 
+            className="mb-6"
+          />
           {configTab === 'rules' ? (
              /* Rule Config content same as before */
             <div className="space-y-8">
@@ -1112,18 +1321,196 @@ export default function ProjectDetailPage() {
             </div>
               </div>
             </div>
-          ) : (
+          ) : configTab === 'options' ? (
              /* Option Config content */
             <div className="space-y-6">
-                <Text className="text-sm text-zinc-600">在此处预设项目的标准选项，避免在生成编号时手动输入错误。</Text>
-              <div className="space-y-4">
-                    <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200"><h4 className="font-medium text-zinc-900 mb-2">检测类型 (Test Type)</h4><TagInput values={dictionaries.test_types} onChange={(vals) => setDictionaries({...dictionaries, test_types: vals})} placeholder="例如: PK, PD, ADA, Nab"/></div>
-                    <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200"><h4 className="font-medium text-zinc-900 mb-2">周期/组别 (Cycle/Group)</h4><TagInput values={dictionaries.cycles} onChange={(vals) => setDictionaries({...dictionaries, cycles: vals})} placeholder="例如: A, B, 第1周期, 第2周期"/></div>
-                <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200"><h4 className="font-medium text-zinc-900 mb-2">正份 (Primary)</h4><TagInput values={dictionaries.primary_types} onChange={(vals) => setDictionaries({...dictionaries, primary_types: vals})} placeholder="例如: a1, a2, a3"/></div>
-                        <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200"><h4 className="font-medium text-zinc-900 mb-2">备份 (Backup)</h4><TagInput values={dictionaries.backup_types} onChange={(vals) => setDictionaries({...dictionaries, backup_types: vals})} placeholder="例如: b1, b2, b3"/></div>
+              <Text className="text-sm text-zinc-600">在此处预设项目的标准选项，每个选项单独一行，方便后续在生成编号时直接选择。</Text>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                    <h4 className="font-medium text-zinc-900 mb-2 flex justify-between">
+                      <span>检测类型 (Test Type)</span>
+                      <span className="text-xs font-normal text-zinc-500">{dictionaries.test_types.length} 个选项</span>
+                    </h4>
+                    <TagInput 
+                      values={dictionaries.test_types} 
+                      onChange={(vals) => setDictionaries({...dictionaries, test_types: vals})} 
+                      placeholder="输入类型后回车 (如: PK, PD)"
+                    />
                   </div>
-                    <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200"><h4 className="font-medium text-zinc-900 mb-2">临床机构代码 (Clinic Code)</h4><TagInput values={dictionaries.clinic_codes} onChange={(vals) => setDictionaries({...dictionaries, clinic_codes: vals})} placeholder="例如: CHH, CENTER01"/></div>
+
+                  <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                    <h4 className="font-medium text-zinc-900 mb-2 flex justify-between">
+                      <span>周期/组别 (Cycle/Group)</span>
+                      <span className="text-xs font-normal text-zinc-500">{dictionaries.cycles.length} 个选项</span>
+                    </h4>
+                    <TagInput 
+                      values={dictionaries.cycles} 
+                      onChange={(vals) => setDictionaries({...dictionaries, cycles: vals})} 
+                      placeholder="输入周期后回车 (如: V1, V2)"
+                    />
+                  </div>
+
+                  <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                    <h4 className="font-medium text-zinc-900 mb-2 flex justify-between">
+                      <span>临床机构代码 (Clinic Code)</span>
+                      <span className="text-xs font-normal text-zinc-500">{dictionaries.clinic_codes.length} 个选项</span>
+                    </h4>
+                    <TagInput 
+                      values={dictionaries.clinic_codes} 
+                      onChange={(vals) => setDictionaries({...dictionaries, clinic_codes: vals})} 
+                      placeholder="输入机构代码后回车 (如: 01, 02)"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                    <h4 className="font-medium text-zinc-900 mb-2 flex justify-between">
+                      <span>正份 (Primary)</span>
+                      <span className="text-xs font-normal text-zinc-500">{dictionaries.primary_types.length} 个选项</span>
+                    </h4>
+                    <TagInput 
+                      values={dictionaries.primary_types} 
+                      onChange={(vals) => setDictionaries({...dictionaries, primary_types: vals})} 
+                      placeholder="输入标识后回车 (如: a1, a2)"
+                    />
+                  </div>
+
+                  <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                    <h4 className="font-medium text-zinc-900 mb-2 flex justify-between">
+                      <span>备份 (Backup)</span>
+                      <span className="text-xs font-normal text-zinc-500">{dictionaries.backup_types.length} 个选项</span>
+                    </h4>
+                    <TagInput 
+                      values={dictionaries.backup_types} 
+                      onChange={(vals) => setDictionaries({...dictionaries, backup_types: vals})} 
+                      placeholder="输入标识后回车 (如: b1, b2)"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : configTab === 'organizations' ? (
+
+          {configTab === 'organizations' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Text className="text-sm text-zinc-600">管理此项目的相关单位（申办方、临床机构等）</Text>
+                <Button onClick={() => {
+                  setEditingOrg(null);
+                  setOrgForm({ name: '', org_type: '', address: '', contact_person: '', contact_phone: '', contact_email: '' });
+                  setIsOrgDialogOpen(true);
+                }}>
+                  <PlusIcon className="w-4 h-4 mr-1"/> 新增单位
+                </Button>
+              </div>
+              <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                <Table bleed>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>名称</TableHeader>
+                      <TableHeader>类型</TableHeader>
+                      <TableHeader>联系人</TableHeader>
+                      <TableHeader>操作</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {projectOrgs.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-zinc-500">暂无项目专属单位</TableCell></TableRow>
+                    ) : (
+                      projectOrgs.map(org => (
+                        <TableRow key={org.id}>
+                          <TableCell className="font-medium">{org.name}</TableCell>
+                          <TableCell>
+                            <Badge color={org.org_type === 'sponsor' ? 'blue' : 'green'}>
+                              {org.org_type === 'sponsor' ? '申办方' : org.org_type === 'clinical' ? '临床机构' : '其他'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{org.contact_person || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button plain onClick={() => {
+                                setEditingOrg(org);
+                                setOrgForm({ 
+                                    name: org.name, 
+                                    org_type: org.org_type, 
+                                    address: org.address || '', 
+                                    contact_person: org.contact_person || '', 
+                                    contact_phone: org.contact_phone || '', 
+                                    contact_email: org.contact_email || '' 
+                                });
+                                setIsOrgDialogOpen(true);
+                              }}><PencilSquareIcon className="w-4 h-4"/></Button>
+                              <Button plain onClick={() => deleteOrg(org.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {configTab === 'samples' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Text className="text-sm text-zinc-600">配置项目的临床样本类型组合</Text>
+                <Button onClick={() => {
+                  setEditingSampleType(null);
+                  setSampleTypeForm({ category: 'clinical', cycle_group: '', test_type: '', primary_count: 1, backup_count: 1, purpose: '', transport_method: '', status: '', special_notes: '' });
+                  setIsSampleTypeDialogOpen(true);
+                }}>
+                  <PlusIcon className="w-4 h-4 mr-1"/> 新增配置
+                </Button>
+              </div>
+              <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                <Table bleed>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>周期/组别</TableHeader>
+                      <TableHeader>检测类型</TableHeader>
+                      <TableHeader>数量(正/备)</TableHeader>
+                      <TableHeader>操作</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {clinicalSampleTypes.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-zinc-500">暂无临床样本配置</TableCell></TableRow>
+                    ) : (
+                      clinicalSampleTypes.map(st => (
+                        <TableRow key={st.id}>
+                          <TableCell>{st.cycle_group || '-'}</TableCell>
+                          <TableCell>{st.test_type || '-'}</TableCell>
+                          <TableCell>{st.primary_count} / {st.backup_count}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button plain onClick={() => {
+                                setEditingSampleType(st);
+                                setSampleTypeForm({ 
+                                    category: st.category,
+                                    cycle_group: st.cycle_group || '',
+                                    test_type: st.test_type || '',
+                                    primary_count: st.primary_count,
+                                    backup_count: st.backup_count,
+                                    purpose: st.purpose || '',
+                                    transport_method: st.transport_method || '',
+                                    status: st.status || '',
+                                    special_notes: st.special_notes || '',
+                                });
+                                setIsSampleTypeDialogOpen(true);
+                              }}><PencilSquareIcon className="w-4 h-4"/></Button>
+                              <Button plain onClick={() => deleteSampleType(st.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
@@ -1152,6 +1539,92 @@ export default function ProjectDetailPage() {
 
             {activeGenerationTab === 'clinical' && (
                 <div className="space-y-6">
+                    {/* Quick Add Form */}
+                    <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200">
+                        <div className="flex items-center justify-between mb-3">
+                            <Text className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                                <PlusIcon className="w-4 h-4 text-blue-600" />
+                                快速单条添加 / 校验
+                            </Text>
+                            <Text className="text-xs text-zinc-500">输入具体信息，实时生成对应的样本编号</Text>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">受试者编号</label>
+                                <Input 
+                                    className="!py-1 !text-sm" 
+                                    placeholder="如: 001" 
+                                    onChange={(e) => setQuickAddForm({...quickAddForm, subject: e.target.value})}
+                                    value={quickAddForm.subject}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">周期</label>
+                                <select 
+                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                    onChange={(e) => setQuickAddForm({...quickAddForm, cycle: e.target.value})}
+                                    value={quickAddForm.cycle}
+                                >
+                                    <option value="">请选择</option>
+                                    {dictionaries.cycles.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">检测类型</label>
+                                <select 
+                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                    onChange={(e) => setQuickAddForm({...quickAddForm, testType: e.target.value})}
+                                    value={quickAddForm.testType}
+                                >
+                                    <option value="">请选择</option>
+                                    {dictionaries.test_types.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">采血序号</label>
+                                <Input 
+                                    className="!py-1 !text-sm" 
+                                    placeholder="如: 01" 
+                                    onChange={(e) => setQuickAddForm({...quickAddForm, seq: e.target.value})}
+                                    value={quickAddForm.seq}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">正/备</label>
+                                <select 
+                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                    onChange={(e) => setQuickAddForm({...quickAddForm, stype: e.target.value})}
+                                    value={quickAddForm.stype}
+                                >
+                                    <option value="">请选择</option>
+                                    {[...dictionaries.primary_types, ...dictionaries.backup_types].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                <Button 
+                                    className="w-full !py-1.5 !text-xs" 
+                                    color="blue" 
+                                    onClick={handleQuickAdd}
+                                    disabled={!quickAddForm.subject || !quickAddForm.cycle}
+                                >
+                                    生成并预览
+                                </Button>
+                            </div>
+                        </div>
+                        {quickAddPreview && (
+                            <div className="mt-3 p-2 bg-white border border-blue-200 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-medium text-blue-600">生成结果:</span>
+                                    <code className="font-mono font-bold text-sm text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{quickAddPreview}</code>
+                                </div>
+                                <Button plain onClick={addQuickAddToList} className="!py-1 !px-2 text-xs">
+                                    <PlusIcon className="w-3 h-3 mr-1"/>
+                                    添加到列表
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Data Entry for Dynamic Lists */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <div className="space-y-2">
@@ -1198,7 +1671,21 @@ export default function ProjectDetailPage() {
               </div>
 
                     {/* Matrix Selection Grid */}
-                    <Text className="font-semibold border-b border-zinc-100 pb-2">选择生成条件 (生成所选组合的样本编号)</Text>
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-2 mb-2">
+                        <div>
+                            <Text className="font-semibold text-zinc-900">选择生成条件</Text>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">系统将自动组合所选各列的所有选项 (笛卡尔积)</p>
+                        </div>
+                        <div className="bg-blue-50 px-3 py-1 rounded-full text-blue-700 text-xs font-medium border border-blue-100">
+                            预估生成: {
+                                (batchForm.selectedSubjects.length || 0) * 
+                                (batchForm.selectedCycles.length || 1) * 
+                                (batchForm.selectedTestTypes.length || 1) * 
+                                (batchForm.selectedTimepoints.length || 1) * 
+                                ((batchForm.selectedPrimary.length + batchForm.selectedBackup.length) || 1)
+                            } 个样本
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 h-[400px]">
                         <MatrixColumn
                             title='周期/组别'
@@ -1410,6 +1897,82 @@ export default function ProjectDetailPage() {
         title="确认保存规则"
         description="请验证密码以保存样本编号规则配置。"
       />
+
+      {/* Project Org Dialog */}
+      <Dialog open={isOrgDialogOpen} onClose={setIsOrgDialogOpen}>
+        <DialogTitle>{editingOrg ? '编辑单位' : '新增单位'}</DialogTitle>
+        <DialogBody>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">名称 *</label>
+              <Input value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">类型 *</label>
+              <Select value={orgForm.org_type} onChange={e => setOrgForm({...orgForm, org_type: e.target.value})}>
+                <option value="">选择类型</option>
+                <option value="sponsor">申办方</option>
+                <option value="clinical">临床机构</option>
+                <option value="testing">检测单位</option>
+                <option value="transport">运输单位</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">邮箱 (选填)</label>
+              <Input type="email" value={orgForm.contact_email} onChange={e => setOrgForm({...orgForm, contact_email: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">联系人</label>
+              <Input value={orgForm.contact_person} onChange={e => setOrgForm({...orgForm, contact_person: e.target.value})} />
+            </div>
+            {editingOrg && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">修改理由 *</label>
+                <Textarea value={auditReason} onChange={e => setAuditReason(e.target.value)} placeholder="请输入修改理由" rows={2} required />
+              </div>
+            )}
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsOrgDialogOpen(false)}>取消</Button>
+          <Button color="dark" onClick={handleOrgSubmit}>确定</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Project Sample Type Dialog */}
+      <Dialog open={isSampleTypeDialogOpen} onClose={setIsSampleTypeDialogOpen} size="xl">
+        <DialogTitle>{editingSampleType ? '编辑样本配置' : '新增样本配置'}</DialogTitle>
+        <DialogBody>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-zinc-700">周期/组别</label>
+              <Input value={sampleTypeForm.cycle_group} onChange={e => setSampleTypeForm({...sampleTypeForm, cycle_group: e.target.value})} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-zinc-700">检测类型</label>
+              <Input value={sampleTypeForm.test_type} onChange={e => setSampleTypeForm({...sampleTypeForm, test_type: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">正份数量</label>
+              <Input type="number" value={sampleTypeForm.primary_count} onChange={e => setSampleTypeForm({...sampleTypeForm, primary_count: parseInt(e.target.value) || 1})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">备份数量</label>
+              <Input type="number" value={sampleTypeForm.backup_count} onChange={e => setSampleTypeForm({...sampleTypeForm, backup_count: parseInt(e.target.value) || 1})} />
+            </div>
+            {editingSampleType && (
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-zinc-700">修改理由 *</label>
+                <Textarea value={auditReason} onChange={e => setAuditReason(e.target.value)} placeholder="请输入修改理由" rows={2} required />
+              </div>
+            )}
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsSampleTypeDialogOpen(false)}>取消</Button>
+          <Button color="dark" onClick={handleSampleTypeSubmit}>确定</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Edit Sample Code - Step 1: Input */}
       {editingSample && (

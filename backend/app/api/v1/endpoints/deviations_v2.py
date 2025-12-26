@@ -18,15 +18,15 @@ router = APIRouter()
 
 # 定义8步审批流程
 APPROVAL_STEPS = [
-    {"step": 1, "name": "偏差报告", "role": ["ANALYST", "SAMPLE_ADMIN"], "next_role": ["PROJECT_LEAD"]},
-    {"step": 2, "name": "项目负责人审核", "role": ["PROJECT_LEAD"], "next_role": ["QA"]},
-    {"step": 3, "name": "QA初审", "role": ["QA"], "next_role": ["PROJECT_LEAD"]},
-    {"step": 4, "name": "项目负责人指定执行人", "role": ["PROJECT_LEAD"], "next_role": ["ANALYST", "SAMPLE_ADMIN"]},
-    {"step": 5, "name": "执行人填写执行情况", "role": ["ANALYST", "SAMPLE_ADMIN"], "next_role": ["PROJECT_LEAD"]},
-    {"step": 6, "name": "项目负责人确认", "role": ["PROJECT_LEAD"], "next_role": ["TEST_MANAGER"]},
-    {"step": 7, "name": "分析测试主管审核", "role": ["TEST_MANAGER"], "next_role": ["QA"]},
-    {"step": 8, "name": "QA最终审核", "role": ["QA"], "next_role": ["LAB_DIRECTOR"]},
-    {"step": 9, "name": "实验室主任批准", "role": ["LAB_DIRECTOR"], "next_role": []},
+    {"step": 1, "name": "偏差报告", "role": ["analyst", "sample_admin", "qa"], "next_role": ["project_lead"]},
+    {"step": 2, "name": "项目负责人审核", "role": ["project_lead"], "next_role": ["qa"]},
+    {"step": 3, "name": "QA初审", "role": ["qa"], "next_role": ["project_lead"]},
+    {"step": 4, "name": "项目负责人指定执行人", "role": ["project_lead"], "next_role": ["analyst", "sample_admin"]},
+    {"step": 5, "name": "执行人填写执行情况", "role": ["analyst", "sample_admin", "executor"], "next_role": ["project_lead"]},
+    {"step": 6, "name": "项目负责人确认", "role": ["project_lead"], "next_role": ["test_manager"]},
+    {"step": 7, "name": "分析测试主管审核", "role": ["test_manager"], "next_role": ["qa"]},
+    {"step": 8, "name": "QA最终审核", "role": ["qa"], "next_role": ["lab_director"]},
+    {"step": 9, "name": "实验室主任批准", "role": ["lab_director"], "next_role": []},
 ]
 
 
@@ -58,11 +58,17 @@ async def create_deviation(
     db: AsyncSession = Depends(get_db)
 ):
     """创建偏差报告（步骤1）"""
-    # 检查权限
-    if current_user.role not in [UserRole.ANALYST, UserRole.SAMPLE_ADMIN]:
+    # 检查权限：允许分析员、样本管理员、QA或系统管理员创建
+    is_allowed = (
+        current_user.is_superuser or 
+        current_user.role in [UserRole.ANALYST, UserRole.SAMPLE_ADMIN, UserRole.QA, UserRole.SYSTEM_ADMIN] or
+        any(role.code in ["analyst", "sample_admin", "qa", "system_admin"] for role in current_user.roles)
+    )
+    
+    if not is_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有分析测试员或样本管理员可以报告偏差"
+            detail="只有分析测试员、样本管理员或质量管理员可以报告偏差"
         )
     
     # 生成偏差编号
@@ -102,12 +108,17 @@ async def create_deviation(
                 )
                 db.add(deviation_sample)
     
+    # 获取角色代码用于记录
+    user_role_code = current_user.role.value if current_user.role else (
+        current_user.roles[0].code if current_user.roles else "unknown"
+    )
+    
     # 创建第一步审批记录
     approval = DeviationApproval(
         deviation_id=deviation.id,
         step=1,
         step_name=APPROVAL_STEPS[0]["name"],
-        role=current_user.role.value,
+        role=user_role_code,
         user_id=current_user.id,
         action="submit",
         comments=f"报告偏差：{deviation_data.description}",
@@ -164,8 +175,12 @@ async def get_deviations(
         # 获取当前用户待处理的偏差
         # 根据用户角色和当前步骤过滤
         role_steps = []
+        user_role_codes = [role.code for role in current_user.roles]
+        if current_user.role:
+            user_role_codes.append(current_user.role.value)
+            
         for i, step in enumerate(APPROVAL_STEPS):
-            if current_user.role.value in step["role"]:
+            if any(role_code in step["role"] for role_code in user_role_codes):
                 role_steps.append(i + 1)
         
         if role_steps:
@@ -329,7 +344,17 @@ async def process_deviation_approval(
     
     # 检查权限
     step_config = APPROVAL_STEPS[current_approval.step - 1]
-    if current_user.role.value not in step_config["role"]:
+    
+    user_role_codes = [role.code for role in current_user.roles]
+    if current_user.role:
+        user_role_codes.append(current_user.role.value)
+    
+    is_allowed = (
+        current_user.is_superuser or 
+        any(role_code in step_config["role"] for role_code in user_role_codes)
+    )
+    
+    if not is_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"您没有权限处理步骤{current_approval.step}: {current_approval.step_name}"

@@ -1,20 +1,5 @@
 import { api } from '@/lib/api';
-import { User } from '@/types/api';
-
-export interface UserCreate {
-  username: string;
-  full_name: string;
-  email: string;
-  role: string;
-  password: string;
-}
-
-export interface UserUpdate {
-  full_name?: string;
-  email?: string;
-  role?: string;
-  is_active?: boolean;
-}
+import { User, UserCreate, UserUpdate } from '@/types/api';
 
 export class UsersService {
   /**
@@ -53,9 +38,38 @@ export class UsersService {
   }
 
   /**
-   * 重置用户密码
+   * 修改密码
+   */
+  static async changePassword(
+    id: number,
+    oldPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    await api.post(`/users/${id}/change-password`, {
+      old_password: oldPassword,
+      new_password: newPassword
+    });
+  }
+
+  /**
+   * 重置用户密码（管理员操作）
    */
   static async resetPassword(id: number, newPassword: string): Promise<void> {
     await api.post(`/users/${id}/reset-password`, { new_password: newPassword });
+  }
+
+  /**
+   * 获取密码要求
+   */
+  static async getPasswordRequirements(): Promise<string[]> {
+    const response = await api.get<{ requirements: string[] }>('/users/password-requirements/info');
+    return response.data.requirements;
+  }
+
+  /**
+   * 删除用户
+   */
+  static async deleteUser(id: number): Promise<void> {
+    await api.delete(`/users/${id}`);
   }
 }

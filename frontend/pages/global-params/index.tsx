@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 interface Organization {
   id: number;
@@ -129,26 +130,44 @@ export default function GlobalParamsPage() {
 
   // --- 组织管理 ---
   const handleCreateOrg = async () => {
+    // 数据清理：将空字符串转换为 null，避免后端验证失败
+    const payload = Object.fromEntries(
+      Object.entries(orgForm).map(([key, value]) => [key, value === '' ? null : value])
+    );
+
     try {
-      await api.post('/global-params/organizations', orgForm);
+      await api.post('/global-params/organizations', payload);
       setIsOrgDialogOpen(false);
       resetOrgForm();
       fetchData();
+      toast.success('组织创建成功');
     } catch (error) {
       console.error('Failed to create organization:', error);
+      // 错误处理已由 api.ts 中的拦截器统一处理并显示 toast
     }
   };
 
   const handleUpdateOrg = async () => {
     if (!editingOrg) return;
+    if (!auditReason.trim()) {
+      toast.error('请输入修改理由');
+      return;
+    }
+
+    // 数据清理：将空字符串转换为 null
+    const payload = Object.fromEntries(
+      Object.entries(orgForm).map(([key, value]) => [key, value === '' ? null : value])
+    );
+
     try {
       await api.put(`/global-params/organizations/${editingOrg.id}`, {
-        ...orgForm,
-        audit_reason: auditReason,
+        ...payload,
+        audit_reason: auditReason.trim(),
       });
       setIsOrgDialogOpen(false);
       resetOrgForm();
       fetchData();
+      toast.success('组织更新成功');
     } catch (error) {
       console.error('Failed to update organization:', error);
     }
@@ -211,11 +230,15 @@ export default function GlobalParamsPage() {
 
   const handleUpdateClinical = async () => {
     if (!editingSampleType) return;
+    if (!auditReason.trim()) {
+      alert('请输入修改理由');
+      return;
+    }
     try {
       await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
         ...clinicalForm,
         category: 'clinical',
-        audit_reason: auditReason,
+        audit_reason: auditReason.trim(),
       });
       setIsClinicalDialogOpen(false);
       resetClinicalForm();
@@ -278,11 +301,15 @@ export default function GlobalParamsPage() {
 
   const handleUpdateQC = async () => {
     if (!editingSampleType) return;
+    if (!auditReason.trim()) {
+      alert('请输入修改理由');
+      return;
+    }
     try {
       await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
         ...qcForm,
         category: 'qc_stability',
-        audit_reason: auditReason,
+        audit_reason: auditReason.trim(),
       });
       setIsQCDialogOpen(false);
       resetQCForm();
@@ -640,7 +667,6 @@ export default function GlobalParamsPage() {
                 邮箱
               </label>
               <Input
-                type="email"
                 value={orgForm.contact_email}
                 onChange={(e) => setOrgForm({ ...orgForm, contact_email: e.target.value })}
                 placeholder="输入邮箱地址"

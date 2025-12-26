@@ -5,13 +5,12 @@ import React, { forwardRef } from 'react'
 export function InputGroup({ children }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
-      data-slot="control"
       className={clsx(
-        'relative isolate block',
-        'has-[[data-slot=icon]:first-child]:[&_input]:pl-10 has-[[data-slot=icon]:last-child]:[&_input]:pr-10 sm:has-[[data-slot=icon]:first-child]:[&_input]:pl-8 sm:has-[[data-slot=icon]:last-child]:[&_input]:pr-8',
-        '*:data-[slot=icon]:pointer-events-none *:data-[slot=icon]:absolute *:data-[slot=icon]:top-3 *:data-[slot=icon]:z-10 *:data-[slot=icon]:size-5 sm:*:data-[slot=icon]:top-2.5 sm:*:data-[slot=icon]:size-4',
-        '[&>[data-slot=icon]:first-child]:left-3 sm:[&>[data-slot=icon]:first-child]:left-2.5 [&>[data-slot=icon]:last-child]:right-3 sm:[&>[data-slot=icon]:last-child]:right-2.5',
-        '*:data-[slot=icon]:text-zinc-500 dark:*:data-[slot=icon]:text-zinc-400'
+        'relative isolate block w-full',
+        // 针对内部 input 的左内边距
+        '[&_input]:!pl-11',
+        // 针对内部 svg 图标的样式：绝对定位、高层级、固定尺寸、居中对齐
+        '[&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-4 [&_svg]:top-1/2 [&_svg]:-translate-y-1/2 [&_svg]:z-20 [&_svg]:size-5 [&_svg]:text-zinc-400'
       )}
     >
       {children}

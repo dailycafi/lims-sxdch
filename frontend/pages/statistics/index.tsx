@@ -13,8 +13,9 @@ import { SearchInput } from '@/components/search-input';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { api } from '@/lib/api';
+import { toast } from 'react-hot-toast';
 import { 
-  ChartBarIcon,
+  ChartBarIcon, 
   ClockIcon,
   BeakerIcon,
   CalendarIcon,
@@ -172,9 +173,9 @@ export default function StatisticsPage() {
     } catch (error: any) {
       console.error('Failed to fetch sample access history:', error);
       if (error.response?.status === 404) {
-        alert('样本不存在');
+        toast.error('样本不存在');
       } else {
-        alert('查询失败，请重试');
+        toast.error('查询失败，请重试');
       }
       setAccessHistory(null);
     } finally {

@@ -34,6 +34,7 @@ export default function SampleReceivePage() {
     transport_company: '',
     transport_method: '',
     temperature_monitor_id: '',
+    is_over_temperature: 'false',
     sample_count: '',
     sample_status: '',
     storage_location: '',
@@ -114,6 +115,7 @@ export default function SampleReceivePage() {
       formDataToSend.append('transport_org_id', formData.transport_company);
       formDataToSend.append('transport_method', formData.transport_method);
       formDataToSend.append('temperature_monitor_id', formData.temperature_monitor_id);
+      formDataToSend.append('is_over_temperature', formData.is_over_temperature);
       formDataToSend.append('sample_count', formData.sample_count);
       formDataToSend.append('sample_status', formData.sample_status);
       formDataToSend.append('storage_location', formData.storage_location);
@@ -169,7 +171,6 @@ export default function SampleReceivePage() {
         {/* 页面标题 */}
         <div className="mb-6">
             <Heading>样本接收</Heading>
-          <Text className="mt-1 text-zinc-600">录入样本接收信息，生成清点任务</Text>
         </div>
 
         {/* 表单主体 */}
@@ -183,29 +184,6 @@ export default function SampleReceivePage() {
                 基础信息
               </h3>
               
-              {/* 如果未选择项目，显示提示 */}
-              {!selectedProjectId ? (
-                <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-                  <InformationCircleIcon className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                    <h4 className="text-sm font-medium text-amber-800">未选择项目</h4>
-                    <p className="text-sm text-amber-700 mt-1">
-                      请在页面右上角的项目选择器中选择当前要操作的项目，然后继续填写接收信息。
-                    </p>
-                  </div>
-                      </div>
-              ) : (
-                <div className="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center gap-3">
-                  <InformationCircleIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                  <div className="text-sm text-blue-900">
-                    当前项目：<span className="font-semibold">{currentProject?.lab_project_code}</span>
-                    {currentProject?.sponsor_project_code && (
-                      <span className="text-blue-700 ml-2">({currentProject.sponsor_project_code})</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
@@ -259,10 +237,10 @@ export default function SampleReceivePage() {
                     disabled={!selectedProjectId}
                 >
                   <option value="">请选择运输方式</option>
-                  <option value="cold_chain">冷链运输（2-8℃）</option>
-                  <option value="frozen">冷冻运输（-20℃）</option>
-                  <option value="ultra_frozen">超低温运输（-80℃）</option>
-                  <option value="room_temp">常温运输</option>
+                  <option value="dry_ice">干冰</option>
+                  <option value="ice_pack">冰袋</option>
+                  <option value="room_temp">室温</option>
+                  <option value="other">其它</option>
                 </Select>
               </div>
               </div>
@@ -358,12 +336,28 @@ export default function SampleReceivePage() {
                     disabled={!selectedProjectId}
                 >
                   <option value="">请选择样本状态</option>
-                  <option value="good">完好</option>
-                  <option value="damaged">包装破损</option>
-                  <option value="thawed">疑似解冻</option>
-                  <option value="other">其他异常</option>
+                  <option value="frozen">冰冻</option>
+                  <option value="partially_thawed">部分融化</option>
+                  <option value="completely_thawed">完成融化</option>
+                  <option value="other">其它</option>
                 </Select>
             </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  是否存在超温情况 <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.is_over_temperature}
+                  onChange={(e) => setFormData({ ...formData, is_over_temperature: e.target.value })}
+                  required
+                    className="w-full"
+                    disabled={!selectedProjectId}
+                >
+                  <option value="true">是</option>
+                  <option value="false">否</option>
+                </Select>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
@@ -7,7 +8,7 @@ import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Fieldset, Field, Label } from '@/components/fieldset';
 import { Textarea } from '@/components/textarea';
-import { api } from '@/lib/api';
+import { api, extractDetailMessage } from '@/lib/api';
 
 export default function NewFreezerPage() {
   const router = useRouter();
@@ -25,9 +26,10 @@ export default function NewFreezerPage() {
     setLoading(true);
     try {
       await api.post('/storage/freezers', formData);
+      toast.success('存储设备已添加');
       router.push('/storage');
     } catch (e: any) {
-      alert(e.response?.data?.detail || '创建失败');
+      toast.error(extractDetailMessage(e.response?.data) || '创建失败');
     } finally {
       setLoading(false);
     }

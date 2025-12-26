@@ -15,6 +15,8 @@ from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.schemas.sample import SampleCreate, SampleUpdate, SampleResponse
 from app.api.v1.endpoints.auth import get_current_user
+from app.services.sample_service import generate_sample_codes_logic, parse_sample_code
+from app.models.project import Project
 from fastapi.responses import StreamingResponse
 import pandas as pd
 
@@ -41,6 +43,7 @@ class ReceiveTaskResponse(BaseModel):
     transport_company: str
     transport_method: str
     temperature_monitor_id: str
+    is_over_temperature: bool
     sample_count: int
     sample_status: str
     received_by: str
@@ -531,6 +534,7 @@ async def get_receive_tasks(
             "transport_company": record.transport_org.name if record.transport_org else "",
             "transport_method": record.transport_method,
             "temperature_monitor_id": record.temperature_monitor_id,
+            "is_over_temperature": record.is_over_temperature,
             "sample_count": record.sample_count,
             "sample_status": record.sample_status,
             "received_by": record.receiver.full_name if record.receiver else "",
@@ -650,6 +654,7 @@ async def receive_samples(
     transport_org_id: int = Form(...),
     transport_method: str = Form(...),
     temperature_monitor_id: str = Form(...),
+    is_over_temperature: bool = Form(False),
     sample_count: int = Form(...),
     sample_status: str = Form(...),
     storage_location: Optional[str] = Form(None),
@@ -731,6 +736,7 @@ async def receive_samples(
         transport_method=transport_method,
         temperature_monitor_id=temperature_monitor_id,
         temperature_file_path=temperature_file_path,
+        is_over_temperature=is_over_temperature,
         sample_count=sample_count,
         sample_status=sample_status,
         storage_location=storage_location,
@@ -804,8 +810,11 @@ async def get_expected_samples(
 ):
     """获取应该清点的样本编号列表（包含已清点状态）"""
     # 获取接收记录
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(SampleReceiveRecord).where(SampleReceiveRecord.id == record_id)
+        select(SampleReceiveRecord)
+        .options(selectinload(SampleReceiveRecord.project))
+        .where(SampleReceiveRecord.id == record_id)
     )
     record = result.scalar_one_or_none()
     
@@ -815,15 +824,58 @@ async def get_expected_samples(
             detail="接收记录不存在"
         )
     
-    # TODO: 根据接收记录和项目配置，生成应该清点的样本编号列表
-    # 这里返回模拟数据
-    expected_codes = []
-    for i in range(1, 11):  # 模拟10个样本
-        expected_codes.append(f"L2501-CHH-001-PK-{i:02d}-2h-A-a1")
+    project = record.project
+    if not project:
+        raise HTTPException(status_code=404, detail="关联项目不存在")
+
+    # 根据项目配置生成该机构可能的所有样本编号
+    rule = project.sample_code_rule or {}
+    dictionaries = rule.get("dictionaries", {})
+    
+    # 获取临床机构代码
+    from app.models.global_params import Organization
+    clinic_result = await db.execute(select(Organization).where(Organization.id == record.clinical_org_id))
+    clinic = clinic_result.scalar_one_or_none()
+    # 优先使用机构的 code，如果没有则用 name
+    clinic_code = getattr(clinic, "code", "") or (clinic.name if clinic else "")
+
+    # 构造生成参数
+    gen_params = {
+        "cycles": dictionaries.get("cycles", []),
+        "test_types": dictionaries.get("test_types", []),
+        "primary": dictionaries.get("primary_types", []),
+        "backup": dictionaries.get("backup_types", []),
+        "clinic_codes": [clinic_code],
+        "subjects": dictionaries.get("subjects", []), # 如果规则里有预设受试者
+        "seq_time_pairs": dictionaries.get("seq_time_pairs", [])
+    }
+    
+    # 如果 dictionaries 中没有 subjects，尝试获取该项目已有的受试者
+    if not gen_params["subjects"]:
+        # 从该项目已有的样本中提取受试者编号
+        subject_result = await db.execute(
+            select(Sample.subject_code).distinct().where(Sample.project_id == project.id)
+        )
+        gen_params["subjects"] = subject_result.scalars().all()
+    
+    # 如果还是没有，尝试从临床机构-受试者配对中提取（如果有这个字典）
+    if not gen_params["subjects"] and "clinic_subject_pairs" in dictionaries:
+        pairs = dictionaries["clinic_subject_pairs"]
+        gen_params["subjects"] = [p["subject"] for p in pairs if p.get("clinic") == clinic_code or not p.get("clinic")]
+
+    # 生成编号
+    expected_codes = generate_sample_codes_logic(project, gen_params)
+    
+    # 如果生成的编号太多，限制一下，避免前端崩溃
+    if len(expected_codes) > 2000:
+        expected_codes = expected_codes[:2000]
     
     # 查询这些样本在数据库中的实际状态
     existing_result = await db.execute(
-        select(Sample).where(Sample.sample_code.in_(expected_codes))
+        select(Sample).where(
+            Sample.project_id == project.id,
+            Sample.sample_code.in_(expected_codes)
+        )
     )
     existing_samples = {s.sample_code: s for s in existing_result.scalars().all()}
     
@@ -917,8 +969,15 @@ async def complete_inventory(
                     existing_sample.position_in_box = position
                     existing_sample.special_notes = sample_data.get("specialNotes")
                     existing_sample.updated_at = datetime.utcnow()
+                    
+                    # 同时尝试补全缺失的元数据
+                    meta = parse_sample_code(record.project, existing_sample.sample_code)
+                    for key, val in meta.items():
+                        if not getattr(existing_sample, key):
+                            setattr(existing_sample, key, val)
                 else:
-                    # 创建新样本
+                    # 创建新样本，并尝试解析元数据
+                    meta = parse_sample_code(record.project, sample_data["code"])
                     sample = Sample(
                         sample_code=sample_data["code"],
                         project_id=record.project_id,
@@ -926,7 +985,8 @@ async def complete_inventory(
                         box_code=box_code,
                         position_in_box=position,
                         special_notes=sample_data.get("specialNotes"),
-                        created_at=datetime.utcnow()
+                        created_at=datetime.utcnow(),
+                        **meta
                     )
                     db.add(sample)
         
@@ -1198,7 +1258,7 @@ async def get_borrow_requests(
             "target_location": req.target_location,
             "target_date": req.target_date.isoformat() if req.target_date else "",
             "status": req.status,
-            "created_at": req.created_at.isoformat()
+            "created_at": req.created_at.replace(tzinfo=None).isoformat() + "Z" if req.created_at.tzinfo is None else req.created_at.isoformat()
         })
     
     return response
@@ -1429,6 +1489,47 @@ async def return_samples(
     return {"message": f"成功归还 {returned_count} 个样本"}
 
 
+@router.get("/tracking/search")
+async def search_tracking_records(
+    query: str = Query(..., description="申请单号或项目编号"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """搜索领用/归还跟踪记录"""
+    from sqlalchemy import or_
+    from app.models.project import Project
+    
+    # 搜索领用申请
+    stmt = select(SampleBorrowRequest).options(
+        selectinload(SampleBorrowRequest.project),
+        selectinload(SampleBorrowRequest.requester),
+        selectinload(SampleBorrowRequest.samples)
+    ).join(Project).where(
+        or_(
+            SampleBorrowRequest.request_code.contains(query),
+            Project.lab_project_code.contains(query),
+            Project.sponsor_project_code.contains(query)
+        )
+    ).order_by(SampleBorrowRequest.created_at.desc())
+    
+    result = await db.execute(stmt)
+    borrow_requests = result.scalars().all()
+    
+    records = []
+    for req in borrow_requests:
+        records.append({
+            "id": req.id,
+            "request_code": req.request_code,
+            "project_code": req.project.lab_project_code if req.project else "",
+            "requester": req.requester.full_name if req.requester else "",
+            "type": "borrow",
+            "sample_count": len(req.samples),
+            "created_at": req.created_at.isoformat()
+        })
+        
+    return records
+
+
 # 样本转移相关API
 @router.post("/transfer/external")
 async def create_external_transfer(
@@ -1569,11 +1670,20 @@ async def create_internal_transfer(
     count_value = count.scalar() or 0
     transfer_code = f"ITR-{datetime.now().strftime('%Y%m%d')}-{count_value + 1:04d}"
     
+    # 获取第一个样本的项目ID作为记录的项目ID
+    first_sample_code = transfer_data["samples"][0] if transfer_data["samples"] else None
+    project_id = 1
+    if first_sample_code:
+        sample_res = await db.execute(select(Sample).where(Sample.sample_code == first_sample_code))
+        sample_obj = sample_res.scalar_one_or_none()
+        if sample_obj:
+            project_id = sample_obj.project_id
+
     # 创建转移记录
     transfer_record = SampleTransferRecord(
         transfer_code=transfer_code,
         transfer_type="internal",
-        project_id=1,  # TODO: 内部转移可能涉及多个项目
+        project_id=project_id,
         from_location=transfer_data["from_location"],
         to_location=transfer_data["to_location"],
         transport_method=transfer_data["transport_method"],
@@ -1677,7 +1787,7 @@ async def get_transfers(
             "from_location": record.from_location,
             "to_location": record.to_location,
             "status": record.status,
-            "created_at": record.created_at.isoformat()
+            "created_at": record.created_at.replace(tzinfo=None).isoformat() + "Z" if record.created_at.tzinfo is None else record.created_at.isoformat()
         })
     
     return response
@@ -1884,7 +1994,7 @@ async def get_destroy_requests(
             "reason": req.reason,
             "current_approver": current_approver,
             "status": req.status,
-            "created_at": req.created_at.isoformat()
+            "created_at": req.created_at.replace(tzinfo=None).isoformat() + "Z" if req.created_at.tzinfo is None else req.created_at.isoformat()
         })
     
     return response

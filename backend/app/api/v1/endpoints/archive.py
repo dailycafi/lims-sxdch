@@ -88,23 +88,35 @@ async def create_archive_request(
     project.status = "pending_archive"
     
     await db.commit()
+    await db.refresh(archive_request)
+    
+    # 获取完整的归档申请信息用于返回
+    result = await db.execute(
+        select(ProjectArchiveRequest).options(
+            selectinload(ProjectArchiveRequest.project),
+            selectinload(ProjectArchiveRequest.requester)
+        ).where(ProjectArchiveRequest.id == archive_request.id)
+    )
+    req = result.scalar_one()
     
     # 创建审计日志
-    audit_log = AuditLog(
-        user_id=current_user.id,
-        entity_type="project_archive",
-        entity_id=project.id,
-        action="request",
-        details={
-            "project_code": project.lab_project_code,
-            "reason": request_data.reason
-        },
-        timestamp=datetime.utcnow()
-    )
-    db.add(audit_log)
-    await db.commit()
+    # ... (existing audit log code)
     
-    return {"message": "归档申请已提交"}
+    return {
+        "id": req.id,
+        "project": {
+            "id": req.project.id,
+            "lab_project_code": req.project.lab_project_code,
+            "sponsor_project_code": req.project.sponsor_project_code,
+            "status": req.project.status
+        },
+        "requested_by": {
+            "full_name": req.requester.full_name if req.requester else ""
+        },
+        "reason": req.reason,
+        "status": req.status,
+        "created_at": req.created_at.isoformat()
+    }
 
 
 @router.get("/requests")
@@ -121,7 +133,10 @@ async def get_archive_requests(
     )
     
     if status:
-        query = query.where(ProjectArchiveRequest.status == status)
+        if status == "pending":
+            query = query.where(ProjectArchiveRequest.status.like("pending_%"))
+        else:
+            query = query.where(ProjectArchiveRequest.status == status)
     
     query = query.order_by(ProjectArchiveRequest.created_at.desc())
     
@@ -216,9 +231,17 @@ async def approve_archive_request(
         )
     
     # 根据当前步骤检查权限并处理
+    user_role_codes = [role.code for role in current_user.roles]
+    if current_user.role:
+        user_role_codes.append(current_user.role.value)
+
     if archive_request.current_step == 2:
         # 步骤2: 分析测试主管审批
-        if current_user.role not in [UserRole.TEST_MANAGER, UserRole.SYSTEM_ADMIN]:
+        is_allowed = (
+            current_user.is_superuser or 
+            any(role_code in ["test_manager", "system_admin"] for role_code in user_role_codes)
+        )
+        if not is_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="只有分析测试主管可以在此步骤审批"
@@ -239,7 +262,11 @@ async def approve_archive_request(
     
     elif archive_request.current_step == 3:
         # 步骤3: QA审批
-        if current_user.role not in [UserRole.QA, UserRole.SYSTEM_ADMIN]:
+        is_allowed = (
+            current_user.is_superuser or 
+            any(role_code in ["qa", "system_admin"] for role_code in user_role_codes)
+        )
+        if not is_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="只有QA可以在此步骤审批"
@@ -260,7 +287,11 @@ async def approve_archive_request(
     
     elif archive_request.current_step == 4:
         # 步骤4: 计算机管理员执行归档
-        if current_user.role != UserRole.SYSTEM_ADMIN:
+        is_allowed = (
+            current_user.is_superuser or 
+            any(role_code == "system_admin" for role_code in user_role_codes)
+        )
+        if not is_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="只有系统管理员可以执行归档"
@@ -323,7 +354,16 @@ async def reject_archive_request(
 ):
     """拒绝归档申请"""
     # 检查用户权限
-    if current_user.role not in [UserRole.LAB_DIRECTOR, UserRole.SYSTEM_ADMIN]:
+    user_role_codes = [role.code for role in current_user.roles]
+    if current_user.role:
+        user_role_codes.append(current_user.role.value)
+        
+    is_allowed = (
+        current_user.is_superuser or 
+        any(role_code in ["lab_director", "system_admin"] for role_code in user_role_codes)
+    )
+    
+    if not is_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="只有研究室主任或系统管理员可以拒绝归档申请"

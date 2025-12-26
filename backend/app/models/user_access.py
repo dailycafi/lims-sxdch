@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -23,3 +23,7 @@ class UserAccessLog(Base):
     
     # 关系
     user = relationship("User", backref="access_logs")
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'path', name='_user_path_uc'),
+    )

@@ -25,9 +25,9 @@ async def track_user_access(
         select(UserAccessLog).where(
             UserAccessLog.user_id == current_user.id,
             UserAccessLog.path == path
-        )
+        ).limit(1)
     )
-    existing_log = result.scalar_one_or_none()
+    existing_log = result.scalars().first()
     
     if existing_log:
         # 更新访问次数和最后访问时间
