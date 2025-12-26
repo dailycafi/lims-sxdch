@@ -18,27 +18,10 @@ import random
 async def drop_all_tables(engine):
     """删除所有表"""
     async with engine.begin() as conn:
-        # 对于 PostgreSQL，使用 cascade 或者是临时禁用外键检查
-        try:
-            # 尝试禁用外键触发器 (针对 PostgreSQL)
-            await conn.execute(text("SET session_replication_role = 'replica';"))
-            
-            # 获取所有表名
-            from sqlalchemy import inspect
-            def get_table_names(sync_conn):
-                return inspect(sync_conn).get_table_names()
-            
-            tables = await conn.run_sync(get_table_names)
-            if tables:
-                for table in tables:
-                    await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE;'))
-            
-            await conn.execute(text("SET session_replication_role = 'origin';"))
-            print("⚠️  已删除所有数据表 (使用 CASCADE)")
-        except Exception as e:
-            print(f"尝试高级删除失败: {e}，尝试标准删除...")
-            await conn.run_sync(Base.metadata.drop_all)
-    print("⚠️  已完成数据表清理")
+        # 使用 SQLAlchemy 的标准删除方法，自动处理外键依赖
+        print("🗑️  正在删除所有数据表...")
+        await conn.run_sync(Base.metadata.drop_all)
+    print("✅ 已完成数据表清理")
 
 
 from sqlalchemy import text
