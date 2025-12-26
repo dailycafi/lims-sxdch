@@ -119,7 +119,7 @@ export function AnimatedLoadingState({
   text = '加载中...'
 }: { 
   colSpan: number;
-  variant?: 'spinner' | 'dots' | 'pulse' | 'skeleton';
+  variant?: 'spinner' | 'dots' | 'pulse' | 'skeleton' | 'lottie';
   text?: string;
 }) {
   const renderLoadingContent = () => {
@@ -149,6 +149,24 @@ export function AnimatedLoadingState({
               transition={{ duration: 1.5, repeat: Infinity }}
               className="w-12 h-12 bg-zinc-200 rounded-lg"
             />
+            <Text className="text-zinc-500">{text}</Text>
+          </div>
+        );
+
+      case 'lottie':
+        return (
+          <div className="flex flex-col items-center gap-4">
+            <motion.div
+              animate={{ scale: [0.95, 1.05, 0.95], rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              className="w-20 h-20 rounded-full bg-gradient-to-br from-sky-100 via-indigo-100 to-purple-100 flex items-center justify-center shadow-inner"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="w-10 h-10 border-2 border-indigo-200 border-t-indigo-500 rounded-full"
+              />
+            </motion.div>
             <Text className="text-zinc-500">{text}</Text>
           </div>
         );
@@ -208,7 +226,7 @@ export function AnimatedTableData({
   emptyIcon?: React.ComponentType<{ className?: string }>;
   emptyText?: string;
   colSpan: number;
-  loadingVariant?: 'spinner' | 'dots' | 'pulse' | 'skeleton';
+  loadingVariant?: 'spinner' | 'dots' | 'pulse' | 'skeleton' | 'lottie';
 }) {
   return (
     <AnimatePresence mode="wait">

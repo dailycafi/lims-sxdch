@@ -34,8 +34,10 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
-console.log('[API Module] Environment:', process.env.NODE_ENV);
-console.log('[API Module] API URL:', API_URL);
+if (process.env.NODE_ENV !== 'production') {
+  console.log('[API Module] Environment:', process.env.NODE_ENV);
+  console.log('[API Module] API URL:', API_URL);
+}
 
 // 创建axios实例
 export const api = axios.create({

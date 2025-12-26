@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';

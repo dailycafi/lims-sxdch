@@ -677,7 +677,7 @@ export default function SettingsPage() {
                                     编辑
                                   </Button>
                                   {!role.is_system && (
-                                    <Button plain color="red" onClick={() => handleDeleteRole(role)} className="text-zinc-600 hover:text-red-600 hover:bg-red-50">
+                                    <Button plain onClick={() => handleDeleteRole(role)} className="text-zinc-600 hover:text-red-600 hover:bg-red-50">
                                       <TrashIcon className="h-4 w-4" />
                                       删除
                                     </Button>

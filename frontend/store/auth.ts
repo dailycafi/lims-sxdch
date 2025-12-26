@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { toast } from 'react-hot-toast';
 import { authAPI } from '@/lib/api';
 import { tokenManager } from '@/lib/token-manager';
+import type { RoleSimple } from '@/types/api';
 
 interface User {
   id: number;
@@ -9,6 +10,7 @@ interface User {
   email: string;
   full_name: string;
   role: string;
+  roles?: RoleSimple[];
   is_active: boolean;
   is_superuser: boolean;
   created_at?: string;

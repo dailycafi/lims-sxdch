@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
+import { Textarea } from '@/components/textarea';
 import { Checkbox, CheckboxField } from '@/components/checkbox';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
 import { Heading } from '@/components/heading';

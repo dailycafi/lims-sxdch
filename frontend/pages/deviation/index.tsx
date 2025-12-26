@@ -32,10 +32,8 @@ import type { Deviation as APIDeviation } from '@/types/api';
 
 // Extend the API type to include the additional fields your UI needs
 interface Deviation extends APIDeviation {
-  deviation_code: string;
-  category: string;
-  reporter: {
-    full_name: string;
+  reporter?: {
+    full_name?: string;
   };
   project?: {
     id: number;
@@ -257,7 +255,12 @@ export default function DeviationManagement() {
     if (filters.category !== 'all' && deviation.category !== filters.category) {
       return false;
     }
-    if (filters.reporter && !deviation.reporter.full_name.toLowerCase().includes(filters.reporter.toLowerCase())) {
+    if (
+      filters.reporter &&
+      !(deviation.reporter?.full_name || '')
+        .toLowerCase()
+        .includes(filters.reporter.toLowerCase())
+    ) {
       return false;
     }
     return true;
@@ -446,7 +449,7 @@ export default function DeviationManagement() {
                         <TableCell>{getSeverityBadge(deviation.severity)}</TableCell>
                         <TableCell>{deviation.category}</TableCell>
                         <TableCell>{deviation.project?.lab_project_code || '-'}</TableCell>
-                        <TableCell>{deviation.reporter.full_name}</TableCell>
+                        <TableCell>{deviation.reporter?.full_name || '-'}</TableCell>
                         <TableCell>{getStatusBadge(deviation.status)}</TableCell>
                         <TableCell>
                           {deviation.current_step ? (
@@ -616,7 +619,7 @@ export default function DeviationManagement() {
                       </div>
                       <div>
                         <span className="text-sm text-zinc-600">报告人：</span>
-                        <p className="font-medium">{selectedDeviation.reporter.full_name}</p>
+                        <p className="font-medium">{selectedDeviation.reporter?.full_name || '-'}</p>
                       </div>
                       <div>
                         <span className="text-sm text-zinc-600">报告时间：</span>
