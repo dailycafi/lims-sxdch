@@ -274,7 +274,12 @@ async def refresh_access_token(
                 detail="Refresh token 已被撤销"
             )
 
-    if stored_refresh.expires_at <= datetime.now(timezone.utc):
+    # 检查是否过期
+    expires_at = stored_refresh.expires_at
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+    if expires_at <= datetime.now(timezone.utc):
         stored_refresh.revoked = True
         stored_refresh.revoked_at = datetime.now(timezone.utc)
         await db.commit()

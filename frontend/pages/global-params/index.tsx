@@ -201,6 +201,12 @@ export default function GlobalParamsPage() {
     setIsOrgDialogOpen(true);
   };
 
+  const closeOrgDialog = () => {
+    setIsOrgDialogOpen(false);
+    resetOrgForm();
+    setEditingOrg(null);
+  };
+
   const resetOrgForm = () => {
     setOrgForm({
       name: '',
@@ -220,9 +226,9 @@ export default function GlobalParamsPage() {
         ...clinicalForm,
         category: 'clinical'
       });
-      setIsClinicalDialogOpen(false);
-      resetClinicalForm();
+      closeClinicalDialog();
       fetchData();
+      toast.success('临床样本类型创建成功');
     } catch (error) {
       console.error('Failed to create clinical sample type:', error);
     }
@@ -231,7 +237,7 @@ export default function GlobalParamsPage() {
   const handleUpdateClinical = async () => {
     if (!editingSampleType) return;
     if (!auditReason.trim()) {
-      alert('请输入修改理由');
+      toast.error('请输入修改理由');
       return;
     }
     try {
@@ -240,9 +246,9 @@ export default function GlobalParamsPage() {
         category: 'clinical',
         audit_reason: auditReason.trim(),
       });
-      setIsClinicalDialogOpen(false);
-      resetClinicalForm();
+      closeClinicalDialog();
       fetchData();
+      toast.success('临床样本类型更新成功');
     } catch (error) {
       console.error('Failed to update clinical sample type:', error);
     }
@@ -268,6 +274,12 @@ export default function GlobalParamsPage() {
     setIsClinicalDialogOpen(true);
   };
 
+  const closeClinicalDialog = () => {
+    setIsClinicalDialogOpen(false);
+    resetClinicalForm();
+    setEditingSampleType(null);
+  };
+
   const resetClinicalForm = () => {
     setClinicalForm({
       cycle_group: '',
@@ -291,9 +303,9 @@ export default function GlobalParamsPage() {
         primary_count: 0, // 不适用
         backup_count: 0,  // 不适用
       });
-      setIsQCDialogOpen(false);
-      resetQCForm();
+      closeQCDialog();
       fetchData();
+      toast.success('样本类型创建成功');
     } catch (error) {
       console.error('Failed to create QC sample type:', error);
     }
@@ -302,7 +314,7 @@ export default function GlobalParamsPage() {
   const handleUpdateQC = async () => {
     if (!editingSampleType) return;
     if (!auditReason.trim()) {
-      alert('请输入修改理由');
+      toast.error('请输入修改理由');
       return;
     }
     try {
@@ -311,9 +323,9 @@ export default function GlobalParamsPage() {
         category: 'qc_stability',
         audit_reason: auditReason.trim(),
       });
-      setIsQCDialogOpen(false);
-      resetQCForm();
+      closeQCDialog();
       fetchData();
+      toast.success('样本类型更新成功');
     } catch (error) {
       console.error('Failed to update QC sample type:', error);
     }
@@ -332,6 +344,12 @@ export default function GlobalParamsPage() {
       resetQCForm();
     }
     setIsQCDialogOpen(true);
+  };
+
+  const closeQCDialog = () => {
+    setIsQCDialogOpen(false);
+    resetQCForm();
+    setEditingSampleType(null);
   };
 
   const resetQCForm = () => {
@@ -598,7 +616,7 @@ export default function GlobalParamsPage() {
       </div>
 
       {/* 组织对话框 */}
-      <Dialog open={isOrgDialogOpen} onClose={setIsOrgDialogOpen}>
+      <Dialog open={isOrgDialogOpen} onClose={closeOrgDialog}>
         <DialogTitle>{editingOrg ? '编辑组织' : '新增组织'}</DialogTitle>
         <DialogDescription>
           {editingOrg ? '修改组织信息' : '添加新的组织/机构信息'}
@@ -692,7 +710,7 @@ export default function GlobalParamsPage() {
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsOrgDialogOpen(false)}>
+          <Button plain onClick={closeOrgDialog}>
             取消
           </Button>
           <Button onClick={editingOrg ? handleUpdateOrg : handleCreateOrg}>
@@ -702,7 +720,7 @@ export default function GlobalParamsPage() {
       </Dialog>
 
       {/* 临床样本对话框 */}
-      <Dialog open={isClinicalDialogOpen} onClose={setIsClinicalDialogOpen}>
+      <Dialog open={isClinicalDialogOpen} onClose={closeClinicalDialog}>
         <DialogTitle>{editingSampleType ? '编辑临床样本类型' : '新增临床样本类型'}</DialogTitle>
         <DialogDescription>
           {editingSampleType ? '修改临床样本类型配置' : '添加新的临床样本类型配置'}
@@ -821,7 +839,7 @@ export default function GlobalParamsPage() {
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsClinicalDialogOpen(false)}>
+          <Button plain onClick={closeClinicalDialog}>
             取消
           </Button>
           <Button onClick={editingSampleType ? handleUpdateClinical : handleCreateClinical}>
@@ -831,7 +849,7 @@ export default function GlobalParamsPage() {
       </Dialog>
 
       {/* 稳定性及质控样本对话框 */}
-      <Dialog open={isQCDialogOpen} onClose={setIsQCDialogOpen}>
+      <Dialog open={isQCDialogOpen} onClose={closeQCDialog}>
         <DialogTitle>{editingSampleType ? '编辑稳定性/质控样本' : '新增稳定性/质控样本'}</DialogTitle>
         <DialogDescription>
           {editingSampleType ? '修改样本类型配置' : '添加新的样本类型配置'}
@@ -894,7 +912,7 @@ export default function GlobalParamsPage() {
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsQCDialogOpen(false)}>
+          <Button plain onClick={closeQCDialog}>
             取消
           </Button>
           <Button onClick={editingSampleType ? handleUpdateQC : handleCreateQC}>

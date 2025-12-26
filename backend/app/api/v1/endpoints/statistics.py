@@ -9,10 +9,13 @@ import pandas as pd
 from io import BytesIO
 
 from app.core.database import get_db
-from app.models.sample import Sample, SampleStatus, SampleBorrowItem, SampleTransferItem
+from app.models.sample import (
+    Sample, SampleStatus, SampleBorrowItem, SampleTransferItem,
+    SampleBorrowRequest, SampleTransferRecord, SampleDestroyRequest
+)
 from app.models.audit import AuditLog
 from app.models.user import User
-from app.models.project import Project
+from app.models.project import Project, ProjectArchiveRequest
 from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
@@ -348,7 +351,94 @@ async def get_statistics_summary(
         if item.returned_at:
             duration = (item.returned_at - item.borrowed_at).total_seconds() / 60
             total_exposure_time += duration
-    
+
+    # 获取项目统计
+    project_stats = {}
+    if not project_id:
+        # 项目总数
+        total_projects_result = await db.execute(select(func.count()).select_from(Project))
+        project_stats["total_projects"] = total_projects_result.scalar() or 0
+        
+        # 活跃项目数
+        active_projects_result = await db.execute(
+            select(func.count()).select_from(Project).where(
+                and_(Project.is_active == True, Project.is_archived == False)
+            )
+        )
+        project_stats["active_projects"] = active_projects_result.scalar() or 0
+    else:
+        # 如果指定了项目ID，则该项目本身是否活跃
+        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project = project_result.scalar_one_or_none()
+        project_stats["total_projects"] = 1 if project else 0
+        project_stats["active_projects"] = 1 if project and project.is_active and not project.is_archived else 0
+
+    # 计算待审批任务数
+    # 领用申请待审批
+    borrow_pending = await db.execute(
+        select(func.count()).select_from(SampleBorrowRequest).where(
+            and_(
+                SampleBorrowRequest.status == "pending",
+                SampleBorrowRequest.project_id == project_id if project_id else True
+            )
+        )
+    )
+    # 转移申请待审批
+    transfer_pending = await db.execute(
+        select(func.count()).select_from(SampleTransferRecord).where(
+            and_(
+                SampleTransferRecord.status == "pending",
+                SampleTransferRecord.project_id == project_id if project_id else True
+            )
+        )
+    )
+    # 销毁申请待审批
+    destroy_pending = await db.execute(
+        select(func.count()).select_from(SampleDestroyRequest).where(
+            and_(
+                SampleDestroyRequest.status.in_(["pending", "test_manager_approved", "director_approved"]),
+                SampleDestroyRequest.project_id == project_id if project_id else True
+            )
+        )
+    )
+    # 项目归档申请待审批
+    archive_pending = await db.execute(
+        select(func.count()).select_from(ProjectArchiveRequest).where(
+            and_(
+                ProjectArchiveRequest.status.in_(["pending_manager", "pending_qa", "pending_admin"]),
+                ProjectArchiveRequest.project_id == project_id if project_id else True
+            )
+        )
+    )
+    pending_approvals = (borrow_pending.scalar() or 0) + \
+                        (transfer_pending.scalar() or 0) + \
+                        (destroy_pending.scalar() or 0) + \
+                        (archive_pending.scalar() or 0)
+
+    # 今日处理样本数
+    today_start = datetime.combine(datetime.utcnow().date(), datetime.min.time())
+    processed_today_result = await db.execute(
+        select(func.count(AuditLog.id)).where(
+            and_(
+                AuditLog.timestamp >= today_start,
+                AuditLog.entity_type.in_(["sample", "sample_receive", "sample_inventory", "sample_borrow", "sample_return", "sample_transfer", "sample_destroy"]),
+                AuditLog.action.in_(["create", "update", "receive", "inventory", "checkout", "return", "transfer", "destroy"])
+            )
+        )
+    )
+    processed_today = processed_today_result.scalar() or 0
+
+    # 今日审批任务数
+    approved_today_result = await db.execute(
+        select(func.count(AuditLog.id)).where(
+            and_(
+                AuditLog.timestamp >= today_start,
+                AuditLog.action.in_(["approve", "test_manager_approved", "director_approved", "qa_approved"])
+            )
+        )
+    )
+    approved_today = approved_today_result.scalar() or 0
+
     return {
         "total_samples": total_samples,
         "in_storage": status_counts.get("in_storage", 0),
@@ -357,7 +447,12 @@ async def get_statistics_summary(
         "destroyed": status_counts.get("destroyed", 0),
         "avg_storage_days": float(avg_storage_days),
         "total_exposure_time": int(total_exposure_time),
-        "exposure_events": exposure_events
+        "exposure_events": exposure_events,
+        "total_projects": project_stats.get("total_projects", 0),
+        "active_projects": project_stats.get("active_projects", 0),
+        "pending_approvals": pending_approvals,
+        "processed_today": processed_today,
+        "approved_today": approved_today,
     }
 
 

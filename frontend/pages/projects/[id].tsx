@@ -1393,8 +1393,6 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           ) : configTab === 'organizations' ? (
-
-          {configTab === 'organizations' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <Text className="text-sm text-zinc-600">管理此项目的相关单位（申办方、临床机构等）</Text>
@@ -1453,7 +1451,7 @@ export default function ProjectDetailPage() {
                 </Table>
               </div>
             </div>
-          )}
+          ) : null}
 
           {configTab === 'samples' && (
             <div className="space-y-4">

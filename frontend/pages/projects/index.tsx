@@ -12,7 +12,8 @@ import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
 import { 
   FunnelIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  PlusIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ProjectsService } from '@/services';
@@ -134,6 +135,12 @@ export default function ProjectsPage() {
             <Heading>项目管理</Heading>
             <Text className="mt-1 text-zinc-600">管理实验室项目信息</Text>
           </div>
+          <Link href="/projects/new">
+            <Button>
+              <PlusIcon className="h-4 w-4 mr-1" />
+              新建项目
+            </Button>
+          </Link>
         </div>
 
         {/* 筛选区域 */}

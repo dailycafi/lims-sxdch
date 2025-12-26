@@ -56,7 +56,7 @@ export default function SampleArchivePage() {
       // Hardcoded project_id 1 for demo, should come from context or selection
       await api.post('/samples/archive-request', {
         project_id: 1, 
-        sample_codes: JSON.stringify(selectedSamples),
+        sample_codes: selectedSamples,
         reason: archiveReason
       });
       setIsRequestDialogOpen(false);
@@ -107,8 +107,8 @@ export default function SampleArchivePage() {
             <TableHead>
               <TableRow>
                 <TableHeader>申请编号</TableHeader>
-                <TableHeader>项目ID</TableHeader>
-                <TableHeader>申请人ID</TableHeader>
+                <TableHeader>项目</TableHeader>
+                <TableHeader>申请人</TableHeader>
                 <TableHeader>原因</TableHeader>
                 <TableHeader>状态</TableHeader>
                 <TableHeader>申请时间</TableHeader>
@@ -124,8 +124,8 @@ export default function SampleArchivePage() {
                 requests.map(req => (
                   <TableRow key={req.id}>
                     <TableCell className="font-mono">{req.request_code}</TableCell>
-                    <TableCell>{req.project_id}</TableCell>
-                    <TableCell>{req.requested_by}</TableCell>
+                    <TableCell>{req.project_name || req.project_id}</TableCell>
+                    <TableCell>{req.requester_name || req.requested_by}</TableCell>
                     <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
                     <TableCell>
                       <Badge color={req.status === 'completed' ? 'green' : 'yellow'}>

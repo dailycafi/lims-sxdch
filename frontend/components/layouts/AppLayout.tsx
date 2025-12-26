@@ -173,16 +173,22 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuthStore();
   const { selectedProjectId } = useProjectStore();
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
-  const lastActivityRef = useRef<number>(Date.now());
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const STORAGE_KEY = 'lims_last_activity';
 
   // 处理活动检测
   useEffect(() => {
     if (!user) return;
 
+    let isMounted = true;
+
     const handleActivity = () => {
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      localStorage.setItem(STORAGE_KEY, now.toString());
     };
+
+    // 每次组件挂载或用户变更时，重置活动时间为当前，防止读取到旧会话的残留记录
+    handleActivity();
 
     // 监听各种用户活动事件
     window.addEventListener('mousedown', handleActivity);
@@ -194,23 +200,29 @@ export function AppLayout({ children }: AppLayoutProps) {
     const setupAutoLogout = async () => {
       try {
         const timeoutSetting = await SettingsService.getSetting('session_timeout');
+        if (!isMounted) return;
+
         const timeoutMinutes = timeoutSetting.value || 30;
         const timeoutMs = timeoutMinutes * 60 * 1000;
 
         const checkInactivity = () => {
+          if (!isMounted) return;
+
           const now = Date.now();
-          const inactiveTime = now - lastActivityRef.current;
+          const lastActivity = parseInt(localStorage.getItem(STORAGE_KEY) || now.toString());
+          const inactiveTime = now - lastActivity;
 
           if (inactiveTime >= timeoutMs) {
             console.log(`[AutoLogout] Inactive for ${timeoutMinutes} minutes. Logging out...`);
             handleLogout();
           } else {
-            // 继续下一次检查，检查频率为 1 分钟或剩余时间的较小值
-            const nextCheck = Math.min(60000, timeoutMs - inactiveTime);
+            // 继续下一次检查，检查频率为 1 分钟或剩余时间的较小值，最小 1 秒
+            const nextCheck = Math.max(1000, Math.min(60000, timeoutMs - inactiveTime));
             timeoutIdRef.current = setTimeout(checkInactivity, nextCheck);
           }
         };
 
+        // 延迟一分钟开始第一次检查
         timeoutIdRef.current = setTimeout(checkInactivity, 60000);
       } catch (error) {
         console.error('Failed to setup auto logout:', error);
@@ -220,6 +232,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     setupAutoLogout();
 
     return () => {
+      isMounted = false;
       window.removeEventListener('mousedown', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('scroll', handleActivity);
@@ -231,6 +244,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [user]);
 
   const handleLogout = async () => {
+    localStorage.removeItem(STORAGE_KEY);
     await logout();
     router.push('/login');
   };
@@ -366,13 +380,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目管理</SidebarLabel>
                   </SidebarItem>
-                  {/* 新建项目移动到这里 */}
-                  {user && (user.role === 'system_admin' || user.role === 'sample_admin') && (
-                    <SidebarItem href="/projects/new" current={isCurrentPath('/projects/new')}>
-                      <PlusIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>新建项目</SidebarLabel>
-                    </SidebarItem>
-                  )}
                 </div>
               </div>
 

@@ -20,19 +20,10 @@ fi
 echo ""
 
 # 步骤2: 初始化角色和权限
-echo "🔐 步骤 2/3: 初始化角色和权限..."
+echo "🔐 步骤 2/2: 初始化角色和权限..."
 python init_roles.py
 if [ $? -ne 0 ]; then
     echo "❌ 角色权限初始化失败！"
-    exit 1
-fi
-echo ""
-
-# 步骤3: 为用户分配角色
-echo "👥 步骤 3/3: 迁移用户角色..."
-python migrate_user_roles.py
-if [ $? -ne 0 ]; then
-    echo "❌ 用户角色迁移失败！"
     exit 1
 fi
 echo ""

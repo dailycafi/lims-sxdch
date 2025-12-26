@@ -9,6 +9,7 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Dialog, DialogTitle, DialogBody, DialogActions } from '@/components/dialog';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/date-utils';
 import { 
   DocumentMagnifyingGlassIcon,
   ShieldCheckIcon,
@@ -316,7 +317,7 @@ export default function AuditPage() {
                   <TableRow key={log.id}>
                     <TableCell className="font-mono text-sm">{log.id}</TableCell>
                     <TableCell className="text-zinc-600 text-sm">
-                      {new Date(log.timestamp).toLocaleString('zh-CN')}
+                      {formatDateTime(log.timestamp)}
                     </TableCell>
                     <TableCell>
                       <div>

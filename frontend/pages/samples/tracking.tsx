@@ -127,13 +127,14 @@ export default function TrackingFormPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <div className="flex gap-4 max-w-md">
+          <div className="flex gap-4 max-w-2xl items-center">
             <Input 
               placeholder="输入申请单号或项目编号" 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              className="flex-1"
             />
-            <Button onClick={handleSearch}>
+            <Button onClick={handleSearch} className="shrink-0">
               <MagnifyingGlassIcon className="h-4 w-4" />
               查询
             </Button>

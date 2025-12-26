@@ -2199,11 +2199,15 @@ async def execute_destroy(
 
 
 # 样本归档相关API（简化流）
+class SampleArchiveRequestCreate(BaseModel):
+    project_id: int
+    sample_codes: List[str]
+    reason: Optional[str] = ""
+
+
 @router.post("/archive-request")
 async def create_sample_archive_request(
-    project_id: int = Form(...),
-    sample_codes: str = Form(...),  # JSON数组字符串
-    reason: str = Form(""),
+    request_data: SampleArchiveRequestCreate,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -2211,10 +2215,9 @@ async def create_sample_archive_request(
     if not check_sample_permission(current_user, "request"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限申请归档")
 
-    try:
-        codes = json.loads(sample_codes)
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="样本编号格式错误")
+    project_id = request_data.project_id
+    codes = request_data.sample_codes
+    reason = request_data.reason
 
     # 生成申请编号
     count = await db.execute(select(func.count()).select_from(SampleArchiveRequest))
@@ -2261,7 +2264,11 @@ async def get_sample_archive_requests(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(SampleArchiveRequest)
+    from sqlalchemy.orm import selectinload
+    query = select(SampleArchiveRequest).options(
+        selectinload(SampleArchiveRequest.project),
+        selectinload(SampleArchiveRequest.requester)
+    )
     if status:
         query = query.where(SampleArchiveRequest.status == status)
     result = await db.execute(query.order_by(SampleArchiveRequest.created_at.desc()))
@@ -2271,7 +2278,10 @@ async def get_sample_archive_requests(
             "id": r.id,
             "request_code": r.request_code,
             "project_id": r.project_id,
+            "project_name": r.project.lab_project_code if r.project else f"ID: {r.project_id}",
             "requested_by": r.requested_by,
+            "requester_name": r.requester.full_name if r.requester else f"ID: {r.requested_by}",
+            "reason": r.reason,
             "status": r.status,
             "created_at": r.created_at.isoformat()
         } for r in reqs

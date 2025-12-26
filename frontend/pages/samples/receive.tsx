@@ -338,7 +338,7 @@ export default function SampleReceivePage() {
                   <option value="">请选择样本状态</option>
                   <option value="frozen">冰冻</option>
                   <option value="partially_thawed">部分融化</option>
-                  <option value="completely_thawed">完成融化</option>
+                  <option value="completely_thawed">完全融化</option>
                   <option value="other">其它</option>
                 </Select>
             </div>
