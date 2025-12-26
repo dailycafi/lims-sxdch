@@ -5,6 +5,7 @@ if not hasattr(bcrypt, '__about__'):
     bcrypt.__about__ = type('about', (object,), {'__version__': bcrypt.__version__})
 
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text, inspect
 from app.core.database import Base
 from app.core.config import settings
 from app.core.security import get_password_hash
@@ -18,13 +19,27 @@ import random
 async def drop_all_tables(engine):
     """删除所有表"""
     async with engine.begin() as conn:
-        # 使用 SQLAlchemy 的标准删除方法，自动处理外键依赖
         print("🗑️  正在删除所有数据表...")
-        await conn.run_sync(Base.metadata.drop_all)
+        
+        # 获取所有表名并使用 CASCADE 删除（解决循环依赖问题）
+        def get_table_names(sync_conn):
+            inspector = inspect(sync_conn)
+            return inspector.get_table_names()
+        
+        tables = await conn.run_sync(get_table_names)
+        
+        if tables:
+            print(f"   找到 {len(tables)} 个表，正在删除...")
+            for table in tables:
+                try:
+                    await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+                    print(f"   ✓ 已删除表: {table}")
+                except Exception as e:
+                    print(f"   ⚠ 删除表 {table} 时出错: {e}")
+        else:
+            print("   没有找到需要删除的表")
+    
     print("✅ 已完成数据表清理")
-
-
-from sqlalchemy import text
 
 
 async def init_db(drop_existing=False):
