@@ -18,9 +18,9 @@ export const Select = forwardRef(function Select(
         // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
         'dark:before:hidden',
         // Focus ring
-        'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset has-data-focus:after:ring-2 has-data-focus:after:ring-blue-500',
+        'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset has-[[data-focus]]:after:ring-2 has-[[data-focus]]:after:ring-blue-500',
         // Disabled state
-        'has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none',
+        'has-[[data-disabled]]:opacity-50 has-[[data-disabled]]:before:bg-zinc-950/5 has-[[data-disabled]]:before:shadow-none',
         // 增加阴影效果
         'shadow-sm hover:shadow-md transition-shadow duration-200',
       ])}
@@ -41,15 +41,15 @@ export const Select = forwardRef(function Select(
           // Typography
           'text-base/6 text-zinc-950 placeholder:text-zinc-400 sm:text-sm/6 dark:text-white dark:*:text-white',
           // Border - 更新边框颜色
-          'border border-gray-200 data-hover:border-gray-300 dark:border-white/10 dark:data-hover:border-white/20',
+          'border border-gray-200 data-[hover]:border-gray-300 dark:border-white/10 dark:data-[hover]:border-white/20',
           // Background color
           'bg-transparent dark:bg-white/5 dark:*:bg-zinc-800',
           // Hide default focus styles
           'focus:outline-hidden',
           // Invalid state
-          'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
+          'data-[invalid]:border-red-500 data-[invalid]:data-[hover]:border-red-500 dark:data-[invalid]:border-red-600 dark:data-[invalid]:data-[hover]:border-red-600',
           // Disabled state
-          'data-disabled:border-zinc-950/20 data-disabled:opacity-100 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
+          'data-[disabled]:border-zinc-950/20 data-[disabled]:opacity-100 dark:data-[disabled]:border-white/15 dark:data-[disabled]:bg-white/2.5 dark:data-[hover]:data-[disabled]:border-white/15',
           // 确保统一的高度
           'h-full min-h-[2.75rem]',
           // 自定义 select 样式类

@@ -9,6 +9,7 @@ import pandas as pd
 from io import BytesIO
 
 from app.core.database import get_db
+from app.core.datetime_utils import datetime_to_utc_iso
 from app.models.sample import (
     Sample, SampleStatus, SampleBorrowItem, SampleTransferItem,
     SampleBorrowRequest, SampleTransferRecord, SampleDestroyRequest
@@ -17,6 +18,7 @@ from app.models.audit import AuditLog
 from app.models.user import User
 from app.models.project import Project, ProjectArchiveRequest
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import assert_project_access, get_accessible_project_ids, is_project_admin
 
 router = APIRouter()
 
@@ -34,6 +36,11 @@ async def get_sample_records(
     db: AsyncSession = Depends(get_db)
 ):
     """获取样本存取记录"""
+    # 非管理员必须明确选择项目，避免跨项目暴露审计数据
+    if current_user and not is_project_admin(current_user) and project_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择项目")
+    if project_id is not None:
+        await assert_project_access(db, current_user, project_id)
     # 查询审计日志
     query = select(AuditLog).options(
         selectinload(AuditLog.user)
@@ -105,7 +112,7 @@ async def get_sample_records(
                 "operation_type": op_type,
                 "operation_detail": _get_operation_detail(log),
                 "operator": log.user.full_name if log.user else "",
-                "operation_time": log.timestamp.isoformat(),
+                "operation_time": datetime_to_utc_iso(log.timestamp),
                 "location": details.get("location", ""),
                 "temperature": details.get("temperature"),
                 "purpose": record_purpose  # 新增：用途字段
@@ -133,6 +140,8 @@ async def get_sample_access_history(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="样本不存在"
         )
+
+    await assert_project_access(db, current_user, sample.project_id)
     
     # 查询该样本的所有领用记录
     borrow_result = await db.execute(
@@ -166,8 +175,8 @@ async def get_sample_access_history(
         
         access_records.append({
             "access_number": idx + 1,
-            "borrowed_at": item.borrowed_at.isoformat(),
-            "returned_at": item.returned_at.isoformat() if item.returned_at else None,
+            "borrowed_at": datetime_to_utc_iso(item.borrowed_at),
+            "returned_at": datetime_to_utc_iso(item.returned_at) if item.returned_at else None,
             "duration_minutes": duration_minutes,
             "cumulative_exposure_minutes": cumulative_exposure,
             "purpose": purpose,
@@ -210,6 +219,14 @@ async def get_exposure_records(
     db: AsyncSession = Depends(get_db)
 ):
     """获取样本暴露记录"""
+    if project_id is not None:
+        await assert_project_access(db, current_user, project_id)
+    accessible_ids = None
+    if current_user and not is_project_admin(current_user) and project_id is None:
+        ids = await get_accessible_project_ids(db, current_user)
+        accessible_ids = set(ids)
+        if not ids:
+            return []
     # 查询领用记录（样本离开冷库的主要原因）
     query = select(SampleBorrowItem).options(
         selectinload(SampleBorrowItem.request),
@@ -239,13 +256,15 @@ async def get_exposure_records(
         # 根据项目ID筛选
         if project_id and item.sample.project_id != project_id:
             continue
+        if accessible_ids is not None and item.sample.project_id not in accessible_ids:
+            continue
         
         record = {
             "id": item.id,
             "sample_code": item.sample.sample_code,
             "project": item.request.project.lab_project_code if item.request and item.request.project else "",
-            "start_time": item.borrowed_at.isoformat(),
-            "end_time": item.returned_at.isoformat() if item.returned_at else None,
+            "start_time": datetime_to_utc_iso(item.borrowed_at),
+            "end_time": datetime_to_utc_iso(item.returned_at) if item.returned_at else None,
             "duration": duration,
             "max_temperature": None,  # 待集成温度监控系统
             "reason": f"领用用途: {item.request.purpose if item.request else '未知'}"
@@ -293,15 +312,40 @@ async def get_statistics_summary(
     db: AsyncSession = Depends(get_db)
 ):
     """获取统计汇总数据"""
+    if project_id is not None:
+        await assert_project_access(db, current_user, project_id)
+    accessible_ids = None
+    if current_user and not is_project_admin(current_user) and project_id is None:
+        ids = await get_accessible_project_ids(db, current_user)
+        accessible_ids = ids
+        if not ids:
+            # 没有任何授权项目时，汇总全部为 0
+            return {
+                "total_samples": 0,
+                "in_storage": 0,
+                "checked_out": 0,
+                "transferred": 0,
+                "destroyed": 0,
+                "avg_storage_days": 0.0,
+                "total_exposure_time": 0,
+                "exposure_events": 0,
+                "total_projects": 0,
+                "active_projects": 0,
+                "pending_approvals": 0,
+                "processed_today": 0,
+                "approved_today": 0,
+            }
     # 基础查询
     base_query = select(Sample)
     if project_id:
         base_query = base_query.where(Sample.project_id == project_id)
+    elif accessible_ids is not None:
+        base_query = base_query.where(Sample.project_id.in_(accessible_ids))
     
     # 样本总数
     total_result = await db.execute(
         select(func.count()).select_from(Sample).where(
-            Sample.project_id == project_id if project_id else True
+            Sample.project_id == project_id if project_id else (Sample.project_id.in_(accessible_ids) if accessible_ids is not None else True)
         )
     )
     total_samples = total_result.scalar() or 0
@@ -314,7 +358,7 @@ async def get_statistics_summary(
             select(func.count()).select_from(Sample).where(
                 and_(
                     Sample.status == status,
-                    Sample.project_id == project_id if project_id else True
+                    Sample.project_id == project_id if project_id else (Sample.project_id.in_(accessible_ids) if accessible_ids is not None else True)
                 )
             )
         )
@@ -328,7 +372,7 @@ async def get_statistics_summary(
         )).select_from(Sample).where(
             and_(
                 Sample.status == SampleStatus.IN_STORAGE,
-                Sample.project_id == project_id if project_id else True
+                Sample.project_id == project_id if project_id else (Sample.project_id.in_(accessible_ids) if accessible_ids is not None else True)
             )
         )
     )
@@ -340,6 +384,8 @@ async def get_statistics_summary(
     )
     if project_id:
         exposure_query = exposure_query.join(Sample).where(Sample.project_id == project_id)
+    elif accessible_ids is not None:
+        exposure_query = exposure_query.join(Sample).where(Sample.project_id.in_(accessible_ids))
     
     result = await db.execute(exposure_query)
     borrow_items = result.scalars().all()
@@ -356,15 +402,25 @@ async def get_statistics_summary(
     project_stats = {}
     if not project_id:
         # 项目总数
-        total_projects_result = await db.execute(select(func.count()).select_from(Project))
+        if accessible_ids is not None:
+            total_projects_result = await db.execute(select(func.count()).select_from(Project).where(Project.id.in_(accessible_ids)))
+        else:
+            total_projects_result = await db.execute(select(func.count()).select_from(Project))
         project_stats["total_projects"] = total_projects_result.scalar() or 0
         
         # 活跃项目数
-        active_projects_result = await db.execute(
-            select(func.count()).select_from(Project).where(
-                and_(Project.is_active == True, Project.is_archived == False)
+        if accessible_ids is not None:
+            active_projects_result = await db.execute(
+                select(func.count()).select_from(Project).where(
+                    and_(Project.is_active == True, Project.is_archived == False, Project.id.in_(accessible_ids))
+                )
             )
-        )
+        else:
+            active_projects_result = await db.execute(
+                select(func.count()).select_from(Project).where(
+                    and_(Project.is_active == True, Project.is_archived == False)
+                )
+            )
         project_stats["active_projects"] = active_projects_result.scalar() or 0
     else:
         # 如果指定了项目ID，则该项目本身是否活跃
@@ -379,7 +435,7 @@ async def get_statistics_summary(
         select(func.count()).select_from(SampleBorrowRequest).where(
             and_(
                 SampleBorrowRequest.status == "pending",
-                SampleBorrowRequest.project_id == project_id if project_id else True
+                SampleBorrowRequest.project_id == project_id if project_id else (SampleBorrowRequest.project_id.in_(accessible_ids) if accessible_ids is not None else True)
             )
         )
     )
@@ -388,7 +444,7 @@ async def get_statistics_summary(
         select(func.count()).select_from(SampleTransferRecord).where(
             and_(
                 SampleTransferRecord.status == "pending",
-                SampleTransferRecord.project_id == project_id if project_id else True
+                SampleTransferRecord.project_id == project_id if project_id else (SampleTransferRecord.project_id.in_(accessible_ids) if accessible_ids is not None else True)
             )
         )
     )
@@ -397,7 +453,7 @@ async def get_statistics_summary(
         select(func.count()).select_from(SampleDestroyRequest).where(
             and_(
                 SampleDestroyRequest.status.in_(["pending", "test_manager_approved", "director_approved"]),
-                SampleDestroyRequest.project_id == project_id if project_id else True
+                SampleDestroyRequest.project_id == project_id if project_id else (SampleDestroyRequest.project_id.in_(accessible_ids) if accessible_ids is not None else True)
             )
         )
     )
@@ -406,7 +462,7 @@ async def get_statistics_summary(
         select(func.count()).select_from(ProjectArchiveRequest).where(
             and_(
                 ProjectArchiveRequest.status.in_(["pending_manager", "pending_qa", "pending_admin"]),
-                ProjectArchiveRequest.project_id == project_id if project_id else True
+                ProjectArchiveRequest.project_id == project_id if project_id else (ProjectArchiveRequest.project_id.in_(accessible_ids) if accessible_ids is not None else True)
             )
         )
     )

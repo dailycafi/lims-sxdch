@@ -13,6 +13,7 @@ from app.models.deviation import Deviation
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import assert_project_access, get_accessible_project_ids, is_project_admin
 
 router = APIRouter()
 
@@ -49,6 +50,8 @@ async def create_archive_request(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="项目已归档"
         )
+
+    await assert_project_access(db, current_user, project.id)
     
     # 检查是否有未完成的事项
     summary = await get_project_archive_summary(request_data.project_id, current_user, db)
@@ -131,6 +134,12 @@ async def get_archive_requests(
         selectinload(ProjectArchiveRequest.requester),
         selectinload(ProjectArchiveRequest.approver)
     )
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(ProjectArchiveRequest.project_id.in_(accessible_ids))
     
     if status:
         if status == "pending":
@@ -172,13 +181,18 @@ async def get_archived_projects(
     db: AsyncSession = Depends(get_db)
 ):
     """获取已归档项目列表"""
-    result = await db.execute(
-        select(Project).options(
-            selectinload(Project.sponsor),
-            selectinload(Project.clinical_org)
-        ).where(Project.is_archived == True)
-        .order_by(Project.archived_at.desc())
-    )
+    stmt = select(Project).options(
+        selectinload(Project.sponsor),
+        selectinload(Project.clinical_org)
+    ).where(Project.is_archived == True)
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        stmt = stmt.where(Project.id.in_(accessible_ids))
+
+    result = await db.execute(stmt.order_by(Project.archived_at.desc()))
     projects = result.scalars().all()
     
     # 转换为响应格式

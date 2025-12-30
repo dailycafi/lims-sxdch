@@ -34,8 +34,12 @@ class RoleBase(BaseModel):
     is_active: bool = True
 
 
-class RoleCreate(RoleBase):
+class RoleCreate(BaseModel):
     """创建角色"""
+    code: Optional[str] = None  # 可选，如果不提供则自动生成
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
     permission_ids: List[int] = []
 
 

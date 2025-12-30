@@ -12,6 +12,7 @@ import { Avatar } from '@/components/avatar';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { useAuthStore } from '@/store/auth';
 import { UsersService } from '@/services';
+import { extractDetailMessage } from '@/lib/api';
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: '系统管理员',
@@ -35,6 +36,12 @@ export default function ProfilePage() {
     email: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -96,6 +103,39 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     await logout();
     router.push('/login');
+  };
+
+  const canSubmitPassword =
+    passwordForm.oldPassword.trim() !== '' &&
+    passwordForm.newPassword.trim() !== '' &&
+    passwordForm.confirmPassword.trim() !== '' &&
+    passwordForm.newPassword === passwordForm.confirmPassword;
+
+  const handleChangePassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!user) return;
+
+    if (!canSubmitPassword) {
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        toast.error('两次输入的新密码不一致');
+        return;
+      }
+      toast.error('请填写完整的密码信息');
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await UsersService.changePassword(user.id, passwordForm.oldPassword, passwordForm.newPassword);
+      toast.success('密码修改成功');
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      console.error('修改密码失败:', error);
+      const errorMsg = extractDetailMessage(error.response?.data) || error.message || '修改密码失败';
+      toast.error(errorMsg);
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   if (isLoading) {
@@ -204,6 +244,60 @@ export default function ProfilePage() {
               disabled={!hasChanges || !isFormValid || isSaving}
             >
               {isSaving ? '保存中…' : '保存修改'}
+            </Button>
+          </div>
+        </form>
+
+        <form onSubmit={handleChangePassword} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div>
+            <Heading level={3}>修改密码</Heading>
+            <Text className="mt-1 text-sm text-zinc-600">用于您本人账户的密码更新</Text>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-zinc-700">原密码</label>
+              <Input
+                type="password"
+                value={passwordForm.oldPassword}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, oldPassword: event.target.value }))}
+                placeholder="请输入原密码"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="sm:col-span-1">
+              <label className="mb-2 block text-sm font-medium text-zinc-700">新密码</label>
+              <Input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                placeholder="请输入新密码"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="sm:col-span-1">
+              <label className="mb-2 block text-sm font-medium text-zinc-700">确认新密码</label>
+              <Input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                placeholder="请再次输入新密码"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              plain
+              onClick={() => setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })}
+              disabled={isChangingPassword}
+            >
+              清空
+            </Button>
+            <Button type="submit" color="dark" disabled={!canSubmitPassword || isChangingPassword}>
+              {isChangingPassword ? '提交中…' : '确认修改'}
             </Button>
           </div>
         </form>

@@ -4,6 +4,20 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+class OrganizationType(Base):
+    """组织类型模型"""
+    __tablename__ = "organization_types"
+
+    id = Column(Integer, primary_key=True, index=True)
+    value = Column(String, unique=True, nullable=False)  # 类型值，如 sponsor, clinical
+    label = Column(String, nullable=False)  # 显示名称，如 申办方、临床机构
+    is_system = Column(Boolean, default=False)  # 是否系统预置（不可删除）
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)  # 显示排序
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class Organization(Base):
     """组织/机构模型"""
     __tablename__ = "organizations"
@@ -35,9 +49,11 @@ class SampleType(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True) # 关联项目
     category = Column(String, default="clinical")  # clinical, stability, qc
-    cycle_group = Column(String, nullable=True)  # 周期/组别 (临床用)
-    test_type = Column(String, nullable=True)  # 检测类型 (通用)
-    code = Column(String, nullable=True)  # 代码 (STB/QC用)
+    cycle_group = Column(String, nullable=True)  # 周期/组别 (临床用) - 逗号分隔
+    test_type = Column(String, nullable=True)  # 检测类型 (通用) - 逗号分隔
+    code = Column(String, nullable=True)  # 代码 (STB/QC用) - 逗号分隔
+    primary_codes = Column(String, nullable=True)  # 正份代码 (临床用) - 逗号分隔，如：a1,a2,a3,a4
+    backup_codes = Column(String, nullable=True)  # 备份代码 (临床用) - 逗号分隔，如：b1,b2,b3
     primary_count = Column(Integer, default=1)  # 正份数量 (临床用)
     backup_count = Column(Integer, default=1)  # 备份数量 (临床用)
     purpose = Column(String, nullable=True)  # 用途 (临床用)

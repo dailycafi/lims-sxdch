@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { api } from '@/lib/api';
 import { 
@@ -33,10 +32,12 @@ export default function SampleReceivePage() {
     clinical_site: '',
     transport_company: '',
     transport_method: '',
+    transport_method_other: '',
     temperature_monitor_id: '',
     is_over_temperature: 'false',
     sample_count: '',
     sample_status: '',
+    sample_status_other: '',
     storage_location: '',
   });
 
@@ -87,6 +88,10 @@ export default function SampleReceivePage() {
       toast.error('请选择运输方式');
       return false;
     }
+    if (formData.transport_method === 'other' && !formData.transport_method_other.trim()) {
+      toast.error('请输入其它运输方式');
+      return false;
+    }
     if (!formData.temperature_monitor_id.trim()) {
       toast.error('请输入温度记录仪编号/序列号');
       return false;
@@ -97,6 +102,10 @@ export default function SampleReceivePage() {
     }
     if (!formData.sample_status) {
       toast.error('请选择样本状态');
+      return false;
+    }
+    if (formData.sample_status === 'other' && !formData.sample_status_other.trim()) {
+      toast.error('请输入其它样本状态');
       return false;
     }
     return true;
@@ -110,14 +119,25 @@ export default function SampleReceivePage() {
     setSubmitting(true);
     try {
       const formDataToSend = new FormData();
+
+      const transportMethodToSend =
+        formData.transport_method === 'other'
+          ? `其它：${formData.transport_method_other.trim()}`
+          : formData.transport_method;
+
+      const sampleStatusToSend =
+        formData.sample_status === 'other'
+          ? `其它：${formData.sample_status_other.trim()}`
+          : formData.sample_status;
+
       formDataToSend.append('project_id', String(selectedProjectId));
       formDataToSend.append('clinical_org_id', formData.clinical_site);
       formDataToSend.append('transport_org_id', formData.transport_company);
-      formDataToSend.append('transport_method', formData.transport_method);
+      formDataToSend.append('transport_method', transportMethodToSend);
       formDataToSend.append('temperature_monitor_id', formData.temperature_monitor_id);
       formDataToSend.append('is_over_temperature', formData.is_over_temperature);
       formDataToSend.append('sample_count', formData.sample_count);
-      formDataToSend.append('sample_status', formData.sample_status);
+      formDataToSend.append('sample_status', sampleStatusToSend);
       formDataToSend.append('storage_location', formData.storage_location);
       
       if (temperatureFile) {
@@ -168,11 +188,6 @@ export default function SampleReceivePage() {
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto">
-        {/* 页面标题 */}
-        <div className="mb-6">
-            <Heading>样本接收</Heading>
-        </div>
-
         {/* 表单主体 */}
         <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
           <div className="p-6 md:p-8 space-y-8">
@@ -231,7 +246,14 @@ export default function SampleReceivePage() {
                 </label>
                 <Select
                   value={formData.transport_method}
-                  onChange={(e) => setFormData({ ...formData, transport_method: e.target.value })}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormData({
+                      ...formData,
+                      transport_method: v,
+                      transport_method_other: v === 'other' ? formData.transport_method_other : '',
+                    });
+                  }}
                   required
                     className="w-full"
                     disabled={!selectedProjectId}
@@ -242,6 +264,17 @@ export default function SampleReceivePage() {
                   <option value="room_temp">室温</option>
                   <option value="other">其它</option>
                 </Select>
+                {formData.transport_method === 'other' && (
+                  <div className="mt-2">
+                    <Input
+                      value={formData.transport_method_other}
+                      onChange={(e) => setFormData({ ...formData, transport_method_other: e.target.value })}
+                      placeholder="请输入其它运输方式"
+                      className="w-full"
+                      disabled={!selectedProjectId}
+                    />
+                  </div>
+                )}
               </div>
               </div>
             </div>
@@ -277,7 +310,7 @@ export default function SampleReceivePage() {
                     <label className={!selectedProjectId ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
                     <input
                       type="file"
-                      accept=".csv,.xlsx,.xls,.txt,.pdf"
+                      accept=".csv,.xlsx,.xls,.txt,.pdf,.jpg,.jpeg,.png"
                       onChange={handleTemperatureFileChange}
                       className="hidden"
                         disabled={!selectedProjectId}
@@ -293,7 +326,7 @@ export default function SampleReceivePage() {
                         <Text className="text-xs text-zinc-500">{(temperatureFile.size / 1024).toFixed(1)} KB</Text>
                       </div>
                   ) : (
-                    <Text className="text-sm text-zinc-500">支持 CSV, Excel, TXT, PDF</Text>
+                    <Text className="text-sm text-zinc-500">支持 CSV、Excel、TXT、PDF、JPG、PNG</Text>
                   )}
                   </div>
                 </div>
@@ -330,7 +363,14 @@ export default function SampleReceivePage() {
                 </label>
                 <Select
                   value={formData.sample_status}
-                  onChange={(e) => setFormData({ ...formData, sample_status: e.target.value })}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormData({
+                      ...formData,
+                      sample_status: v,
+                      sample_status_other: v === 'other' ? formData.sample_status_other : '',
+                    });
+                  }}
                   required
                     className="w-full"
                     disabled={!selectedProjectId}
@@ -341,6 +381,17 @@ export default function SampleReceivePage() {
                   <option value="completely_thawed">完全融化</option>
                   <option value="other">其它</option>
                 </Select>
+                {formData.sample_status === 'other' && (
+                  <div className="mt-2">
+                    <Input
+                      value={formData.sample_status_other}
+                      onChange={(e) => setFormData({ ...formData, sample_status_other: e.target.value })}
+                      placeholder="请输入其它样本状态"
+                      className="w-full"
+                      disabled={!selectedProjectId}
+                    />
+                  </div>
+                )}
             </div>
 
               <div>

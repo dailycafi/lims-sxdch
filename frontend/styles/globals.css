@@ -82,33 +82,34 @@
   }
 }
 
-/* 按钮修复 */
 @layer components {
-  /* 黑白按钮样式 */
-  button[color="dark"],
-  button[type="submit"] {
-    --btn-bg: rgb(17 24 39) !important;
-    --btn-border: rgb(0 0 0) !important;
-    --btn-hover-overlay: rgba(255, 255, 255, 0.1) !important;
-    --btn-icon: rgb(156 163 175) !important;
-    background-color: rgb(17 24 39) !important;
-    border-color: rgb(0 0 0) !important;
-    color: white !important;
+  /* 按钮修复 */
+  .btn-custom,
+  button[type="submit"]:not([data-slot="control"]),
+  button[color="dark"]:not([data-slot="control"]) {
+    --btn-bg: rgb(17 24 39);
+    --btn-border: rgb(0 0 0);
+    --btn-hover-overlay: rgba(255, 255, 255, 0.1);
+    --btn-icon: rgb(156 163 175);
+    background-color: rgb(17 24 39);
+    border-color: rgb(0 0 0);
+    color: white;
   }
   
-  button[color="dark"]:hover,
-  button[type="submit"]:hover {
-    background-color: rgb(0 0 0) !important;
+  .btn-custom:hover,
+  button[type="submit"]:not([data-slot="control"]):hover,
+  button[color="dark"]:not([data-slot="control"]):hover {
+    background-color: rgb(0 0 0);
   }
   
-  /* 修复按钮的基础样式 */
-  button {
+  /* 基础按钮样式 - 仅针对非功能性组件按钮 */
+  button:not([data-slot="control"]) {
     position: relative;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    min-height: 3rem !important;
-    padding: 0.75rem 1.5rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0.75rem 1.5rem;
     font-weight: 600;
     border-radius: 0.5rem;
     border-width: 1px;
@@ -116,9 +117,9 @@
   }
   
   @media (min-width: 640px) {
-    button {
-      min-height: 2.5rem !important;
-      padding: 0.5rem 1rem !important;
+    button:not([data-slot="control"]) {
+      min-height: 2.5rem;
+      padding: 0.5rem 1rem;
     }
   }
   

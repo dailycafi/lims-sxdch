@@ -31,7 +31,7 @@ function SidebarHeaderContent({ user }: { user: any }) {
   return (
     <div className={clsx("flex items-center gap-2 px-2 py-4", isCollapsed ? "flex-col-reverse justify-center" : "justify-between")}>
       {user && (
-        <Link href="/profile" className={clsx("flex items-center gap-3 rounded-lg p-1 transition-colors hover:bg-zinc-800/50", isCollapsed ? "justify-center" : "flex-1 min-w-0")}>
+        <Link href="/profile" scroll={false} className={clsx("flex items-center gap-3 rounded-lg p-1 transition-colors hover:bg-zinc-800/50", isCollapsed ? "justify-center" : "flex-1 min-w-0")}>
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 shadow-lg">
             <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
               <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
@@ -92,6 +92,7 @@ interface AppLayoutProps {
 // 路由到面包屑的映射
 const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/': [],
+  '/users': [{ label: '系统管理', href: '#' }, { label: '用户管理' }],
   '/tasks': [
     { label: '任务中心', current: true }
   ],
@@ -152,11 +153,11 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
     { label: '样本归档', current: true }
   ],
   '/global-params': [
-    { label: '系统管理', href: '/global-params' },
+    { label: '系统管理', href: '/settings' },
     { label: '全局参数', current: true }
   ],
   '/audit': [
-    { label: '系统管理', href: '/audit' },
+    { label: '系统管理', href: '/settings' },
     { label: '审计日志', current: true }
   ],
   '/settings': [
@@ -352,7 +353,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <SidebarHeader className="!p-0 border-b-0">
             <SidebarHeaderContent user={user} />
             <SidebarSection className="px-4 pb-4">
-              <SidebarItem href="/" current={isCurrentPath('/')}>
+              <SidebarItem href="/" scroll={false} current={isCurrentPath('/')}>
                 <HomeIcon data-slot="icon" className="!w-4 !h-4" />
                 <SidebarLabel>主页</SidebarLabel>
               </SidebarItem>
@@ -365,7 +366,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div>
                 <SidebarHeading>工作台</SidebarHeading>
                 <div className="space-y-1">
-                  <SidebarItem href="/tasks" current={isCurrentPath('/tasks')}>
+                  <SidebarItem href="/tasks" scroll={false} current={isCurrentPath('/tasks')}>
                     <ClipboardDocumentCheckIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>任务中心</SidebarLabel>
                     {pendingTaskCount > 0 && (
@@ -376,7 +377,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       </SidebarContent>
                     )}
                   </SidebarItem>
-                  <SidebarItem href="/projects" current={isCurrentPath('/projects')}>
+                  <SidebarItem href="/projects" scroll={false} current={isCurrentPath('/projects')}>
                     <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目管理</SidebarLabel>
                   </SidebarItem>
@@ -387,35 +388,35 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div>
                 <SidebarHeading>样本管理</SidebarHeading>
                 <div className="space-y-1">
-                  <SidebarItem href="/samples/receive" current={isCurrentPath('/samples/receive')}>
+                  <SidebarItem href="/samples/receive" scroll={false} current={isCurrentPath('/samples/receive')}>
                     <BeakerIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本接收</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples/inventory" current={isCurrentPath('/samples/inventory')}>
+                  <SidebarItem href="/samples/inventory" scroll={false} current={isCurrentPath('/samples/inventory')}>
                     <ClipboardDocumentListIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>清点入库</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/storage" current={isCurrentPath('/storage')}>
+                  <SidebarItem href="/storage" scroll={false} current={isCurrentPath('/storage')}>
                     <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>存储设备</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
+                  <SidebarItem href="/samples/borrow" scroll={false} current={isCurrentPath('/samples/borrow')}>
                     <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本作业</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples/transfer" current={isCurrentPath('/samples/transfer')}>
+                  <SidebarItem href="/samples/transfer" scroll={false} current={isCurrentPath('/samples/transfer')}>
                     <ArrowsRightLeftIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本转移</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples/destroy" current={isCurrentPath('/samples/destroy')}>
+                  <SidebarItem href="/samples/destroy" scroll={false} current={isCurrentPath('/samples/destroy')}>
                     <TrashIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本销毁</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples/tracking" current={isCurrentPath('/samples/tracking')}>
+                  <SidebarItem href="/samples/tracking" scroll={false} current={isCurrentPath('/samples/tracking')}>
                     <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>跟踪表</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/samples" current={isCurrentPath('/samples')}>
+                  <SidebarItem href="/samples" scroll={false} current={isCurrentPath('/samples')}>
                     <MagnifyingGlassIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本查询</SidebarLabel>
                   </SidebarItem>
@@ -427,19 +428,19 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div>
                 <SidebarHeading>统计分析</SidebarHeading>
                 <div className="space-y-1">
-                  <SidebarItem href="/statistics" current={isCurrentPath('/statistics')}>
+                  <SidebarItem href="/statistics" scroll={false} current={isCurrentPath('/statistics')}>
                     <ChartBarIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>统计查询</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/deviation" current={isCurrentPath('/deviation')}>
+                  <SidebarItem href="/deviation" scroll={false} current={isCurrentPath('/deviation')}>
                     <ExclamationTriangleIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>偏差管理</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/archive" current={isCurrentPath('/archive')}>
+                  <SidebarItem href="/archive" scroll={false} current={isCurrentPath('/archive')}>
                     <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目归档</SidebarLabel>
                   </SidebarItem>
-                  <SidebarItem href="/archive/samples" current={isCurrentPath('/archive/samples')}>
+                  <SidebarItem href="/archive/samples" scroll={false} current={isCurrentPath('/archive/samples')}>
                     <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本归档</SidebarLabel>
                   </SidebarItem>
@@ -451,15 +452,19 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <div>
                   <SidebarHeading>系统管理</SidebarHeading>
                   <div className="space-y-1">
-                    <SidebarItem href="/global-params" current={isCurrentPath('/global-params')}>
+                    <SidebarItem href="/users" scroll={false} current={isCurrentPath('/users')}>
+                      <UsersIcon data-slot="icon" className="!w-4 !h-4" />
+                      <SidebarLabel>用户管理</SidebarLabel>
+                    </SidebarItem>
+                    <SidebarItem href="/global-params" scroll={false} current={isCurrentPath('/global-params')}>
                       <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>全局参数</SidebarLabel>
                     </SidebarItem>
-                    <SidebarItem href="/audit" current={isCurrentPath('/audit')}>
+                    <SidebarItem href="/audit" scroll={false} current={isCurrentPath('/audit')}>
                       <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>审计日志</SidebarLabel>
                     </SidebarItem>
-                    <SidebarItem href="/settings" current={isCurrentPath('/settings')}>
+                    <SidebarItem href="/settings" scroll={false} current={isCurrentPath('/settings')}>
                       <Cog6ToothIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>系统设置</SidebarLabel>
                     </SidebarItem>

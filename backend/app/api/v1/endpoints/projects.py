@@ -9,6 +9,7 @@ from itertools import product
 
 from app.core.database import get_db
 from app.models.project import Project
+from app.models.project_organization import ProjectOrganization
 from app.models.sample import (
     Sample,
     SampleReceiveRecord,
@@ -23,6 +24,9 @@ from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.security import pwd_context
 from app.services.sample_service import generate_sample_codes_logic
+from app.api.v1.deps import assert_project_access, get_accessible_project_ids, is_project_admin
+from app.models.project_member import ProjectMember
+from app.models.global_params import Organization as GlobalOrganization
 
 router = APIRouter()
 
@@ -31,6 +35,54 @@ router = APIRouter()
 class SampleCodeRuleUpdate(BaseModel):
     sample_code_rule: dict
     audit_reason: str
+
+
+class ProjectOrganizationLinkCreate(BaseModel):
+    organization_id: int
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ProjectOrganizationLinkUpdate(BaseModel):
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    notes: Optional[str] = None
+    audit_reason: str
+
+
+class OrganizationBrief(BaseModel):
+    id: int
+    project_id: Optional[int] = None
+    name: str
+    org_type: str
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectOrganizationLinkResponse(BaseModel):
+    id: int
+    project_id: int
+    organization_id: int
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    organization: OrganizationBrief
+
+    class Config:
+        from_attributes = True
 
 
 def check_project_permission(user: User) -> bool:
@@ -90,32 +142,30 @@ async def create_project(
             detail="实验室项目编号已存在"
         )
     
-    # 如果指定了配置模板，加载模板内容
-    if project_data.config_template_id:
-        from app.models.global_params import GlobalConfiguration
-        result = await db.execute(
-            select(GlobalConfiguration).where(GlobalConfiguration.id == project_data.config_template_id)
-        )
-        config = result.scalar_one_or_none()
-        if config:
-            # 将模板配置合并到 sample_meta_config
-            current_config = project_data.sample_meta_config or {}
-            # 深度合并或覆盖，这里简单合并
-            merged_config = {**config.config_data, **current_config}
-            project_data.sample_meta_config = merged_config
-            
-            # 如果模板中有样本编号规则，也可以应用（需约定结构）
-            # if "sample_code_rule" in config.config_data:
-            #     project_data.sample_code_rule = config.config_data["sample_code_rule"]
-
     try:
-        # exclude config_template_id as it's not a model field
-        create_data = project_data.model_dump(exclude={"config_template_id"})
+        # exclude clinical_org_ids as it is not a model field
+        create_data = project_data.model_dump(exclude={"clinical_org_ids"})
         db_project = Project(
             **create_data,
             created_by=current_user.id
         )
         db.add(db_project)
+        await db.flush()  # 获取 id
+
+        # 处理多个临床机构
+        if project_data.clinical_org_ids:
+            for org_id in project_data.clinical_org_ids:
+                link = ProjectOrganization(
+                    project_id=db_project.id,
+                    organization_id=org_id,
+                    is_active=True
+                )
+                db.add(link)
+            
+            # 如果提供了 clinical_org_ids，将第一个设置为 clinical_org_id 以保持兼容
+            if not db_project.clinical_org_id:
+                db_project.clinical_org_id = project_data.clinical_org_ids[0]
+
         await db.commit()
         await db.refresh(db_project)
         return db_project
@@ -140,13 +190,26 @@ async def read_projects(
     
     query = select(Project).options(
         selectinload(Project.sponsor),
-        selectinload(Project.clinical_org)
+        selectinload(Project.clinical_org),
+        selectinload(Project.associated_organizations).selectinload(ProjectOrganization.organization)
     )
     if active_only:
         query = query.where(Project.is_active == True)
+
+    # 可见性过滤：非管理员仅返回被授权的项目
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(Project.id.in_(accessible_ids))
     
     result = await db.execute(query.offset(skip).limit(limit))
     projects = result.scalars().all()
+    
+    # 手动处理 clinical_orgs 列表
+    for p in projects:
+        p.clinical_orgs = [assoc.organization for assoc in p.associated_organizations if assoc.organization.org_type == 'clinical']
+        
     return projects
 
 
@@ -158,11 +221,17 @@ async def read_project(
 ):
     """获取项目详情"""
     from sqlalchemy.orm import selectinload
+
+    # 可见性校验
+    await assert_project_access(db, current_user, project_id)
     
     result = await db.execute(
         select(Project)
-        .options(selectinload(Project.sponsor))
-        .options(selectinload(Project.clinical_org))
+        .options(
+            selectinload(Project.sponsor),
+            selectinload(Project.clinical_org),
+            selectinload(Project.associated_organizations).selectinload(ProjectOrganization.organization)
+        )
         .where(Project.id == project_id)
     )
     project = result.scalar_one_or_none()
@@ -173,7 +242,242 @@ async def read_project(
             detail="项目不存在"
         )
     
+    # 手动处理 clinical_orgs 列表
+    project.clinical_orgs = [assoc.organization for assoc in project.associated_organizations if assoc.organization.org_type == 'clinical']
+    
     return project
+
+
+@router.get("/{project_id}/organizations", response_model=List[ProjectOrganizationLinkResponse])
+async def list_project_organizations(
+    project_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """获取项目关联组织列表（项目可见性范围内）"""
+    from sqlalchemy.orm import selectinload
+
+    await assert_project_access(db, current_user, project_id)
+    result = await db.execute(
+        select(ProjectOrganization)
+        .options(selectinload(ProjectOrganization.organization))
+        .where(ProjectOrganization.project_id == project_id)
+        .where(ProjectOrganization.is_active == True)
+        .order_by(ProjectOrganization.id.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{project_id}/organizations", response_model=ProjectOrganizationLinkResponse)
+async def add_project_organization(
+    project_id: int,
+    payload: ProjectOrganizationLinkCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """为项目关联一个全局组织（并可写入项目维度联系人/备注）"""
+    from sqlalchemy.orm import selectinload
+
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限修改项目组织")
+    await assert_project_access(db, current_user, project_id)
+
+    org_res = await db.execute(select(GlobalOrganization).where(GlobalOrganization.id == payload.organization_id))
+    org = org_res.scalar_one_or_none()
+    if not org or not org.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在或已停用")
+
+    # 查找是否已关联（支持恢复软删除）
+    link_res = await db.execute(
+        select(ProjectOrganization)
+        .where(ProjectOrganization.project_id == project_id)
+        .where(ProjectOrganization.organization_id == payload.organization_id)
+    )
+    link = link_res.scalar_one_or_none()
+    if link:
+        original = {
+            "is_active": link.is_active,
+            "contact_person": link.contact_person,
+            "contact_phone": link.contact_phone,
+            "contact_email": link.contact_email,
+            "notes": link.notes,
+        }
+        link.is_active = True
+        link.contact_person = payload.contact_person
+        link.contact_phone = payload.contact_phone
+        link.contact_email = payload.contact_email
+        link.notes = payload.notes
+        link.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(link)
+        await create_audit_log(
+            db=db,
+            user_id=current_user.id,
+            entity_type="project_organization",
+            entity_id=link.id,
+            action="upsert",
+            details={"original": original, "updated": payload.model_dump()},
+        )
+    else:
+        link = ProjectOrganization(
+            project_id=project_id,
+            organization_id=payload.organization_id,
+            contact_person=payload.contact_person,
+            contact_phone=payload.contact_phone,
+            contact_email=payload.contact_email,
+            notes=payload.notes,
+        )
+        db.add(link)
+        await db.commit()
+        await db.refresh(link)
+        await create_audit_log(
+            db=db,
+            user_id=current_user.id,
+            entity_type="project_organization",
+            entity_id=link.id,
+            action="create",
+            details=payload.model_dump() | {"project_id": project_id},
+        )
+
+    # 返回带 organization 的对象
+    res = await db.execute(
+        select(ProjectOrganization)
+        .options(selectinload(ProjectOrganization.organization))
+        .where(ProjectOrganization.id == link.id)
+    )
+    return res.scalar_one()
+
+
+@router.patch("/{project_id}/organizations/{link_id}", response_model=ProjectOrganizationLinkResponse)
+async def update_project_organization(
+    project_id: int,
+    link_id: int,
+    payload: ProjectOrganizationLinkUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """更新项目-组织关联信息（需要审计理由）"""
+    from sqlalchemy.orm import selectinload
+
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限修改项目组织")
+    await assert_project_access(db, current_user, project_id)
+    if not payload.audit_reason or not payload.audit_reason.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="修改理由不能为空")
+
+    res = await db.execute(
+        select(ProjectOrganization)
+        .options(selectinload(ProjectOrganization.organization))
+        .where(ProjectOrganization.id == link_id)
+        .where(ProjectOrganization.project_id == project_id)
+    )
+    link = res.scalar_one_or_none()
+    if not link or not link.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联记录不存在")
+
+    original = {
+        "contact_person": link.contact_person,
+        "contact_phone": link.contact_phone,
+        "contact_email": link.contact_email,
+        "notes": link.notes,
+    }
+    link.contact_person = payload.contact_person
+    link.contact_phone = payload.contact_phone
+    link.contact_email = payload.contact_email
+    link.notes = payload.notes
+    link.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(link)
+
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="project_organization",
+        entity_id=link.id,
+        action="update",
+        details={"original": original, "updated": payload.model_dump(exclude={"audit_reason"})},
+        reason=payload.audit_reason,
+    )
+    return link
+
+
+@router.delete("/{project_id}/organizations/{link_id}")
+async def remove_project_organization(
+    project_id: int,
+    link_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """移除项目-组织关联（软删除）"""
+    if not check_project_permission(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限修改项目组织")
+    await assert_project_access(db, current_user, project_id)
+
+    res = await db.execute(
+        select(ProjectOrganization)
+        .where(ProjectOrganization.id == link_id)
+        .where(ProjectOrganization.project_id == project_id)
+    )
+    link = res.scalar_one_or_none()
+    if not link or not link.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联记录不存在")
+
+    link.is_active = False
+    link.updated_at = datetime.utcnow()
+    await db.commit()
+
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="project_organization",
+        entity_id=link.id,
+        action="delete",
+        details={"project_id": project_id, "organization_id": link.organization_id},
+    )
+    return {"message": "已移除项目关联组织"}
+
+
+class ProjectMembersUpdate(BaseModel):
+    user_ids: List[int]
+
+
+@router.get("/{project_id}/members", response_model=List[int])
+async def list_project_members(
+    project_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """获取项目成员（仅项目管理员）"""
+    if not is_project_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限管理项目成员")
+    result = await db.execute(select(ProjectMember.user_id).where(ProjectMember.project_id == project_id))
+    return list(result.scalars().all())
+
+
+@router.put("/{project_id}/members", response_model=List[int])
+async def replace_project_members(
+    project_id: int,
+    payload: ProjectMembersUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """替换项目成员列表（仅项目管理员）"""
+    if not is_project_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限管理项目成员")
+
+    # 清空旧成员
+    old = await db.execute(select(ProjectMember).where(ProjectMember.project_id == project_id))
+    for row in old.scalars().all():
+        await db.delete(row)
+    await db.flush()
+
+    # 写入新成员（去重）
+    uniq_user_ids = list(dict.fromkeys([int(x) for x in payload.user_ids if x is not None]))
+    for uid in uniq_user_ids:
+        db.add(ProjectMember(project_id=project_id, user_id=uid))
+    await db.commit()
+    return uniq_user_ids
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)

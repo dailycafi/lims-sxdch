@@ -3,6 +3,30 @@
  * 统一处理后端返回的UTC时间显示
  */
 
+function normalizeBackendDateString(dateString: string): string {
+  const s = String(dateString).trim();
+  if (!s) return s;
+
+  // If backend returns an ISO string WITHOUT timezone, JS parses it as local time.
+  // Our backend mostly uses UTC times (e.g. datetime.utcnow()), so treat such strings as UTC.
+  // Examples:
+  // - "2025-12-30T00:50:10" -> "2025-12-30T00:50:10Z"
+  // - "2025-12-30 00:50:10" -> "2025-12-30T00:50:10Z"
+  const isoNoTz = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+  const spaceNoTz = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+  const slashSpaceNoTz = /^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+  if (isoNoTz.test(s)) return `${s}Z`;
+  if (spaceNoTz.test(s)) return `${s.replace(/\s+/, 'T')}Z`;
+  if (slashSpaceNoTz.test(s)) {
+    const [datePart, timePart] = s.split(/\s+/, 2);
+    const isoDate = datePart.replaceAll('/', '-');
+    return `${isoDate}T${timePart}Z`;
+  }
+
+  return s;
+}
+
 /**
  * 格式化日期时间为本地时间字符串
  * @param dateString ISO格式的日期字符串
@@ -12,11 +36,12 @@ export function formatDateTime(dateString: string | null | undefined): string {
   if (!dateString) return '-';
   
   try {
-    const date = new Date(dateString);
+    const date = new Date(normalizeBackendDateString(dateString));
     // 检查日期是否有效
     if (isNaN(date.getTime())) return '-';
     
     return date.toLocaleString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -40,10 +65,11 @@ export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return '-';
   
   try {
-    const date = new Date(dateString);
+    const date = new Date(normalizeBackendDateString(dateString));
     if (isNaN(date.getTime())) return '-';
     
     return date.toLocaleDateString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -63,10 +89,11 @@ export function formatTime(dateString: string | null | undefined): string {
   if (!dateString) return '-';
   
   try {
-    const date = new Date(dateString);
+    const date = new Date(normalizeBackendDateString(dateString));
     if (isNaN(date.getTime())) return '-';
     
     return date.toLocaleTimeString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
@@ -87,7 +114,7 @@ export function getRelativeTime(dateString: string | null | undefined): string {
   if (!dateString) return '-';
   
   try {
-    const date = new Date(dateString);
+    const date = new Date(normalizeBackendDateString(dateString));
     if (isNaN(date.getTime())) return '-';
     
     const now = new Date();

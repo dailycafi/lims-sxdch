@@ -12,7 +12,7 @@ class Project(Base):
     sponsor_project_code = Column(String, nullable=False)  # 申办方项目编号
     lab_project_code = Column(String, unique=True, nullable=False)  # 临床试验研究室项目编号
     sponsor_id = Column(Integer, ForeignKey("organizations.id"))  # 申办方ID
-    clinical_org_id = Column(Integer, ForeignKey("organizations.id"))  # 临床机构ID
+    clinical_org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)  # 临床机构ID (单个，兼容旧版)
     
     # 样本编号规则配置
     sample_code_rule = Column(JSON, nullable=True)  # 存储样本编号规则
@@ -32,6 +32,9 @@ class Project(Base):
     sponsor = relationship("Organization", foreign_keys=[sponsor_id])
     clinical_org = relationship("Organization", foreign_keys=[clinical_org_id])
     creator = relationship("User", foreign_keys=[created_by])
+
+    # 关联的所有组织（包含临床机构等）
+    associated_organizations = relationship("ProjectOrganization", back_populates="project", viewonly=True)
 
 
 class ProjectArchiveRequest(Base):

@@ -39,25 +39,32 @@ export function ProjectSwitcher() {
   return (
     <div className="flex items-center gap-2">
       <span className="hidden text-xs font-medium text-zinc-500 lg:block whitespace-nowrap">当前项目</span>
-      <Select
-        value={selectedProjectId ? String(selectedProjectId) : ''}
-        onChange={(event) => {
-          const value = event.target.value;
-          setSelectedProject(value ? Number(value) : null);
-        }}
-        disabled={isLoading || projects.length === 0}
-        className="w-full min-w-[140px] sm:min-w-[180px] text-xs h-9"
-      >
-        <option value="">请选择项目</option>
-        {projectOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-            {option.subLabel && option.subLabel !== option.label
-              ? `（${option.subLabel}）`
-              : ''}
-          </option>
-        ))}
-      </Select>
+      <div className="flex flex-col gap-1">
+        <Select
+          value={selectedProjectId ? String(selectedProjectId) : ''}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSelectedProject(value ? Number(value) : null);
+          }}
+          disabled={isLoading || projects.length === 0}
+          className="w-full min-w-[140px] sm:min-w-[180px] text-xs h-9"
+        >
+          <option value="">{projects.length ? '请选择项目' : '暂无可用项目'}</option>
+          {projectOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+              {option.subLabel && option.subLabel !== option.label
+                ? `（${option.subLabel}）`
+                : ''}
+            </option>
+          ))}
+        </Select>
+        {!isLoading && projects.length === 0 && (
+          <span className="text-[11px] text-zinc-500 whitespace-nowrap">
+            无可用项目，请联系管理员为你授权项目
+          </span>
+        )}
+      </div>
     </div>
   );
 }

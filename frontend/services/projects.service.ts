@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import { Project, ProjectCreate } from '@/types/api';
+import { Project, ProjectCreate, ProjectOrganizationLink, ProjectOrganizationLinkCreate, ProjectOrganizationLinkUpdate } from '@/types/api';
 
 export class ProjectsService {
   /**
@@ -43,5 +43,36 @@ export class ProjectsService {
    */
   static async deleteProject(id: number): Promise<void> {
     await api.delete(`/projects/${id}`);
+  }
+
+  /**
+   * 获取项目关联组织列表
+   */
+  static async getProjectOrganizations(projectId: number): Promise<ProjectOrganizationLink[]> {
+    const response = await api.get<ProjectOrganizationLink[]>(`/projects/${projectId}/organizations`);
+    return response.data;
+  }
+
+  /**
+   * 关联组织到项目
+   */
+  static async addProjectOrganization(projectId: number, data: ProjectOrganizationLinkCreate): Promise<ProjectOrganizationLink> {
+    const response = await api.post<ProjectOrganizationLink>(`/projects/${projectId}/organizations`, data);
+    return response.data;
+  }
+
+  /**
+   * 更新项目-组织关联信息（项目维度）
+   */
+  static async updateProjectOrganization(projectId: number, linkId: number, data: ProjectOrganizationLinkUpdate): Promise<ProjectOrganizationLink> {
+    const response = await api.patch<ProjectOrganizationLink>(`/projects/${projectId}/organizations/${linkId}`, data);
+    return response.data;
+  }
+
+  /**
+   * 移除项目-组织关联
+   */
+  static async removeProjectOrganization(projectId: number, linkId: number): Promise<void> {
+    await api.delete(`/projects/${projectId}/organizations/${linkId}`);
   }
 }

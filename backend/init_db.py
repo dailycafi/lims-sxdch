@@ -58,9 +58,20 @@ async def init_db(drop_existing=False):
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
+        print("Creating Organization Types...")
+        # 0. 创建组织类型
+        from app.models.global_params import OrganizationType, Organization, GlobalConfiguration, SystemSetting
+        
+        session.add_all([
+            OrganizationType(value="sponsor", label="申办方", display_order=1, is_system=True),
+            OrganizationType(value="clinical", label="临床机构", display_order=2, is_system=True),
+            OrganizationType(value="testing", label="检测单位", display_order=3, is_system=True),
+            OrganizationType(value="transport", label="运输单位", display_order=4, is_system=True),
+        ])
+        await session.flush()
+        
         print("Creating Organizations...")
         # 1. 创建组织机构
-        from app.models.global_params import Organization, GlobalConfiguration, SystemSetting
         
         print("Creating System Settings...")
         # 0. 创建系统设置
@@ -161,21 +172,6 @@ async def init_db(drop_existing=False):
         session.add_all([sponsor1, sponsor2, clinical1, clinical2, transport1, transport2])
         await session.flush()
         
-        print("Creating Global Configurations...")
-        # 1.1 创建全局配置
-        config1 = GlobalConfiguration(
-            name="标准临床试验配置",
-            category="project_template",
-            description="适用于大多数I/II期临床试验的标准配置",
-            config_data={
-                "sample_types": ["PK", "ADA", "Biomarker"],
-                "visits": ["Screening", "Day 1", "Day 8", "EOT", "Follow-up"],
-                "label_template": "standard_v1"
-            }
-        )
-        session.add(config1)
-        await session.flush()
-
         # 1.2 创建存储结构 (冰箱 -> 层 -> 架 -> 盒)
         print("Creating Storage Hierarchy...")
         from app.models.storage import StorageFreezer, StorageShelf, StorageRack, StorageBox
@@ -345,6 +341,22 @@ async def init_db(drop_existing=False):
         )
         
         session.add_all([project1, project2])
+        await session.flush()
+
+        # 3.1 项目授权（成员绑定）：用于“用户仅可见被授权项目”
+        from app.models.project_member import ProjectMember
+        session.add_all(
+            [
+                # 项目1：负责人/分析员/主管/主任可见
+                ProjectMember(project_id=project1.id, user_id=project_lead.id),
+                ProjectMember(project_id=project1.id, user_id=analyst.id),
+                ProjectMember(project_id=project1.id, user_id=test_manager.id),
+                ProjectMember(project_id=project1.id, user_id=lab_director.id),
+                # 项目2：分析员/主任可见
+                ProjectMember(project_id=project2.id, user_id=analyst.id),
+                ProjectMember(project_id=project2.id, user_id=lab_director.id),
+            ]
+        )
         await session.flush()
         
         # 绑定盒子到项目

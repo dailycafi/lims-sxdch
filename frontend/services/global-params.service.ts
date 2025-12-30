@@ -3,18 +3,52 @@ import {
   Organization, 
   OrganizationCreate, 
   OrganizationUpdate,
+  OrganizationType,
+  OrganizationTypeCreate,
+  OrganizationTypeUpdate,
   SampleType,
   SampleTypeCreate,
   SampleTypeUpdate
 } from '@/types/api';
 
 export class GlobalParamsService {
+  // 组织类型管理
+  /**
+   * 获取组织类型列表
+   */
+  static async getOrganizationTypes(): Promise<OrganizationType[]> {
+    const response = await api.get<OrganizationType[]>('/global-params/organization-types');
+    return response.data;
+  }
+
+  /**
+   * 创建组织类型
+   */
+  static async createOrganizationType(data: OrganizationTypeCreate): Promise<OrganizationType> {
+    const response = await api.post<OrganizationType>('/global-params/organization-types', data);
+    return response.data;
+  }
+
+  /**
+   * 更新组织类型
+   */
+  static async updateOrganizationType(id: number, data: OrganizationTypeUpdate): Promise<OrganizationType> {
+    const response = await api.put<OrganizationType>(`/global-params/organization-types/${id}`, data);
+    return response.data;
+  }
+
+  /**
+   * 删除组织类型
+   */
+  static async deleteOrganizationType(id: number): Promise<void> {
+    await api.delete(`/global-params/organization-types/${id}`);
+  }
+
   // 组织管理
   /**
    * 获取组织列表
    */
-  static async getOrganizations(orgType?: 'internal' | 'external'): Promise<Organization[]> {
-    const params = orgType ? { org_type: orgType } : undefined;
+  static async getOrganizations(params?: { org_type?: string; q?: string }): Promise<Organization[]> {
     const response = await api.get<Organization[]>('/global-params/organizations', { params });
     return response.data;
   }

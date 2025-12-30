@@ -153,13 +153,11 @@ function TagInput({
 function ClinicSubjectTable({ 
   data, 
   onChange, 
-  clinicOptions, 
-  onImport 
+  clinicOptions 
 }: { 
   data: { clinic: string; subject: string }[], 
   onChange: (data: { clinic: string; subject: string }[]) => void,
-  clinicOptions: string[],
-  onImport: () => void
+  clinicOptions: string[]
 }) {
   const addRow = () => onChange([...data, { clinic: '', subject: '' }]);
   
@@ -180,10 +178,6 @@ function ClinicSubjectTable({
             列表 ({data.length})
         </div>
         <div className="flex gap-2">
-            <Button plain onClick={onImport} className="!py-1 !px-2 text-xs">
-                <ArrowUpTrayIcon className="w-3 h-3 mr-1"/>
-                导入
-            </Button>
             <Button plain onClick={addRow} className="!py-1 !px-2 text-xs">
                 <PlusIcon className="w-3 h-3 mr-1"/>
                 添加
@@ -248,13 +242,13 @@ function ClinicSubjectTable({
              {data.length === 0 && (
                 <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-sm text-zinc-500">
-                        暂无数据，请点击上方“添加”或“导入”
+                        暂无数据，请点击上方“添加”
                     </td>
                 </tr>
              )}
           </tbody>
         </table>
-        </div>
+      </div>
     </div>
   );
 }
@@ -479,6 +473,18 @@ interface Organization {
   is_active: boolean;
 }
 
+interface ProjectOrganizationLink {
+  id: number;
+  project_id: number;
+  organization_id: number;
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  organization: Organization;
+}
+
 interface SampleType {
   id: number;
   category: string;
@@ -500,7 +506,8 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   
   // 参数配置相关状态
-  const [projectOrgs, setProjectOrgs] = useState<Organization[]>([]);
+  const [globalOrganizations, setGlobalOrganizations] = useState<Organization[]>([]);
+  const [projectOrgLinks, setProjectOrgLinks] = useState<ProjectOrganizationLink[]>([]);
   const [clinicalSampleTypes, setClinicalSampleTypes] = useState<SampleType[]>([]);
   const [qcSampleTypes, setQCSampleTypes] = useState<SampleType[]>([]);
   
@@ -607,9 +614,11 @@ export default function ProjectDetailPage() {
   const [isEditInputOpen, setIsEditInputOpen] = useState(false);
   const [isEditVerifyOpen, setIsEditVerifyOpen] = useState(false);
 
-  // --- 项目专属组织管理 ---
+  // --- 项目组织关联（关联全局组织 + 项目维度补充信息） ---
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
-  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+  const [orgDialogMode, setOrgDialogMode] = useState<'link' | 'create'>('link');
+  const [editingOrgLink, setEditingOrgLink] = useState<ProjectOrganizationLink | null>(null);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [orgForm, setOrgForm] = useState({
     name: '',
     org_type: '',
@@ -618,28 +627,77 @@ export default function ProjectDetailPage() {
     contact_phone: '',
     contact_email: '',
   });
+  const [orgLinkForm, setOrgLinkForm] = useState({
+    contact_person: '',
+    contact_phone: '',
+    contact_email: '',
+    notes: '',
+  });
 
   const handleOrgSubmit = async () => {
-    if (!orgForm.name || !orgForm.org_type) {
-      toast.error('请填写必填项');
-      return;
-    }
     try {
-      const payload = { ...orgForm, project_id: parseInt(id as string) };
-      if (editingOrg) {
+      if (!id) return;
+
+      // 编辑：仅更新“项目-组织关联”维度字段
+      if (editingOrgLink) {
         if (!auditReason.trim()) {
           toast.error('请输入修改理由');
           return;
         }
-        await api.put(`/global-params/organizations/${editingOrg.id}`, {
-          ...payload,
-          audit_reason: auditReason.trim()
+        await api.patch(`/projects/${id}/organizations/${editingOrgLink.id}`, {
+          contact_person: orgLinkForm.contact_person || null,
+          contact_phone: orgLinkForm.contact_phone || null,
+          contact_email: orgLinkForm.contact_email || null,
+          notes: orgLinkForm.notes || null,
+          audit_reason: auditReason.trim(),
         });
         toast.success('更新成功');
-      } else {
-        await api.post('/global-params/organizations', payload);
-        toast.success('创建成功');
+        setIsOrgDialogOpen(false);
+        setAuditReason('');
+        fetchProject();
+        return;
       }
+
+      // 新增：关联已有组织 or 新建组织后关联
+      if (orgDialogMode === 'create') {
+        if (!orgForm.name || !orgForm.org_type) {
+          toast.error('请填写组织名称与类型');
+          return;
+        }
+        const createPayload = {
+          ...orgForm,
+          address: orgForm.address || null,
+          contact_person: orgForm.contact_person || null,
+          contact_phone: orgForm.contact_phone || null,
+          contact_email: orgForm.contact_email || null,
+        };
+        const created = await api.post('/global-params/organizations', createPayload);
+        const orgId = created.data?.id;
+        if (!orgId) throw new Error('创建组织失败');
+
+        await api.post(`/projects/${id}/organizations`, {
+          organization_id: orgId,
+          contact_person: orgLinkForm.contact_person || null,
+          contact_phone: orgLinkForm.contact_phone || null,
+          contact_email: orgLinkForm.contact_email || null,
+          notes: orgLinkForm.notes || null,
+        });
+        toast.success('创建并关联成功');
+      } else {
+        if (!selectedOrgId) {
+          toast.error('请选择要关联的组织');
+          return;
+        }
+        await api.post(`/projects/${id}/organizations`, {
+          organization_id: Number(selectedOrgId),
+          contact_person: orgLinkForm.contact_person || null,
+          contact_phone: orgLinkForm.contact_phone || null,
+          contact_email: orgLinkForm.contact_email || null,
+          notes: orgLinkForm.notes || null,
+        });
+        toast.success('关联成功');
+      }
+
       setIsOrgDialogOpen(false);
       setAuditReason('');
       fetchProject();
@@ -648,11 +706,11 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const deleteOrg = async (orgId: number) => {
-    if (!confirm('确定要删除此组织吗？')) return;
+  const deleteOrgLink = async (linkId: number) => {
+    if (!confirm('确定要移除此项目的关联组织吗？')) return;
     try {
-      await api.delete(`/global-params/organizations/${orgId}`);
-      toast.success('删除成功');
+      await api.delete(`/projects/${id}/organizations/${linkId}`);
+      toast.success('已移除');
       fetchProject();
     } catch (error) {
       toast.error('删除失败');
@@ -781,12 +839,14 @@ export default function ProjectDetailPage() {
       // 初始化 slots
       initSlotsFromRule(response.data.sample_code_rule);
       
-      // 获取项目专属参数
-      const [orgsRes, sampleTypesRes] = await Promise.all([
-        api.get(`/global-params/organizations?project_id=${id}`),
+      // 获取项目参数（组织关联/全局组织/样本类型）
+      const [linksRes, globalOrgsRes, sampleTypesRes] = await Promise.all([
+        api.get(`/projects/${id}/organizations`),
+        api.get(`/global-params/organizations`),
         api.get(`/global-params/sample-types?project_id=${id}`),
       ]);
-      setProjectOrgs(orgsRes.data);
+      setProjectOrgLinks(linksRes.data);
+      setGlobalOrganizations(globalOrgsRes.data);
       const allSamples = sampleTypesRes.data as SampleType[];
       setClinicalSampleTypes(allSamples.filter(s => s.category === 'clinical'));
       setQCSampleTypes(allSamples.filter(s => s.category === 'qc_stability'));
@@ -1396,10 +1456,13 @@ export default function ProjectDetailPage() {
           ) : configTab === 'organizations' ? (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <Text className="text-sm text-zinc-600">管理此项目的相关单位（申办方、临床机构等）</Text>
+                <Text className="text-sm text-zinc-600">为此项目关联全局组织，并可填写项目维度的联系人/备注</Text>
                 <Button onClick={() => {
-                  setEditingOrg(null);
+                  setEditingOrgLink(null);
+                  setOrgDialogMode('link');
+                  setSelectedOrgId('');
                   setOrgForm({ name: '', org_type: '', address: '', contact_person: '', contact_phone: '', contact_email: '' });
+                  setOrgLinkForm({ contact_person: '', contact_phone: '', contact_email: '', notes: '' });
                   setIsOrgDialogOpen(true);
                 }}>
                   <PlusIcon className="w-4 h-4 mr-1"/> 新增单位
@@ -1412,37 +1475,41 @@ export default function ProjectDetailPage() {
                       <TableHeader>名称</TableHeader>
                       <TableHeader>类型</TableHeader>
                       <TableHeader>联系人</TableHeader>
+                      <TableHeader>电话</TableHeader>
+                      <TableHeader>备注</TableHeader>
                       <TableHeader>操作</TableHeader>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {projectOrgs.length === 0 ? (
-                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-zinc-500">暂无项目专属单位</TableCell></TableRow>
+                    {projectOrgLinks.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-zinc-500">暂无关联组织</TableCell></TableRow>
                     ) : (
-                      projectOrgs.map(org => (
-                        <TableRow key={org.id}>
-                          <TableCell className="font-medium">{org.name}</TableCell>
+                      projectOrgLinks.map(link => (
+                        <TableRow key={link.id}>
+                          <TableCell className="font-medium">{link.organization?.name}</TableCell>
                           <TableCell>
-                            <Badge color={org.org_type === 'sponsor' ? 'blue' : 'green'}>
-                              {org.org_type === 'sponsor' ? '申办方' : org.org_type === 'clinical' ? '临床机构' : '其他'}
+                            <Badge color={link.organization?.org_type === 'sponsor' ? 'blue' : link.organization?.org_type === 'clinical' ? 'green' : 'zinc'}>
+                              {link.organization?.org_type === 'sponsor' ? '申办方' : link.organization?.org_type === 'clinical' ? '临床机构' : link.organization?.org_type || '其他'}
                             </Badge>
                           </TableCell>
-                          <TableCell>{org.contact_person || '-'}</TableCell>
+                          <TableCell>{link.contact_person || link.organization?.contact_person || '-'}</TableCell>
+                          <TableCell>{link.contact_phone || link.organization?.contact_phone || '-'}</TableCell>
+                          <TableCell className="max-w-[260px] truncate" title={link.notes || undefined}>{link.notes || '-'}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
                               <Button plain onClick={() => {
-                                setEditingOrg(org);
-                                setOrgForm({ 
-                                    name: org.name, 
-                                    org_type: org.org_type, 
-                                    address: org.address || '', 
-                                    contact_person: org.contact_person || '', 
-                                    contact_phone: org.contact_phone || '', 
-                                    contact_email: org.contact_email || '' 
+                                setEditingOrgLink(link);
+                                setOrgDialogMode('link');
+                                setSelectedOrgId(String(link.organization_id));
+                                setOrgLinkForm({
+                                  contact_person: link.contact_person || '',
+                                  contact_phone: link.contact_phone || '',
+                                  contact_email: link.contact_email || '',
+                                  notes: link.notes || '',
                                 });
                                 setIsOrgDialogOpen(true);
                               }}><PencilSquareIcon className="w-4 h-4"/></Button>
-                              <Button plain onClick={() => deleteOrg(org.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
+                              <Button plain onClick={() => deleteOrgLink(link.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1547,11 +1614,11 @@ export default function ProjectDetailPage() {
                             </Text>
                             <Text className="text-xs text-zinc-500">输入具体信息，实时生成对应的样本编号</Text>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
                             <div>
                                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">受试者编号</label>
                                 <Input 
-                                    className="!py-1 !text-sm" 
+                                    className="!text-sm" 
                                     placeholder="如: 001" 
                                     onChange={(e) => setQuickAddForm({...quickAddForm, subject: e.target.value})}
                                     value={quickAddForm.subject}
@@ -1559,30 +1626,28 @@ export default function ProjectDetailPage() {
                             </div>
                             <div>
                                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">周期</label>
-                                <select 
-                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                <Select 
                                     onChange={(e) => setQuickAddForm({...quickAddForm, cycle: e.target.value})}
                                     value={quickAddForm.cycle}
                                 >
                                     <option value="">请选择</option>
                                     {dictionaries.cycles.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                </select>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">检测类型</label>
-                                <select 
-                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                <Select 
                                     onChange={(e) => setQuickAddForm({...quickAddForm, testType: e.target.value})}
                                     value={quickAddForm.testType}
                                 >
                                     <option value="">请选择</option>
                                     {dictionaries.test_types.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                </select>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">采血序号</label>
                                 <Input 
-                                    className="!py-1 !text-sm" 
+                                    className="!text-sm" 
                                     placeholder="如: 01" 
                                     onChange={(e) => setQuickAddForm({...quickAddForm, seq: e.target.value})}
                                     value={quickAddForm.seq}
@@ -1590,19 +1655,18 @@ export default function ProjectDetailPage() {
                             </div>
                             <div>
                                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">正/备</label>
-                                <select 
-                                    className="block w-full rounded-md border-0 py-1.5 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm"
+                                <Select 
                                     onChange={(e) => setQuickAddForm({...quickAddForm, stype: e.target.value})}
                                     value={quickAddForm.stype}
                                 >
                                     <option value="">请选择</option>
                                     {[...dictionaries.primary_types, ...dictionaries.backup_types].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                </select>
+                                </Select>
                             </div>
-                            <div className="flex items-end">
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1 opacity-0">占位</label>
                                 <Button 
-                                    className="w-full !py-1.5 !text-xs" 
-                                    color="blue" 
+                                    className="w-full" 
                                     onClick={handleQuickAdd}
                                     disabled={!quickAddForm.subject || !quickAddForm.cycle}
                                 >
@@ -1632,20 +1696,7 @@ export default function ProjectDetailPage() {
                     data={batchForm.clinicSubjectPairs}
                     onChange={(data) => setBatchForm({...batchForm, clinicSubjectPairs: data})}
                     clinicOptions={dictionaries.clinic_codes}
-                    onImport={() => document.getElementById('clinic-subject-file')?.click()}
                   />
-                            <input id="clinic-subject-file" type="file" accept=".xlsx,.xls" className="hidden" onChange={/* Reuse import logic */ async (e) => {
-                        if (!e.target.files || !e.target.files[0]) return;
-                        const form = new FormData();
-                        form.append('file', e.target.files[0]);
-                        try {
-                          const res = await api.post(`/projects/${id}/import-clinic-subjects`, form, { headers: { 'Content-Type': 'multipart/form-data' }});
-                                    const pairs = res.data.clinic_subject_pairs || [];
-                                    setBatchForm(prev => ({...prev, clinicSubjectPairs: [...prev.clinicSubjectPairs, ...pairs]}));
-                                    toast.success(`成功导入 ${pairs.length} 条`);
-                                } catch { toast.error('导入失败'); }
-                        e.currentTarget.value = '';
-                            }} />
                 </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium">采血序号 / 时间数据源</label>
@@ -1743,20 +1794,9 @@ export default function ProjectDetailPage() {
                             options={batchForm.clinicSubjectPairs.map(p => `${p.clinic}|${p.subject}`)}
                             selected={batchForm.selectedSubjects}
                             onSelectionChange={(l) => setBatchForm({...batchForm, selectedSubjects: l})}
-                            action={
-                                <Button plain className="!w-full !justify-center text-xs !py-1" onClick={() => document.getElementById('clinic-subject-file')?.click()}>
-                                    <ArrowUpOnSquareIcon className="w-3 h-3 mr-1"/>导入 Excel
-                                </Button>
-                            }
-                            emptyText="请点击下方按钮导入数据"
+                            emptyText="请在上方列表中添加数据"
                         />
             </div>
-
-                    <div className="flex justify-end mt-4">
-                         <Button color="dark" onClick={handleViewSamples} disabled={isGeneratingCodes} className="!px-8">
-                            {isGeneratingCodes ? '生成中...' : '查看'}
-                         </Button>
-                </div>
                 </div>
             )}
 
@@ -1861,7 +1901,6 @@ export default function ProjectDetailPage() {
                         <div><label className="block text-sm font-medium text-zinc-700 mb-1">数量 *</label><Input type="number" value={stabilityQCParams.quantity || ''} onChange={(e) => setStabilityQCParams({...stabilityQCParams, quantity: parseInt(e.target.value) || 0})} placeholder="生成数量"/></div>
                         <div><label className="block text-sm font-medium text-zinc-700 mb-1">起始编号 *</label><Input type="number" value={stabilityQCParams.start_number || ''} onChange={(e) => setStabilityQCParams({...stabilityQCParams, start_number: parseInt(e.target.value) || 1})} placeholder="如：31"/></div>
                       </div>
-                    <div className="flex justify-end"><Button color="dark" onClick={handleGenerateStabilityQCCodes}><BeakerIcon />生成</Button></div>
                     {generatedQCCodes.length > 0 && (
                         <div className="bg-zinc-50 p-4 rounded border border-zinc-200">
                             <div className="font-medium mb-2">生成结果 ({generatedQCCodes.length})</div>
@@ -1873,6 +1912,17 @@ export default function ProjectDetailPage() {
         </DialogBody>
         <DialogActions>
              <Button plain onClick={() => setIsBatchGenerateDialogOpen(false)}>关闭</Button>
+             {activeGenerationTab === 'clinical' && (
+               <Button color="dark" onClick={handleViewSamples} disabled={isGeneratingCodes} className="!px-8">
+                 {isGeneratingCodes ? '生成中...' : '查看'}
+               </Button>
+             )}
+             {activeGenerationTab === 'stability' && (
+               <Button color="dark" onClick={handleGenerateStabilityQCCodes}>
+                 <BeakerIcon className="w-4 h-4 mr-1" />
+                 生成
+               </Button>
+             )}
         </DialogActions>
       </Dialog>
 
@@ -1899,32 +1949,108 @@ export default function ProjectDetailPage() {
 
       {/* Project Org Dialog */}
       <Dialog open={isOrgDialogOpen} onClose={setIsOrgDialogOpen}>
-        <DialogTitle>{editingOrg ? '编辑单位' : '新增单位'}</DialogTitle>
+        <DialogTitle>
+          {editingOrgLink
+            ? '编辑关联信息'
+            : orgDialogMode === 'create'
+              ? '新建组织并关联'
+              : '关联组织到项目'}
+        </DialogTitle>
         <DialogBody>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700">名称 *</label>
-              <Input value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} />
+            {!editingOrgLink && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">新增方式</label>
+                <Select
+                  value={orgDialogMode}
+                  onChange={(e) => setOrgDialogMode(e.target.value as any)}
+                >
+                  <option value="link">关联已有组织</option>
+                  <option value="create">新建组织并关联</option>
+                </Select>
+              </div>
+            )}
+
+            {editingOrgLink ? (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">组织</label>
+                <div className="mt-1 p-2 rounded bg-zinc-50 border border-zinc-200 text-sm">
+                  {editingOrgLink.organization?.name || `ID: ${editingOrgLink.organization_id}`}
+                </div>
+              </div>
+            ) : orgDialogMode === 'link' ? (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">选择组织 *</label>
+                <Select value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}>
+                  <option value="">请选择</option>
+                  {globalOrganizations.map((o) => (
+                    <option key={o.id} value={String(o.id)}>
+                      {o.name} ({o.org_type})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">名称 *</label>
+                  <Input value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">类型 *</label>
+                  <Select value={orgForm.org_type} onChange={e => setOrgForm({...orgForm, org_type: e.target.value})}>
+                    <option value="">选择类型</option>
+                    <option value="sponsor">申办方</option>
+                    <option value="clinical">临床机构</option>
+                    <option value="testing">检测单位</option>
+                    <option value="transport">运输单位</option>
+                    <option value="other">其他</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">地址 (选填)</label>
+                  <Textarea value={orgForm.address} onChange={e => setOrgForm({...orgForm, address: e.target.value})} rows={2} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700">联系人 (全局)</label>
+                    <Input value={orgForm.contact_person} onChange={e => setOrgForm({...orgForm, contact_person: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700">电话 (全局)</label>
+                    <Input value={orgForm.contact_phone} onChange={e => setOrgForm({...orgForm, contact_phone: e.target.value})} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">邮箱 (全局，选填)</label>
+                  <Input type="email" value={orgForm.contact_email} onChange={e => setOrgForm({...orgForm, contact_email: e.target.value})} />
+                </div>
+              </>
+            )}
+
+            <div className="border-t border-zinc-100 pt-4">
+              <div className="text-sm font-medium text-zinc-800 mb-2">项目维度信息（可选）</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">联系人（项目）</label>
+                  <Input value={orgLinkForm.contact_person} onChange={e => setOrgLinkForm({...orgLinkForm, contact_person: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">电话（项目）</label>
+                  <Input value={orgLinkForm.contact_phone} onChange={e => setOrgLinkForm({...orgLinkForm, contact_phone: e.target.value})} />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-zinc-700">邮箱（项目）</label>
+                <Input type="email" value={orgLinkForm.contact_email} onChange={e => setOrgLinkForm({...orgLinkForm, contact_email: e.target.value})} />
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-zinc-700">备注</label>
+                <Textarea value={orgLinkForm.notes} onChange={e => setOrgLinkForm({...orgLinkForm, notes: e.target.value})} rows={2} />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700">类型 *</label>
-              <Select value={orgForm.org_type} onChange={e => setOrgForm({...orgForm, org_type: e.target.value})}>
-                <option value="">选择类型</option>
-                <option value="sponsor">申办方</option>
-                <option value="clinical">临床机构</option>
-                <option value="testing">检测单位</option>
-                <option value="transport">运输单位</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700">邮箱 (选填)</label>
-              <Input type="email" value={orgForm.contact_email} onChange={e => setOrgForm({...orgForm, contact_email: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700">联系人</label>
-              <Input value={orgForm.contact_person} onChange={e => setOrgForm({...orgForm, contact_person: e.target.value})} />
-            </div>
-            {editingOrg && (
+
+            {editingOrgLink && (
               <div>
                 <label className="block text-sm font-medium text-zinc-700">修改理由 *</label>
                 <Textarea value={auditReason} onChange={e => setAuditReason(e.target.value)} placeholder="请输入修改理由" rows={2} required />

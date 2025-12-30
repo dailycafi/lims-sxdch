@@ -13,6 +13,7 @@ import { SearchInput } from '@/components/search-input';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/date-utils';
 import { toast } from 'react-hot-toast';
 import { 
   ChartBarIcon, 
@@ -420,7 +421,7 @@ export default function StatisticsPage() {
                           <TableCell>{getOperationTypeBadge(record.operation_type)}</TableCell>
                           <TableCell>{record.operation_detail}</TableCell>
                           <TableCell>{record.operator}</TableCell>
-                          <TableCell className="pr-6">{new Date(record.operation_time).toLocaleString('zh-CN')}</TableCell>
+                          <TableCell className="pr-6">{formatDateTime(record.operation_time)}</TableCell>
                         </AnimatedTableRow>
                       ))}
                     </AnimatePresence>
@@ -481,7 +482,7 @@ export default function StatisticsPage() {
                               {record.exposure_duration} 分钟
                             </Badge>
                           </TableCell>
-                          <TableCell className="pr-6">{new Date(record.exposure_time).toLocaleString('zh-CN')}</TableCell>
+                          <TableCell className="pr-6">{formatDateTime(record.exposure_time)}</TableCell>
                         </AnimatedTableRow>
                       ))}
                     </AnimatePresence>
@@ -597,9 +598,9 @@ export default function StatisticsPage() {
                         {accessHistory.access_records.map((record) => (
                           <TableRow key={record.access_number}>
                             <TableCell className="pl-6">{record.access_number}</TableCell>
-                            <TableCell>{new Date(record.borrowed_at).toLocaleString('zh-CN')}</TableCell>
+                            <TableCell>{formatDateTime(record.borrowed_at)}</TableCell>
                             <TableCell>
-                              {record.returned_at ? new Date(record.returned_at).toLocaleString('zh-CN') : '-'}
+                              {formatDateTime(record.returned_at)}
                             </TableCell>
                             <TableCell>
                               <Badge color={record.duration_minutes > 30 ? 'red' : record.duration_minutes > 15 ? 'yellow' : 'green'}>

@@ -10,9 +10,9 @@ export function SwitchGroup({ className, ...props }: React.ComponentPropsWithout
       className={clsx(
         className,
         // Basic groups
-        'space-y-3 **:data-[slot=label]:font-normal',
+        'space-y-3 [&_[data-slot=label]]:font-normal',
         // With descriptions
-        'has-data-[slot=description]:space-y-6 has-data-[slot=description]:**:data-[slot=label]:font-medium'
+        'has-[[data-slot=description]]:space-y-6 has-[[data-slot=description]]:[&_[data-slot=label]]:font-medium'
       )}
     />
   )
@@ -31,13 +31,13 @@ export function SwitchField({
         // Base layout
         'grid grid-cols-[1fr_auto] gap-x-8 gap-y-1 sm:grid-cols-[1fr_auto]',
         // Control layout
-        '*:data-[slot=control]:col-start-2 *:data-[slot=control]:self-start sm:*:data-[slot=control]:mt-0.5',
+        '[&>[data-slot=control]]:col-start-2 [&>[data-slot=control]]:self-start sm:[&>[data-slot=control]]:mt-0.5',
         // Label layout
-        '*:data-[slot=label]:col-start-1 *:data-[slot=label]:row-start-1',
+        '[&>[data-slot=label]]:col-start-1 [&>[data-slot=label]]:row-start-1',
         // Description layout
-        '*:data-[slot=description]:col-start-1 *:data-[slot=description]:row-start-2',
+        '[&>[data-slot=description]]:col-start-1 [&>[data-slot=description]]:row-start-2',
         // With description
-        'has-data-[slot=description]:**:data-[slot=label]:font-medium'
+        'has-[[data-slot=description]]:[&_[data-slot=label]]:font-medium'
       )}
     />
   )
@@ -153,21 +153,21 @@ export function Switch({
         // Base styles
         'group relative isolate inline-flex h-6 w-10 cursor-default rounded-full p-[3px] sm:h-5 sm:w-8',
         // Transitions
-        'transition duration-0 ease-in-out data-changing:duration-200',
+        'transition duration-0 ease-in-out data-[changing]:duration-200',
         // Outline and background color in forced-colors mode so switch is still visible
         'forced-colors:outline forced-colors:[--switch-bg:Highlight] dark:forced-colors:[--switch-bg:Highlight]',
         // Unchecked
         'bg-zinc-200 ring-1 ring-black/5 ring-inset dark:bg-white/5 dark:ring-white/15',
         // Checked
-        'data-checked:bg-[var(--switch-bg)] data-checked:ring-[var(--switch-bg-ring)] dark:data-checked:bg-[var(--switch-bg)] dark:data-checked:ring-[var(--switch-bg-ring)]',
+        'data-[checked]:bg-[var(--switch-bg)] data-[checked]:ring-[var(--switch-bg-ring)] dark:data-[checked]:bg-[var(--switch-bg)] dark:data-[checked]:ring-[var(--switch-bg-ring)]',
         // Focus
-        'focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-blue-500',
+        'focus:not-data-[focus]:outline-hidden data-[focus]:outline-2 data-[focus]:outline-offset-2 data-[focus]:outline-blue-500',
         // Hover
-        'data-hover:ring-black/15 data-hover:data-checked:ring-[var(--switch-bg-ring)]',
-        'dark:data-hover:ring-white/25 dark:data-hover:data-checked:ring-[var(--switch-bg-ring)]',
+        'data-[hover]:ring-black/15 data-[hover]:data-[checked]:ring-[var(--switch-bg-ring)]',
+        'dark:data-[hover]:ring-white/25 dark:data-[hover]:data-[checked]:ring-[var(--switch-bg-ring)]',
         // Disabled
-        'data-disabled:bg-zinc-200 data-disabled:opacity-50 data-disabled:data-checked:bg-zinc-200 data-disabled:data-checked:ring-black/5',
-        'dark:data-disabled:bg-white/15 dark:data-disabled:data-checked:bg-white/15 dark:data-disabled:data-checked:ring-white/15',
+        'data-[disabled]:bg-zinc-200 data-[disabled]:opacity-50 data-[disabled]:data-[checked]:bg-zinc-200 data-[disabled]:data-[checked]:ring-black/5',
+        'dark:data-[disabled]:bg-white/15 dark:data-[disabled]:data-[checked]:bg-white/15 dark:data-[disabled]:data-[checked]:ring-white/15',
         // Color specific styles
         colors[color]
       )}
@@ -176,7 +176,7 @@ export function Switch({
         aria-hidden="true"
         className={clsx(
           // Basic layout
-          'pointer-events-none relative inline-block size-4.5 rounded-full sm:size-3.5',
+          'pointer-events-none relative inline-block size-4.5 shrink-0 rounded-full sm:size-3.5',
           // Transition
           'translate-x-0 transition duration-200 ease-in-out',
           // Invisible border so the switch is still visible in forced-colors mode
@@ -184,10 +184,10 @@ export function Switch({
           // Unchecked
           'bg-white shadow-sm ring-1 ring-black/5',
           // Checked
-          'group-data-checked:bg-[var(--switch)] group-data-checked:shadow-[var(--switch-shadow)] group-data-checked:ring-[var(--switch-ring)]',
-          'group-data-checked:translate-x-4 sm:group-data-checked:translate-x-3',
+          'group-data-[checked]:bg-[var(--switch)] group-data-[checked]:shadow-[var(--switch-shadow)] group-data-[checked]:ring-[var(--switch-ring)]',
+          'group-data-[checked]:translate-x-4 sm:group-data-[checked]:translate-x-3',
           // Disabled
-          'group-data-checked:group-data-disabled:bg-white group-data-checked:group-data-disabled:shadow-sm group-data-checked:group-data-disabled:ring-black/5'
+          'group-data-[checked]:group-data-[disabled]:bg-white group-data-[checked]:group-data-[disabled]:shadow-sm group-data-[checked]:group-data-[disabled]:ring-black/5'
         )}
       />
     </Headless.Switch>

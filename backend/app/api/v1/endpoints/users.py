@@ -353,10 +353,17 @@ async def get_password_requirements(db: AsyncSession = Depends(get_db)):
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
-    current_user: Annotated[User, Depends(get_current_active_superuser)],
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """删除用户（仅超级管理员）"""
+    """删除用户（系统管理员）"""
+    # 检查权限 - 只有系统管理员可以删除用户
+    if not check_user_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限删除用户"
+        )
+    
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     

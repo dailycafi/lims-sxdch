@@ -130,11 +130,7 @@ export default function ProjectsPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>项目管理</Heading>
-            <Text className="mt-1 text-zinc-600">管理实验室项目信息</Text>
-          </div>
+        <div className="mb-6 flex items-center justify-end">
           <Link href="/projects/new">
             <Button>
               <PlusIcon className="h-4 w-4 mr-1" />

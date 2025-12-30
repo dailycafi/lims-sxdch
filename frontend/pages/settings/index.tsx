@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input, InputGroup } from '@/components/input';
 import { Select } from '@/components/select';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -42,6 +41,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [sessionTimeoutDraft, setSessionTimeoutDraft] = useState<string>('30');
 
   // 用户相关状态
   const [users, setUsers] = useState<User[]>([]);
@@ -59,7 +59,6 @@ export default function SettingsPage() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [modules, setModules] = useState<string[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
-  const [roleSearchQuery, setRoleSearchQuery] = useState('');
   
   // 角色对话框状态
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
@@ -69,12 +68,10 @@ export default function SettingsPage() {
   
   // 角色表单状态
   const [roleFormData, setRoleFormData] = useState<{
-    code: string;
     name: string;
     description: string;
     permission_ids: number[];
   }>({
-    code: '',
     name: '',
     description: '',
     permission_ids: []
@@ -83,12 +80,45 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers();
+      // 同时加载角色列表以便角色筛选器显示最新的角色
+      fetchRolesForFilter();
     } else if (activeTab === 'roles') {
       fetchRolesData();
     } else if (activeTab === 'system') {
       fetchSettings();
     }
   }, [activeTab]);
+
+  // 为用户标签页的角色筛选器加载角色列表
+  const fetchRolesForFilter = async () => {
+    try {
+      const fetchedRoles = await RolesService.getRoles({ include_inactive: false });
+      setRoles(fetchedRoles);
+    } catch (error) {
+      console.error('加载角色列表失败:', error);
+    }
+  };
+
+  const sessionTimeoutValue = useMemo(() => {
+    const v = settings.find((s) => s.key === 'session_timeout')?.value;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : 30;
+  }, [settings]);
+
+  const passwordComplexityEnabled = useMemo(() => {
+    const v = settings.find((s) => s.key === 'password_complexity_enabled')?.value;
+    if (v === undefined || v === null) return true;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') return v !== '0' && v.toLowerCase() !== 'false';
+    return Boolean(v);
+  }, [settings]);
+
+  useEffect(() => {
+    // 同步输入框初始值（不在每次输入时回写，避免打断用户输入）
+    if (activeTab !== 'system') return;
+    setSessionTimeoutDraft(String(sessionTimeoutValue));
+  }, [activeTab, sessionTimeoutValue]);
 
   // 系统设置加载
   const fetchSettings = async () => {
@@ -116,6 +146,17 @@ export default function SettingsPage() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const commitSessionTimeout = async () => {
+    const n = Number(sessionTimeoutDraft);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error('请输入有效的自动登出时间（分钟）');
+      setSessionTimeoutDraft(String(sessionTimeoutValue));
+      return;
+    }
+    if (n === sessionTimeoutValue) return;
+    await handleUpdateSetting('session_timeout', Math.floor(n));
   };
 
   // 用户数据加载
@@ -182,7 +223,6 @@ export default function SettingsPage() {
   const handleCreateRole = () => {
     setEditingRole(null);
     setRoleFormData({
-      code: '',
       name: '',
       description: '',
       permission_ids: []
@@ -196,7 +236,6 @@ export default function SettingsPage() {
       const fullRole = await RolesService.getRole(role.id);
       setEditingRole(fullRole);
       setRoleFormData({
-        code: fullRole.code,
         name: fullRole.name,
         description: fullRole.description || '',
         permission_ids: fullRole.permissions?.map(p => p.id) || []
@@ -226,10 +265,6 @@ export default function SettingsPage() {
   const handleRoleSubmit = async () => {
     setRoleDialogError('');
 
-    if (!roleFormData.code.trim()) {
-      setRoleDialogError('请输入角色代码');
-      return;
-    }
     if (!roleFormData.name.trim()) {
       setRoleDialogError('请输入角色名称');
       return;
@@ -246,7 +281,6 @@ export default function SettingsPage() {
         await RolesService.updateRole(editingRole.id, updateData);
       } else {
         const createData: RoleCreate = {
-          code: roleFormData.code,
           name: roleFormData.name,
           description: roleFormData.description,
           permission_ids: roleFormData.permission_ids
@@ -360,18 +394,7 @@ export default function SettingsPage() {
     return true;
   });
   
-  // 角色筛选
-  const filteredRoles = roles.filter(role => {
-    if (roleSearchQuery) {
-      const query = roleSearchQuery.toLowerCase();
-      return (
-        role.name.toLowerCase().includes(query) ||
-        role.code.toLowerCase().includes(query) ||
-        role.description?.toLowerCase().includes(query)
-      );
-    }
-    return true;
-  });
+  const filteredRoles = roles;
 
   const isAdmin = currentUser?.is_superuser || currentUser?.roles?.some(r => r.code === 'system_admin');
   
@@ -381,28 +404,6 @@ export default function SettingsPage() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <Heading className="text-2xl font-bold tracking-tight text-zinc-900">系统设置</Heading>
-            <Text className="mt-1.5 text-zinc-500">管理系统配置、用户权限及核心运行参数</Text>
-          </div>
-          {((activeTab === 'users' && isAdmin) || (activeTab === 'roles' && canManageRoles)) && (
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button 
-                onClick={activeTab === 'users' ? handleCreateUser : handleCreateRole}
-                className="shadow-sm bg-blue-600 hover:bg-blue-700 text-white border-none h-11 px-5"
-              >
-                <PlusIcon className="h-5 w-5 mr-1" />
-                {activeTab === 'users' ? '新建用户' : '新建角色'}
-              </Button>
-            </motion.div>
-          )}
-        </div>
-
         {/* 标签页导航 */}
         <div className="mb-8">
           <Tabs
@@ -426,32 +427,31 @@ export default function SettingsPage() {
             className="space-y-6"
           >
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-              <div className="p-6 border-b border-zinc-100">
-                <h3 className="text-lg font-semibold text-zinc-900">安全设置</h3>
-                <p className="text-sm text-zinc-500 mt-1">配置系统的安全性参数和登录策略</p>
-              </div>
               <div className="p-6 space-y-8">
                 {/* 自动登出时间 */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="max-w-xl">
                     <Text className="font-semibold text-zinc-900">自动登出时间</Text>
-                    <Text className="text-sm text-zinc-500 mt-1">
-                      设置用户在无操作后的自动登出时间（分钟）。建议设置为 30-60 分钟以兼顾安全与便捷。
-                    </Text>
+                    <Text className="text-sm text-zinc-500 mt-1">用户无操作超过设定时间后将自动退出登录</Text>
                   </div>
-                  <div className="w-full sm:w-48">
-                    <Select
-                      value={settings.find(s => s.key === 'session_timeout')?.value || 30}
-                      onChange={(e) => handleUpdateSetting('session_timeout', parseInt(e.target.value))}
+                  <div className="w-full sm:w-48 flex-shrink-0">
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={sessionTimeoutDraft}
+                      onChange={(e) => setSessionTimeoutDraft(e.target.value)}
+                      onBlur={commitSessionTimeout}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          commitSessionTimeout();
+                        }
+                      }}
                       disabled={savingSettings}
-                    >
-                      <option value={15}>15 分钟</option>
-                      <option value={30}>30 分钟</option>
-                      <option value={60}>60 分钟</option>
-                      <option value={120}>2 小时</option>
-                      <option value={240}>4 小时</option>
-                      <option value={480}>8 小时</option>
-                    </Select>
+                      className="bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all"
+                      placeholder="分钟"
+                    />
                   </div>
                 </div>
 
@@ -461,28 +461,20 @@ export default function SettingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="max-w-xl">
                     <Text className="font-semibold text-zinc-900">强密码要求</Text>
-                    <Text className="text-sm text-zinc-500 mt-1">
-                      启用后，用户设置密码时必须满足复杂度要求（包含大写、小写、数字和特殊字符，且长度不少于6位）。
-                    </Text>
+                    <Text className="text-sm text-zinc-500 mt-1">开启后密码必须包含大小写字母、数字和特殊字符，长度至少8位</Text>
                   </div>
-                  <div className="flex items-center">
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <Text className="text-sm text-zinc-600 whitespace-nowrap">
+                      {passwordComplexityEnabled ? '已开启' : '已关闭'}
+                    </Text>
                     <Switch
-                      checked={settings.find(s => s.key === 'password_complexity_enabled')?.value ?? true}
-                      onChange={(checked) => handleUpdateSetting('password_complexity_enabled', checked)}
+                      checked={passwordComplexityEnabled}
+                      onChange={(checked) => handleUpdateSetting('password_complexity_enabled', Boolean(checked))}
                       disabled={savingSettings}
+                      color="blue"
                     />
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
-              <Cog6ToothIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <Text className="text-sm text-blue-800 font-semibold">提示</Text>
-                <Text className="text-xs text-blue-700 mt-0.5">
-                  系统参数修改后即时生效。自动登出时间修改后，用户下次登录或刷新页面时将应用新的时长。
-                </Text>
               </div>
             </div>
           </motion.div>
@@ -495,6 +487,21 @@ export default function SettingsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
+            {/* Actions */}
+            {isAdmin && (
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Button
+                    onClick={handleCreateUser}
+                    className="shadow-sm bg-blue-600 hover:bg-blue-700 text-white border-none h-11 px-5"
+                  >
+                    <PlusIcon className="h-5 w-5 mr-1" />
+                    新建用户
+                  </Button>
+                </motion.div>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 mb-6 p-5">
               <div className="flex flex-col md:flex-row gap-4">
@@ -518,13 +525,11 @@ export default function SettingsPage() {
                     className="w-full bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all"
                   >
                     <option value="all">所有角色</option>
-                    <option value="system_admin">系统管理员</option>
-                    <option value="sample_admin">样本管理员</option>
-                    <option value="lab_director">实验室主任</option>
-                    <option value="test_manager">检验科主任</option>
-                    <option value="qa">质量管理员</option>
-                    <option value="project_lead">项目负责人</option>
-                    <option value="analyst">分析员</option>
+                    {roles.filter(r => r.is_active).map(role => (
+                      <option key={role.id} value={role.code}>
+                        {role.name}
+                      </option>
+                    ))}
                   </Select>
                 </div>
               </div>
@@ -606,21 +611,20 @@ export default function SettingsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            {/* Search */}
-            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 mb-6 p-5">
-              <div className="max-w-md">
-                <InputGroup>
-                  <MagnifyingGlassIcon />
-                  <Input
-                    type="text"
-                    placeholder="搜索角色名称、代码或描述..."
-                    value={roleSearchQuery}
-                    onChange={(e) => setRoleSearchQuery(e.target.value)}
-                    className="w-full bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all"
-                  />
-                </InputGroup>
+            {/* Actions */}
+            {canManageRoles && (
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Button
+                    onClick={handleCreateRole}
+                    className="shadow-sm bg-blue-600 hover:bg-blue-700 text-white border-none h-11 px-5"
+                  >
+                    <PlusIcon className="h-5 w-5 mr-1" />
+                    新建角色
+                  </Button>
+                </motion.div>
               </div>
-            </div>
+            )}
 
             {/* Roles Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
@@ -638,7 +642,7 @@ export default function SettingsPage() {
                   {rolesLoading ? (
                     <AnimatedLoadingState colSpan={5} variant="lottie" />
                   ) : filteredRoles.length === 0 ? (
-                    <AnimatedEmptyState colSpan={5} text={roleSearchQuery ? "未找到匹配的角色" : "暂无角色数据，请点击右上角新建角色"} />
+                    <AnimatedEmptyState colSpan={5} text="暂无角色数据，请点击右上角新建角色" />
                   ) : (
                     <AnimatePresence mode="popLayout">
                       {filteredRoles.map((role, index) => (
@@ -719,27 +723,16 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {editingRole ? (
+          {editingRole && (
             <div className="rounded-lg bg-zinc-50 border border-zinc-200 p-3">
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-zinc-500">角色标识：</span>
                 <code className="text-zinc-900 font-mono bg-white px-2 py-0.5 rounded border border-zinc-300">
-                  {roleFormData.code}
+                  {editingRole.code}
                 </code>
+                <span className="text-zinc-400 text-xs ml-2">（系统自动生成，不可修改）</span>
               </div>
             </div>
-          ) : (
-            <Field>
-              <Label>角色标识 *</Label>
-              <Input
-                value={roleFormData.code}
-                onChange={(e) => setRoleFormData(prev => ({ ...prev, code: e.target.value }))}
-                placeholder="例如：custom_analyst（仅英文、数字和下划线）"
-              />
-              <Text className="text-xs text-zinc-500 mt-1">
-                角色标识用于系统内部识别，创建后不可修改
-              </Text>
-            </Field>
           )}
 
           <Field>

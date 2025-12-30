@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.global_params import Organization, SampleType, GlobalConfiguration, SystemSetting
+from app.models.global_params import OrganizationType, Organization, SampleType, GlobalConfiguration, SystemSetting
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
@@ -15,6 +15,29 @@ from app.api.v1.endpoints.auth import get_current_user
 router = APIRouter()
 
 # Pydantic schemas
+class OrganizationTypeCreate(BaseModel):
+    value: str
+    label: str
+    display_order: Optional[int] = 0
+
+class OrganizationTypeUpdate(BaseModel):
+    label: Optional[str] = None
+    display_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class OrganizationTypeResponse(BaseModel):
+    id: int
+    value: str
+    label: str
+    is_system: bool
+    is_active: bool
+    display_order: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
 class OrganizationCreate(BaseModel):
     name: str
     org_type: str
@@ -47,6 +70,8 @@ class SampleTypeCreate(BaseModel):
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
     code: Optional[str] = None
+    primary_codes: Optional[str] = None  # 正份代码，逗号分隔
+    backup_codes: Optional[str] = None  # 备份代码，逗号分隔
     primary_count: int = 1
     backup_count: int = 1
     purpose: Optional[str] = None
@@ -87,6 +112,8 @@ class SampleTypeResponse(BaseModel):
     cycle_group: Optional[str] = None
     test_type: Optional[str] = None
     code: Optional[str] = None
+    primary_codes: Optional[str] = None  # 正份代码，逗号分隔
+    backup_codes: Optional[str] = None  # 备份代码，逗号分隔
     primary_count: int
     backup_count: int
     purpose: Optional[str] = None
@@ -277,6 +304,8 @@ async def create_organization(
 async def read_organizations(
     org_type: Optional[str] = None,
     project_id: Optional[int] = None,
+    q: Optional[str] = None,
+    include_project_scoped: bool = False,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -286,12 +315,20 @@ async def read_organizations(
     if org_type:
         query = query.where(Organization.org_type == org_type)
     
-    if project_id:
+    if project_id is not None:
+        # 显式指定 project_id：返回该项目下的组织（历史兼容：项目专属组织）
         query = query.where(Organization.project_id == project_id)
     else:
-        # 如果没有 project_id，默认只返回全局组织 (project_id is None)
-        # 或者根据业务需求，可能返回所有。这里我们根据用户需求，改为允许过滤。
-        pass
+        # 未指定 project_id：默认仅返回全局组织（project_id 为空）
+        if not include_project_scoped:
+            query = query.where(Organization.project_id.is_(None))
+
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(
+            (Organization.name.ilike(like)) |
+            (Organization.contact_person.ilike(like))
+        )
     
     result = await db.execute(query.order_by(Organization.name))
     orgs = result.scalars().all()
@@ -491,6 +528,8 @@ async def update_sample_type(
         "cycle_group": db_sample_type.cycle_group,
         "test_type": db_sample_type.test_type,
         "code": db_sample_type.code,
+        "primary_codes": db_sample_type.primary_codes,
+        "backup_codes": db_sample_type.backup_codes,
         "primary_count": db_sample_type.primary_count,
         "backup_count": db_sample_type.backup_count,
         "purpose": db_sample_type.purpose,
@@ -571,3 +610,203 @@ async def delete_sample_type(
     )
     
     return {"message": "样本类型删除成功"}
+
+
+# ==================== 组织类型管理 ====================
+
+@router.get("/organization-types", response_model=List[OrganizationTypeResponse])
+async def read_organization_types(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有组织类型"""
+    result = await db.execute(
+        select(OrganizationType)
+        .where(OrganizationType.is_active == True)
+        .order_by(OrganizationType.display_order, OrganizationType.id)
+    )
+    return result.scalars().all()
+
+
+@router.post("/organization-types", response_model=OrganizationTypeResponse)
+async def create_organization_type(
+    org_type_data: OrganizationTypeCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """创建新的组织类型"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    # 检查value是否已存在
+    result = await db.execute(
+        select(OrganizationType).where(OrganizationType.value == org_type_data.value)
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="组织类型值已存在"
+        )
+    
+    # 创建新的组织类型
+    db_org_type = OrganizationType(
+        value=org_type_data.value,
+        label=org_type_data.label,
+        display_order=org_type_data.display_order or 0,
+        is_system=False,  # 用户创建的不是系统预置
+        is_active=True
+    )
+    
+    db.add(db_org_type)
+    await db.commit()
+    await db.refresh(db_org_type)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="organization_type",
+        entity_id=db_org_type.id,
+        action="create",
+        details={
+            "value": org_type_data.value,
+            "label": org_type_data.label
+        }
+    )
+    
+    return db_org_type
+
+
+@router.put("/organization-types/{type_id}", response_model=OrganizationTypeResponse)
+async def update_organization_type(
+    type_id: int,
+    org_type_data: OrganizationTypeUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新组织类型"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(OrganizationType).where(OrganizationType.id == type_id)
+    )
+    db_org_type = result.scalar_one_or_none()
+    
+    if not db_org_type:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织类型不存在"
+        )
+    
+    # 记录原始数据
+    original_data = {
+        "label": db_org_type.label,
+        "display_order": db_org_type.display_order,
+        "is_active": db_org_type.is_active
+    }
+    
+    # 更新字段
+    if org_type_data.label is not None:
+        db_org_type.label = org_type_data.label
+    if org_type_data.display_order is not None:
+        db_org_type.display_order = org_type_data.display_order
+    if org_type_data.is_active is not None:
+        db_org_type.is_active = org_type_data.is_active
+    
+    db_org_type.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(db_org_type)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="organization_type",
+        entity_id=db_org_type.id,
+        action="update",
+        details={
+            "original": original_data,
+            "updated": {
+                "label": db_org_type.label,
+                "display_order": db_org_type.display_order,
+                "is_active": db_org_type.is_active
+            }
+        }
+    )
+    
+    return db_org_type
+
+
+@router.delete("/organization-types/{type_id}")
+async def delete_organization_type(
+    type_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """删除组织类型（软删除，系统预置类型不可删除）"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(OrganizationType).where(OrganizationType.id == type_id)
+    )
+    db_org_type = result.scalar_one_or_none()
+    
+    if not db_org_type:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织类型不存在"
+        )
+    
+    if db_org_type.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="系统预置的组织类型不能删除"
+        )
+    
+    # 检查是否有组织在使用这个类型
+    org_result = await db.execute(
+        select(Organization).where(
+            Organization.org_type == db_org_type.value,
+            Organization.is_active == True
+        ).limit(1)
+    )
+    if org_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该组织类型正在使用中，无法删除"
+        )
+    
+    # 软删除
+    db_org_type.is_active = False
+    db_org_type.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="organization_type",
+        entity_id=db_org_type.id,
+        action="delete",
+        details={
+            "value": db_org_type.value,
+            "label": db_org_type.label
+        }
+    )
+    
+    return {"message": "组织类型删除成功"}
+

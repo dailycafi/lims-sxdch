@@ -19,6 +19,7 @@ from app.services.sample_service import generate_sample_codes_logic, parse_sampl
 from app.models.project import Project
 from fastapi.responses import StreamingResponse
 import pandas as pd
+from app.api.v1.deps import assert_project_access, get_accessible_project_ids, is_project_admin
 
 router = APIRouter()
 
@@ -514,6 +515,13 @@ async def get_receive_tasks(
         selectinload(SampleReceiveRecord.transport_org),
         selectinload(SampleReceiveRecord.receiver)
     )
+
+    # 可见性过滤：非管理员仅看授权项目的接收记录
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(SampleReceiveRecord.project_id.in_(accessible_ids))
     
     if status:
         query = query.where(SampleReceiveRecord.status == status)
@@ -573,7 +581,14 @@ async def read_samples(
     query = select(Sample)
     
     if project_id:
+        await assert_project_access(db, current_user, project_id)
         query = query.where(Sample.project_id == project_id)
+    else:
+        if current_user and not is_project_admin(current_user):
+            accessible_ids = await get_accessible_project_ids(db, current_user)
+            if not accessible_ids:
+                return []
+            query = query.where(Sample.project_id.in_(accessible_ids))
     if status:
         query = query.where(Sample.status == status)
     
@@ -609,7 +624,8 @@ async def read_sample_by_code(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="样本不存在"
         )
-    
+
+    await assert_project_access(db, current_user, sample.project_id)
     return sample
 
 
@@ -629,6 +645,8 @@ async def update_sample(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="样本不存在"
         )
+
+    await assert_project_access(db, current_user, sample.project_id)
     
     # 根据更新的内容检查权限
     update_data = sample_update.model_dump(exclude_unset=True)
@@ -669,6 +687,8 @@ async def receive_samples(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="只有样本管理员可以接收样本"
         )
+
+    await assert_project_access(db, current_user, project_id)
     
     import os
     from app.services.qiniu_service import qiniu_service
@@ -798,6 +818,8 @@ async def get_receive_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="接收记录不存在"
         )
+
+    await assert_project_access(db, current_user, record.project_id)
     
     return record
 
@@ -823,6 +845,8 @@ async def get_expected_samples(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="接收记录不存在"
         )
+
+    await assert_project_access(db, current_user, record.project_id)
     
     project = record.project
     if not project:
@@ -924,6 +948,8 @@ async def complete_inventory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="接收记录不存在"
         )
+
+    await assert_project_access(db, current_user, record.project_id)
     
     # 检查是否已经完成过清点（允许重新清点 in_progress 状态的记录）
     if record.status == "completed":
@@ -1041,6 +1067,8 @@ async def export_receive_record_checklist(
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="接收记录不存在")
 
+    await assert_project_access(db, current_user, record.project_id)
+
     # 明细：如果已创建样本，导出样本编号；否则导出预计样本编号
     result = await db.execute(select(Sample).where(Sample.project_id == record.project_id))
     samples = result.scalars().all()
@@ -1154,6 +1182,8 @@ async def create_borrow_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限申请领用样本"
         )
+
+    await assert_project_access(db, current_user, int(request_data["project_id"]))
     
     # 生成申请编号
     count = await db.execute(
@@ -1227,6 +1257,12 @@ async def get_borrow_requests(
         selectinload(SampleBorrowRequest.requester),
         selectinload(SampleBorrowRequest.samples)
     )
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(SampleBorrowRequest.project_id.in_(accessible_ids))
     
     if status == "pending":
         query = query.where(SampleBorrowRequest.status.in_(["pending", "approved"]))
@@ -1511,6 +1547,12 @@ async def search_tracking_records(
             Project.sponsor_project_code.contains(query)
         )
     ).order_by(SampleBorrowRequest.created_at.desc())
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        stmt = stmt.where(Project.id.in_(accessible_ids))
     
     result = await db.execute(stmt)
     borrow_requests = result.scalars().all()
@@ -1549,6 +1591,8 @@ async def create_external_transfer(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限申请转移样本"
         )
+
+    await assert_project_access(db, current_user, project_id)
     
     # 解析样本编号
     try:
@@ -1679,6 +1723,8 @@ async def create_internal_transfer(
         if sample_obj:
             project_id = sample_obj.project_id
 
+    await assert_project_access(db, current_user, project_id)
+
     # 创建转移记录
     transfer_record = SampleTransferRecord(
         transfer_code=transfer_code,
@@ -1758,6 +1804,12 @@ async def get_transfers(
         selectinload(SampleTransferRecord.requester),
         selectinload(SampleTransferRecord.samples)
     )
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(SampleTransferRecord.project_id.in_(accessible_ids))
     
     if type:
         query = query.where(SampleTransferRecord.transfer_type == type)
@@ -1818,6 +1870,8 @@ async def execute_transfer(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="转移记录不存在"
         )
+
+    await assert_project_access(db, current_user, transfer.project_id)
     
     # 更新状态
     transfer.status = "in_transit"
@@ -1862,6 +1916,8 @@ async def create_destroy_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限申请销毁样本"
         )
+
+    await assert_project_access(db, current_user, project_id)
     
     # 解析样本编号
     try:
@@ -1957,6 +2013,12 @@ async def get_destroy_requests(
         selectinload(SampleDestroyRequest.requester),
         selectinload(SampleDestroyRequest.samples)
     )
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(SampleDestroyRequest.project_id.in_(accessible_ids))
     
     if status == "pending":
         query = query.where(SampleDestroyRequest.status.in_(["pending", "test_manager_approved"]))
@@ -2216,6 +2278,7 @@ async def create_sample_archive_request(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限申请归档")
 
     project_id = request_data.project_id
+    await assert_project_access(db, current_user, project_id)
     codes = request_data.sample_codes
     reason = request_data.reason
 
@@ -2269,6 +2332,12 @@ async def get_sample_archive_requests(
         selectinload(SampleArchiveRequest.project),
         selectinload(SampleArchiveRequest.requester)
     )
+
+    if current_user and not is_project_admin(current_user):
+        accessible_ids = await get_accessible_project_ids(db, current_user)
+        if not accessible_ids:
+            return []
+        query = query.where(SampleArchiveRequest.project_id.in_(accessible_ids))
     if status:
         query = query.where(SampleArchiveRequest.status == status)
     result = await db.execute(query.order_by(SampleArchiveRequest.created_at.desc()))

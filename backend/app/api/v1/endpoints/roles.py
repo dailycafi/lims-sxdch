@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
+import uuid
+import re
 
 from app.core.database import get_db
 from app.models.user import User
@@ -20,6 +22,27 @@ from app.schemas.role import (
 from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
+
+
+def generate_role_code(name: str) -> str:
+    """
+    根据角色名称生成角色代码
+    1. 移除特殊字符
+    2. 转换为小写
+    3. 添加短UUID后缀确保唯一性
+    """
+    # 移除所有非字母数字字符，转为小写
+    clean_name = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fa5]', '', name).lower()
+    
+    # 如果清理后的名称为空，使用默认前缀
+    if not clean_name:
+        clean_name = 'role'
+    
+    # 生成短UUID（取前8位）
+    short_uuid = str(uuid.uuid4())[:8]
+    
+    # 组合成角色代码
+    return f"custom_{clean_name}_{short_uuid}"
 
 
 def check_admin_permission(current_user: User) -> bool:
@@ -171,18 +194,40 @@ async def create_role(
             detail="仅系统管理员可以创建角色"
         )
     
-    # 检查角色代码是否已存在
-    result = await db.execute(
-        select(Role).where(Role.code == role_data.code)
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="角色代码已存在"
+    # 如果没有提供角色代码，则自动生成
+    role_code = role_data.code
+    if not role_code:
+        role_code = generate_role_code(role_data.name)
+        
+        # 确保生成的代码唯一（理论上UUID已经保证了唯一性，但做个检查）
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            result = await db.execute(
+                select(Role).where(Role.code == role_code)
+            )
+            if not result.scalar_one_or_none():
+                break
+            # 如果代码已存在，重新生成
+            role_code = generate_role_code(role_data.name)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="生成唯一角色代码失败，请重试"
+            )
+    else:
+        # 如果用户提供了代码，检查是否已存在
+        result = await db.execute(
+            select(Role).where(Role.code == role_code)
         )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="角色代码已存在"
+            )
     
     # 创建角色
-    role_dict = role_data.model_dump(exclude={'permission_ids'})
+    role_dict = role_data.model_dump(exclude={'permission_ids', 'code'})
+    role_dict['code'] = role_code
     role = Role(**role_dict)
     
     # 添加权限

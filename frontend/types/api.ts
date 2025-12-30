@@ -73,7 +73,7 @@ export interface Role {
 }
 
 export interface RoleCreate {
-  code: string;
+  code?: string;  // 可选，系统会自动生成
   name: string;
   description?: string;
   is_active?: boolean;
@@ -109,9 +109,10 @@ export interface Project {
   sponsor_project_code: string;
   lab_project_code: string;
   sponsor_id: number;
-  clinical_org_id: number;
+  clinical_org_id?: number | null;
   sponsor?: Organization | null;
   clinical_org?: Organization | null;
+  clinical_orgs?: Organization[];  // 支持多个临床机构
   sample_code_rule?: Record<string, any> | null;
   is_active: boolean;
   is_archived: boolean;
@@ -124,7 +125,8 @@ export interface ProjectCreate {
   sponsor_project_code: string;
   lab_project_code: string;
   sponsor_id: number;
-  clinical_org_id: number;
+  clinical_org_id?: number | null;
+  clinical_org_ids?: number[];  // 支持多个临床机构
   sample_code_rule?: Record<string, any> | null;
 }
 
@@ -175,11 +177,36 @@ export interface SampleTransferRequest {
   target_org_id?: number;
 }
 
+// 组织类型
+export interface OrganizationType {
+  id: number;
+  value: string;
+  label: string;
+  is_system: boolean;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface OrganizationTypeCreate {
+  value: string;
+  label: string;
+  display_order?: number;
+}
+
+export interface OrganizationTypeUpdate {
+  label?: string;
+  display_order?: number;
+  is_active?: boolean;
+}
+
 // 组织相关类型
 export interface Organization {
   id: number;
   name: string;
-  org_type: 'internal' | 'external';
+  // 后端实际枚举：sponsor | clinical | testing | transport（也可能扩展）
+  org_type: 'sponsor' | 'clinical' | 'testing' | 'transport' | string;
   address?: string;
   contact_person?: string;
   contact_phone?: string;
@@ -191,7 +218,7 @@ export interface Organization {
 
 export interface OrganizationCreate {
   name: string;
-  org_type: 'internal' | 'external';
+  org_type: 'sponsor' | 'clinical' | 'testing' | 'transport' | string;
   address?: string;
   contact_person?: string;
   contact_phone?: string;
@@ -199,6 +226,33 @@ export interface OrganizationCreate {
 }
 
 export interface OrganizationUpdate extends OrganizationCreate {
+  audit_reason: string;
+}
+
+// 项目-组织关联（项目维度补充信息）
+export interface ProjectOrganizationLink {
+  id: number;
+  project_id: number;
+  organization_id: number;
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string | null;
+  organization: Organization;
+}
+
+export interface ProjectOrganizationLinkCreate {
+  organization_id: number;
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  notes?: string | null;
+}
+
+export interface ProjectOrganizationLinkUpdate extends ProjectOrganizationLinkCreate {
   audit_reason: string;
 }
 

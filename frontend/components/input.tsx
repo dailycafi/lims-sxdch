@@ -45,9 +45,9 @@ export const Input = forwardRef(function Input(
         // Focus ring
         'after:pointer-events-none after:absolute after:inset-0 after:rounded-xl after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-blue-500',
         // Disabled state
-        'has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none',
+        'has-[[data-disabled]]:opacity-50 has-[[data-disabled]]:before:bg-zinc-950/5 has-[[data-disabled]]:before:shadow-none',
         // Invalid state
-        'has-data-invalid:before:shadow-red-500/10',
+        'has-[[data-invalid]]:before:shadow-red-500/10',
       ])}
     >
       <input
@@ -77,15 +77,15 @@ export const Input = forwardRef(function Input(
           // Typography
           'text-base/6 text-zinc-950 placeholder:text-gray-400 placeholder:font-normal sm:text-sm/6 dark:text-white',
           // Border - 更新边框颜色
-          'border border-gray-200 data-hover:border-gray-300 dark:border-white/10 dark:data-hover:border-white/20',
+          'border border-gray-200 data-[hover]:border-gray-300 dark:border-white/10 dark:data-[hover]:border-white/20',
           // Background color
           'bg-transparent dark:bg-white/5',
           // Hide default focus styles
           'focus:outline-hidden',
           // Invalid state
-          'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-500 dark:data-invalid:data-hover:border-red-500',
+          'data-[invalid]:border-red-500 data-[invalid]:data-[hover]:border-red-500 dark:data-[invalid]:border-red-500 dark:data-[invalid]:data-[hover]:border-red-500',
           // Disabled state
-          'data-disabled:border-gray-200 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
+          'data-[disabled]:border-gray-200 dark:data-[disabled]:border-white/15 dark:data-[disabled]:bg-white/2.5 dark:data-[hover]:data-[disabled]:border-white/15',
           // System icons
           'dark:scheme-dark',
           // 确保统一的高度
