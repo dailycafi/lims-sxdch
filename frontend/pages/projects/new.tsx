@@ -122,24 +122,28 @@ export default function NewProjectPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
           <Fieldset>
             <FieldGroup>
-              <Field>
-                <Label>申办方项目编号</Label>
-                <Input
-                  {...register('sponsor_project_code', { required: '请输入申办方项目编号' })}
-                />
-                {errors.sponsor_project_code && (
-                  <p className="text-sm text-red-600 mt-1">{errors.sponsor_project_code.message}</p>
-                )}
+              <Field className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">申办方项目编号</Label>
+                <div className="flex-1">
+                  <Input
+                    {...register('sponsor_project_code', { required: '请输入申办方项目编号' })}
+                  />
+                  {errors.sponsor_project_code && (
+                    <p className="text-sm text-red-600 mt-1">{errors.sponsor_project_code.message}</p>
+                  )}
+                </div>
               </Field>
 
-              <Field>
-                <Label>实验室项目编号</Label>
-                <Input
-                  {...register('lab_project_code', { required: '请输入实验室项目编号' })}
-                />
-                {errors.lab_project_code && (
-                  <p className="text-sm text-red-600 mt-1">{errors.lab_project_code.message}</p>
-                )}
+              <Field className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">实验室项目编号</Label>
+                <div className="flex-1">
+                  <Input
+                    {...register('lab_project_code', { required: '请输入实验室项目编号' })}
+                  />
+                  {errors.lab_project_code && (
+                    <p className="text-sm text-red-600 mt-1">{errors.lab_project_code.message}</p>
+                  )}
+                </div>
               </Field>
 
               <Field>

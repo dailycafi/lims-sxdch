@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from app.schemas.global_params import OrganizationResponse
 
 
 class ProjectBase(BaseModel):
@@ -36,7 +37,9 @@ class ProjectResponse(ProjectBase):
     updated_at: Optional[datetime] = None
     
     # 额外包含的信息
-    clinical_orgs: Optional[List[Any]] = None  # 临床机构列表
+    sponsor: Optional[OrganizationResponse] = None
+    clinical_org: Optional[OrganizationResponse] = None
+    clinical_orgs: Optional[List[OrganizationResponse]] = None  # 临床机构列表
 
     class Config:
         from_attributes = True

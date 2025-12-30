@@ -2,6 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user
@@ -46,7 +47,26 @@ async def track_user_access(
         )
         db.add(new_log)
     
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # 并发情况下可能出现唯一约束冲突，尝试回滚并更新
+        await db.rollback()
+        # 重新查找并更新
+        result = await db.execute(
+            select(UserAccessLog).where(
+                UserAccessLog.user_id == current_user.id,
+                UserAccessLog.path == path
+            ).limit(1)
+        )
+        existing_log = result.scalars().first()
+        if existing_log:
+            existing_log.access_count += 1
+            existing_log.last_accessed_at = func.now()
+            existing_log.title = title
+            existing_log.icon = icon
+            await db.commit()
+    
     return {"status": "success"}
 
 

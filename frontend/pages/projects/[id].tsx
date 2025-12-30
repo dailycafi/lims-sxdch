@@ -39,6 +39,26 @@ import clsx from 'clsx';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
+const statusColors: Record<string, any> = {
+  pending: 'yellow',
+  received: 'blue',
+  in_storage: 'green',
+  checked_out: 'orange',
+  transferred: 'purple',
+  destroyed: 'red',
+  returned: 'green',
+};
+
+const statusLabels: Record<string, string> = {
+  pending: '待接收',
+  received: '已接收',
+  in_storage: '在库',
+  checked_out: '已领用',
+  transferred: '已转移',
+  destroyed: '已销毁',
+  returned: '已归还',
+};
+
 interface Project {
   id: number;
   sponsor_project_code: string;
@@ -462,29 +482,6 @@ function MatrixColumn({
   );
 }
 
-interface Organization {
-  id: number;
-  name: string;
-  org_type: string;
-  address?: string;
-  contact_person?: string;
-  contact_phone?: string;
-  contact_email?: string;
-  is_active: boolean;
-}
-
-interface ProjectOrganizationLink {
-  id: number;
-  project_id: number;
-  organization_id: number;
-  contact_person?: string | null;
-  contact_phone?: string | null;
-  contact_email?: string | null;
-  notes?: string | null;
-  is_active: boolean;
-  organization: Organization;
-}
-
 interface SampleType {
   id: number;
   category: string;
@@ -506,14 +503,12 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   
   // 参数配置相关状态
-  const [globalOrganizations, setGlobalOrganizations] = useState<Organization[]>([]);
-  const [projectOrgLinks, setProjectOrgLinks] = useState<ProjectOrganizationLink[]>([]);
   const [clinicalSampleTypes, setClinicalSampleTypes] = useState<SampleType[]>([]);
   const [qcSampleTypes, setQCSampleTypes] = useState<SampleType[]>([]);
   
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isBatchGenerateDialogOpen, setIsBatchGenerateDialogOpen] = useState(false);
-  const [configTab, setConfigTab] = useState('rules'); // 'rules' | 'options' | 'organizations' | 'samples'
+  const [configTab, setConfigTab] = useState('rules'); // 'rules' | 'options' | 'samples'
   const [activeGenerationTab, setActiveGenerationTab] = useState('clinical'); // 'clinical' | 'result' | 'stability'
   
   // 新的插槽状态，长度为7 (A-G)
@@ -555,6 +550,8 @@ export default function ProjectDetailPage() {
 
   // 生成结果状态
   const [generatedSamples, setGeneratedSamples] = useState<any[]>([]);
+  const [projectSamples, setProjectSamples] = useState<any[]>([]);
+  const [isLoadingProjectSamples, setIsLoadingProjectSamples] = useState(false);
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set());
   
   // 快速添加状态
@@ -832,6 +829,29 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const fetchProjectSamples = async () => {
+    if (!id) return;
+    setIsLoadingProjectSamples(true);
+    try {
+      const response = await api.get('/samples', { 
+        params: { 
+          project_id: id,
+          limit: 1000 // 获取更多样本以供查看
+        } 
+      });
+      // 这里的后端返回可能是列表也可能是带分页的对象
+      const samples = Array.isArray(response.data) ? response.data : (response.data.items || []);
+      setProjectSamples(samples.map((s: any) => ({
+        ...s,
+        isExisting: true // 标记为已存在样本
+      })));
+    } catch (error) {
+      console.error('Failed to fetch project samples:', error);
+    } finally {
+      setIsLoadingProjectSamples(false);
+    }
+  };
+
   const fetchProject = async () => {
     try {
       const response = await api.get(`/projects/${id}`);
@@ -839,17 +859,14 @@ export default function ProjectDetailPage() {
       // 初始化 slots
       initSlotsFromRule(response.data.sample_code_rule);
       
-      // 获取项目参数（组织关联/全局组织/样本类型）
-      const [linksRes, globalOrgsRes, sampleTypesRes] = await Promise.all([
-        api.get(`/projects/${id}/organizations`),
-        api.get(`/global-params/organizations`),
-        api.get(`/global-params/sample-types?project_id=${id}`),
-      ]);
-      setProjectOrgLinks(linksRes.data);
-      setGlobalOrganizations(globalOrgsRes.data);
+      // 获取项目参数（样本类型）
+      const sampleTypesRes = await api.get(`/global-params/sample-types?project_id=${id}`);
       const allSamples = sampleTypesRes.data as SampleType[];
       setClinicalSampleTypes(allSamples.filter(s => s.category === 'clinical'));
       setQCSampleTypes(allSamples.filter(s => s.category === 'qc_stability'));
+      
+      // 获取已存在的样本编号
+      fetchProjectSamples();
       
     } catch (error) {
       console.error('Failed to fetch project details:', error);
@@ -1219,11 +1236,15 @@ export default function ProjectDetailPage() {
       setSelectedSamples(newSet);
   };
 
+  const displaySamples = useMemo(() => {
+    return generatedSamples.length > 0 ? generatedSamples : projectSamples;
+  }, [generatedSamples, projectSamples]);
+
   const toggleAllSamples = () => {
-      if (selectedSamples.size === generatedSamples.length) {
+      if (selectedSamples.size === displaySamples.length) {
           setSelectedSamples(new Set());
       } else {
-          setSelectedSamples(new Set(generatedSamples.map(s => s.id)));
+          setSelectedSamples(new Set(displaySamples.map(s => s.id)));
       }
   };
 
@@ -1309,13 +1330,25 @@ export default function ProjectDetailPage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <Text className="font-medium">批量生成样本编号</Text>
-                        <Text className="text-sm text-zinc-600 mt-1">根据配置的规则批量生成样本编号并打印标签</Text>
+                    <Text className="font-medium">临床样本编号管理</Text>
+                        <Text className="text-sm text-zinc-600 mt-1">生成临床样本编号、查看已生成的编号并打印标签</Text>
                   </div>
-                    <Button color="dark" onClick={() => setIsBatchGenerateDialogOpen(true)} disabled={!project.sample_code_rule} className="shadow-sm relative z-10">
-                    <DocumentTextIcon />
-                    生成编号
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button outline onClick={() => {
+                        setActiveGenerationTab('result');
+                        setIsBatchGenerateDialogOpen(true);
+                    }} disabled={!project.sample_code_rule} className="shadow-sm relative z-10">
+                        <MagnifyingGlassIcon />
+                        查看编号
+                    </Button>
+                    <Button color="dark" onClick={() => {
+                        setActiveGenerationTab('clinical');
+                        setIsBatchGenerateDialogOpen(true);
+                    }} disabled={!project.sample_code_rule} className="shadow-sm relative z-10">
+                        <DocumentTextIcon />
+                        生成编号
+                    </Button>
+                  </div>
               </div>
             </div>
           </div>
@@ -1330,7 +1363,6 @@ export default function ProjectDetailPage() {
             tabs={[
               { key: 'rules', label: '编号结构' }, 
               { key: 'options', label: '选项配置' },
-              { key: 'organizations', label: '组织管理' },
               { key: 'samples', label: '临床样本配置' }
             ]} 
             activeTab={configTab} 
@@ -1451,72 +1483,6 @@ export default function ProjectDetailPage() {
                     />
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : configTab === 'organizations' ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Text className="text-sm text-zinc-600">为此项目关联全局组织，并可填写项目维度的联系人/备注</Text>
-                <Button onClick={() => {
-                  setEditingOrgLink(null);
-                  setOrgDialogMode('link');
-                  setSelectedOrgId('');
-                  setOrgForm({ name: '', org_type: '', address: '', contact_person: '', contact_phone: '', contact_email: '' });
-                  setOrgLinkForm({ contact_person: '', contact_phone: '', contact_email: '', notes: '' });
-                  setIsOrgDialogOpen(true);
-                }}>
-                  <PlusIcon className="w-4 h-4 mr-1"/> 新增单位
-                </Button>
-              </div>
-              <div className="border border-zinc-200 rounded-lg overflow-hidden">
-                <Table bleed>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeader>名称</TableHeader>
-                      <TableHeader>类型</TableHeader>
-                      <TableHeader>联系人</TableHeader>
-                      <TableHeader>电话</TableHeader>
-                      <TableHeader>备注</TableHeader>
-                      <TableHeader>操作</TableHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {projectOrgLinks.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-zinc-500">暂无关联组织</TableCell></TableRow>
-                    ) : (
-                      projectOrgLinks.map(link => (
-                        <TableRow key={link.id}>
-                          <TableCell className="font-medium">{link.organization?.name}</TableCell>
-                          <TableCell>
-                            <Badge color={link.organization?.org_type === 'sponsor' ? 'blue' : link.organization?.org_type === 'clinical' ? 'green' : 'zinc'}>
-                              {link.organization?.org_type === 'sponsor' ? '申办方' : link.organization?.org_type === 'clinical' ? '临床机构' : link.organization?.org_type || '其他'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{link.contact_person || link.organization?.contact_person || '-'}</TableCell>
-                          <TableCell>{link.contact_phone || link.organization?.contact_phone || '-'}</TableCell>
-                          <TableCell className="max-w-[260px] truncate" title={link.notes || undefined}>{link.notes || '-'}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button plain onClick={() => {
-                                setEditingOrgLink(link);
-                                setOrgDialogMode('link');
-                                setSelectedOrgId(String(link.organization_id));
-                                setOrgLinkForm({
-                                  contact_person: link.contact_person || '',
-                                  contact_phone: link.contact_phone || '',
-                                  contact_email: link.contact_email || '',
-                                  notes: link.notes || '',
-                                });
-                                setIsOrgDialogOpen(true);
-                              }}><PencilSquareIcon className="w-4 h-4"/></Button>
-                              <Button plain onClick={() => deleteOrgLink(link.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
               </div>
             </div>
           ) : null}
@@ -1804,21 +1770,29 @@ export default function ProjectDetailPage() {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between bg-zinc-50 p-2 rounded-lg border border-zinc-200">
                          <div className="flex items-center gap-3">
-                            <Text className="font-medium ml-2">样本列表 ({generatedSamples.length})</Text>
-                            {generatedSamples.length > 0 && (
+                            <Text className="font-medium ml-2">
+                                {generatedSamples.length > 0 ? '预览新生成的编号' : '查看已存样本编号'} 
+                                ({displaySamples.length})
+                            </Text>
+                            {displaySamples.length > 0 && (
                                 <Badge color="zinc">
                                     已选 {selectedSamples.size}
                                 </Badge>
                             )}
                 </div>
                          <div className="flex gap-2">
+                            {generatedSamples.length > 0 && (
+                                <Button outline onClick={() => setGeneratedSamples([])} className="!py-1.5">
+                                    清空预览
+                                </Button>
+                            )}
                             <Button outline onClick={toggleAllSamples} className="!py-1.5">
-                                {selectedSamples.size === generatedSamples.length ? '取消全选' : '全选'}
+                                {selectedSamples.size === displaySamples.length ? '取消全选' : '全选'}
                             </Button>
-                            <Button outline onClick={() => triggerPrint(generatedSamples.filter(s => selectedSamples.has(s.id)), 'list')} disabled={selectedSamples.size === 0} className="!py-1.5">
+                            <Button outline onClick={() => triggerPrint(displaySamples.filter(s => selectedSamples.has(s.id)), 'list')} disabled={selectedSamples.size === 0} className="!py-1.5">
                                 <PrinterIcon className="w-4 h-4 mr-1"/>打印清单
                             </Button>
-                            <Button outline onClick={() => triggerPrint(generatedSamples.filter(s => selectedSamples.has(s.id)), 'label')} disabled={selectedSamples.size === 0} className="!py-1.5">
+                            <Button outline onClick={() => triggerPrint(displaySamples.filter(s => selectedSamples.has(s.id)), 'label')} disabled={selectedSamples.size === 0} className="!py-1.5">
                                 <PrinterIcon className="w-4 h-4 mr-1"/>打印标签
                             </Button>
               </div>
@@ -1830,31 +1804,37 @@ export default function ProjectDetailPage() {
                                 <TableRow>
                                     <TableHeader className="w-12 text-center">
                                         <Checkbox 
-                                            checked={generatedSamples.length > 0 && selectedSamples.size === generatedSamples.length} 
+                                            checked={displaySamples.length > 0 && selectedSamples.size === displaySamples.length} 
                                             onChange={toggleAllSamples}
                                         />
                                     </TableHeader>
-                                    <TableHeader>申办方</TableHeader>
-                                    <TableHeader>申办者项目编号</TableHeader>
-                                    <TableHeader>临床试验研究室项目编号</TableHeader>
                                     <TableHeader>样本编号</TableHeader>
+                                    <TableHeader>状态</TableHeader>
+                                    <TableHeader>实验室项目编号</TableHeader>
+                                    <TableHeader>申办方项目编号</TableHeader>
                                     <TableHeader>操作</TableHeader>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {generatedSamples.length === 0 ? (
+                                {displaySamples.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={6} className="text-center py-12 text-zinc-500">
                                             <div className="flex flex-col items-center gap-3">
-                                                <p>请先在"生成临床样本编号"中选择条件并生成</p>
-                                                <Button onClick={() => setActiveGenerationTab('clinical')}>
-                                                    去生成
-                                                </Button>
+                                                {isLoadingProjectSamples ? (
+                                                    <p>加载中...</p>
+                                                ) : (
+                                                    <>
+                                                        <p>暂无编号，请先生成或清点样本</p>
+                                                        <Button onClick={() => setActiveGenerationTab('clinical')}>
+                                                            去生成
+                                                        </Button>
+                                                    </>
+                                                )}
                   </div>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    generatedSamples.map((sample) => (
+                                    displaySamples.map((sample) => (
                                         <TableRow key={sample.id}>
                                             <TableCell className="text-center">
                                                 <Checkbox 
@@ -1862,13 +1842,21 @@ export default function ProjectDetailPage() {
                                                     onChange={() => toggleSampleSelection(sample.id)}
                                                 />
                                             </TableCell>
-                                            <TableCell>{project?.sponsor?.name || '-'}</TableCell>
-                                            <TableCell>{project?.sponsor_project_code}</TableCell>
-                                            <TableCell>{project?.lab_project_code}</TableCell>
                                             <TableCell>
                                                 <span className="font-mono font-medium text-zinc-900">{sample.code}</span>
                                                 {sample.code !== sample.originalCode && <span className="ml-2 text-xs text-amber-600">(已修改)</span>}
                                             </TableCell>
+                                            <TableCell>
+                                                {sample.isExisting ? (
+                                                    <Badge color={statusColors[sample.status] || 'zinc'}>
+                                                        {statusLabels[sample.status] || sample.status}
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge color="yellow">预览中</Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{project?.lab_project_code}</TableCell>
+                                            <TableCell>{project?.sponsor_project_code}</TableCell>
                                             <TableCell>
                                                 <Button plain onClick={() => {
                                                     setEditingSample({ id: sample.id, oldCode: sample.code, newCode: sample.code });
@@ -1946,123 +1934,6 @@ export default function ProjectDetailPage() {
         title="确认保存规则"
         description="请验证密码以保存样本编号规则配置。"
       />
-
-      {/* Project Org Dialog */}
-      <Dialog open={isOrgDialogOpen} onClose={setIsOrgDialogOpen}>
-        <DialogTitle>
-          {editingOrgLink
-            ? '编辑关联信息'
-            : orgDialogMode === 'create'
-              ? '新建组织并关联'
-              : '关联组织到项目'}
-        </DialogTitle>
-        <DialogBody>
-          <div className="space-y-4">
-            {!editingOrgLink && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">新增方式</label>
-                <Select
-                  value={orgDialogMode}
-                  onChange={(e) => setOrgDialogMode(e.target.value as any)}
-                >
-                  <option value="link">关联已有组织</option>
-                  <option value="create">新建组织并关联</option>
-                </Select>
-              </div>
-            )}
-
-            {editingOrgLink ? (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">组织</label>
-                <div className="mt-1 p-2 rounded bg-zinc-50 border border-zinc-200 text-sm">
-                  {editingOrgLink.organization?.name || `ID: ${editingOrgLink.organization_id}`}
-                </div>
-              </div>
-            ) : orgDialogMode === 'link' ? (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">选择组织 *</label>
-                <Select value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}>
-                  <option value="">请选择</option>
-                  {globalOrganizations.map((o) => (
-                    <option key={o.id} value={String(o.id)}>
-                      {o.name} ({o.org_type})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">名称 *</label>
-                  <Input value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">类型 *</label>
-                  <Select value={orgForm.org_type} onChange={e => setOrgForm({...orgForm, org_type: e.target.value})}>
-                    <option value="">选择类型</option>
-                    <option value="sponsor">申办方</option>
-                    <option value="clinical">临床机构</option>
-                    <option value="testing">检测单位</option>
-                    <option value="transport">运输单位</option>
-                    <option value="other">其他</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">地址 (选填)</label>
-                  <Textarea value={orgForm.address} onChange={e => setOrgForm({...orgForm, address: e.target.value})} rows={2} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700">联系人 (全局)</label>
-                    <Input value={orgForm.contact_person} onChange={e => setOrgForm({...orgForm, contact_person: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700">电话 (全局)</label>
-                    <Input value={orgForm.contact_phone} onChange={e => setOrgForm({...orgForm, contact_phone: e.target.value})} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">邮箱 (全局，选填)</label>
-                  <Input type="email" value={orgForm.contact_email} onChange={e => setOrgForm({...orgForm, contact_email: e.target.value})} />
-                </div>
-              </>
-            )}
-
-            <div className="border-t border-zinc-100 pt-4">
-              <div className="text-sm font-medium text-zinc-800 mb-2">项目维度信息（可选）</div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">联系人（项目）</label>
-                  <Input value={orgLinkForm.contact_person} onChange={e => setOrgLinkForm({...orgLinkForm, contact_person: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700">电话（项目）</label>
-                  <Input value={orgLinkForm.contact_phone} onChange={e => setOrgLinkForm({...orgLinkForm, contact_phone: e.target.value})} />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-zinc-700">邮箱（项目）</label>
-                <Input type="email" value={orgLinkForm.contact_email} onChange={e => setOrgLinkForm({...orgLinkForm, contact_email: e.target.value})} />
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-zinc-700">备注</label>
-                <Textarea value={orgLinkForm.notes} onChange={e => setOrgLinkForm({...orgLinkForm, notes: e.target.value})} rows={2} />
-              </div>
-            </div>
-
-            {editingOrgLink && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">修改理由 *</label>
-                <Textarea value={auditReason} onChange={e => setAuditReason(e.target.value)} placeholder="请输入修改理由" rows={2} required />
-              </div>
-            )}
-          </div>
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={() => setIsOrgDialogOpen(false)}>取消</Button>
-          <Button color="dark" onClick={handleOrgSubmit}>确定</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Project Sample Type Dialog */}
       <Dialog open={isSampleTypeDialogOpen} onClose={setIsSampleTypeDialogOpen} size="xl">
