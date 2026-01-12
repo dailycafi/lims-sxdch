@@ -7,6 +7,7 @@ import { Select } from '@/components/select';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
+import { Heading } from '@/components/heading';
 import { Tabs } from '@/components/tabs';
 import { SearchInput } from '@/components/search-input';
 import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';

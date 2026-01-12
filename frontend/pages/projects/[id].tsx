@@ -740,7 +740,7 @@ export default function ProjectDetailPage() {
                       <span className="text-xs font-normal text-zinc-500">{dictionaries.clinic_codes.length} 个选项</span>
                     </h4>
                     <TagInput 
-                      values={dictionaries.clinic_codes} 
+                      value={dictionaries.clinic_codes} 
                       onChange={(vals) => setDictionaries({...dictionaries, clinic_codes: vals})} 
                       placeholder="输入机构代码后回车 (如: 01, 02)"
                     />
@@ -1018,7 +1018,7 @@ export default function ProjectDetailPage() {
           <div className="space-y-4">
             <Text className="text-sm text-zinc-600">添加该项目的采血点编号，每行一个。</Text>
             <TagInput 
-              values={collectionPointsConfig} 
+              value={collectionPointsConfig} 
               onChange={setCollectionPointsConfig} 
               placeholder="输入采血点编号后回车 (如: 01, 02, 03)"
             />

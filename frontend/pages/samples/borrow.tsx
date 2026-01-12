@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Text } from '@/components/text';
+import { Heading } from '@/components/heading';
 import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/store/project';

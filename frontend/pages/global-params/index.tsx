@@ -3,6 +3,7 @@ import { formatDate } from '@/lib/date-utils';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
+import { Heading } from '@/components/heading';
 import { Select } from '@/components/select';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
@@ -441,6 +442,7 @@ export default function GlobalParamsPage() {
         test_types: testTypes,
         primary_codes: primaryCodes,
         backup_codes: backupCodes,
+        collection_points: [{ code: '', name: '', time_description: '' }],
       });
     } else {
       setEditingSampleType(null);
@@ -461,6 +463,7 @@ export default function GlobalParamsPage() {
       test_types: [''],
       primary_codes: [''],
       backup_codes: [''],
+      collection_points: [{ code: '', name: '', time_description: '' }],
     });
     setAuditReason('');
   };

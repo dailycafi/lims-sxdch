@@ -314,14 +314,12 @@ export default function UsersPage() {
                     <div className="flex items-center gap-2">
                       <Button
                         color="zinc"
-                        outline
                         onClick={() => openEditDialog(user)}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </Button>
                       <Button
                         color={user.is_active ? 'red' : 'green'}
-                        outline
                         onClick={() => handleToggleActive(user)}
                       >
                         {user.is_active ? (
@@ -332,14 +330,12 @@ export default function UsersPage() {
                       </Button>
                       <Button
                         color="blue"
-                        outline
                         onClick={() => openResetPasswordDialog(user)}
                       >
                         <KeyIcon className="h-4 w-4" />
                       </Button>
                       <Button
                         color="red"
-                        outline
                         onClick={() => openDeleteDialog(user)}
                       >
                         <TrashIcon className="h-4 w-4" />
