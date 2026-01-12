@@ -486,6 +486,14 @@ async def init_db(drop_existing=False):
         await session.commit()
         
         print("✅ 数据库初始化完成")
+        
+        print("\n📊 当前系统状态：")
+        print("  - 数据库表: 已重建")
+        print("  - 角色权限: 已初始化")
+        print("  - 测试数据: 已生成 (含测试用户、项目、样本)")
+        print("\n🚀 可以开始测试了！")
+        print("   用户管理: http://localhost:3000/users")
+        print("   角色管理: http://localhost:3000/roles")
     
     await engine.dispose()
 
