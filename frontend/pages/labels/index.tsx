@@ -611,7 +611,8 @@ const ViewAndPrintTab = ({
   currentProject,
   availableOptions,
   batches,
-  fetchBatches
+  fetchBatches,
+  onGoToGenerate
 }: {
   currentProject: Project | null;
   availableOptions: {
@@ -623,6 +624,7 @@ const ViewAndPrintTab = ({
   };
   batches: LabelBatch[];
   fetchBatches: () => void;
+  onGoToGenerate: () => void;
 }) => {
   // 筛选状态
   const [filters, setFilters] = useState({
@@ -1033,7 +1035,30 @@ const ViewAndPrintTab = ({
     });
     setSearchKeyword('');
   };
-  
+
+  // 如果没有数据，显示引导页
+  if (!loading && batches.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-dashed border-zinc-200">
+        <div className="bg-zinc-50 p-6 rounded-full mb-6">
+          <TagIcon className="w-12 h-12 text-zinc-300" />
+        </div>
+        <Text className="text-lg font-bold text-zinc-900 mb-2">暂无标签记录</Text>
+        <Text className="text-zinc-500 mb-8 max-w-sm text-center text-sm leading-relaxed">
+          当前项目尚未生成任何标签。您可以前往“生成编号”页面，根据需要配置并生成新的标签批次。
+        </Text>
+        <Button 
+          color="dark" 
+          onClick={onGoToGenerate}
+          className="px-8 h-10 rounded-xl font-bold"
+        >
+          <PlusIcon className="w-4 h-4 mr-2" />
+          去生成标签
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* 筛选区域 */}
@@ -1868,6 +1893,7 @@ export default function LabelsPage() {
             availableOptions={availableOptions}
             batches={batches}
             fetchBatches={fetchBatches}
+            onGoToGenerate={() => setActiveTab('generate')}
           />
         )}
       </div>
