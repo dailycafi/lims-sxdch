@@ -1084,9 +1084,9 @@ async def complete_inventory(
         entity_id=record_id,
         action="complete",
         details={
-            "total_samples": len(samples),
-            "scanned_samples": len([s for s in samples if s["status"] == "scanned"]),
-            "error_samples": len([s for s in samples if s["status"] == "error"]),
+            "total_samples": len(samples_data),
+            "scanned_samples": len([s for s in samples_data if s["status"] == "scanned"]),
+            "error_samples": len([s for s in samples_data if s["status"] == "error"]),
             "boxes_used": len(boxes)
         },
         timestamp=datetime.utcnow()
@@ -1364,7 +1364,7 @@ async def get_borrow_request(
         .options(
             selectinload(SampleBorrowRequest.project),
             selectinload(SampleBorrowRequest.requester),
-            selectinload(SampleBorrowItem.sample)
+            selectinload(SampleBorrowRequest.samples).selectinload(SampleBorrowItem.sample)
         )
         .where(SampleBorrowRequest.id == request_id)
     )
@@ -1412,7 +1412,17 @@ async def approve_borrow_request(
     db: AsyncSession = Depends(get_db)
 ):
     """批准领用申请"""
-    # TODO: 检查审批权限
+    # 检查审批权限：只有样本管理员、项目负责人或系统管理员可以审批
+    allowed_roles = [
+        UserRole.SYSTEM_ADMIN,
+        UserRole.SAMPLE_ADMIN,
+        UserRole.PROJECT_LEAD
+    ]
+    if current_user.role not in allowed_roles and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限审批领用申请"
+        )
     
     result = await db.execute(
         select(SampleBorrowRequest).where(SampleBorrowRequest.id == request_id)
@@ -1424,6 +1434,9 @@ async def approve_borrow_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="领用申请不存在"
         )
+    
+    # 检查项目访问权限
+    await assert_project_access(db, current_user, request.project_id)
     
     request.status = "approved"
     request.approved_by = current_user.id

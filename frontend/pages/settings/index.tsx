@@ -583,7 +583,7 @@ export default function SettingsPage() {
                             <div className="flex justify-end gap-1">
                               {isAdmin && (
                                 <>
-                                  <Button plain onClick={() => handleEditUser(user)} className="text-zinc-600 hover:text-blue-600 hover:bg-blue-50">
+                                  <Button plain onClick={() => handleEditUser(user)} className="text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100">
                                     <PencilIcon className="h-4 w-4" />
                                     编辑
                                   </Button>
@@ -677,7 +677,7 @@ export default function SettingsPage() {
                             <div className="flex justify-end gap-1">
                               {canManageRoles && (
                                 <>
-                                  <Button plain onClick={() => handleEditRole(role)} className="text-zinc-600 hover:text-blue-600 hover:bg-blue-50">
+                                  <Button plain onClick={() => handleEditRole(role)} className="text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100">
                                     <PencilIcon className="h-4 w-4" />
                                     编辑
                                   </Button>

@@ -214,15 +214,15 @@ async def get_deviations(
             "severity": deviation.severity,
             "category": deviation.category,
             "project": {
-                "id": deviation.project.id,
-                "lab_project_code": deviation.project.lab_project_code
+                "id": deviation.project.id if deviation.project else None,
+                "lab_project_code": deviation.project.lab_project_code if deviation.project else ""
             } if deviation.project else None,
             "reporter": {
-                "full_name": deviation.reporter.full_name
+                "full_name": deviation.reporter.full_name if deviation.reporter else ""
             } if deviation.reporter else None,
             "status": deviation.status,
             "current_step": current_step,
-            "created_at": deviation.created_at.isoformat()
+            "created_at": deviation.created_at.isoformat() if deviation.created_at else ""
         })
     
     return response
@@ -398,7 +398,17 @@ async def process_deviation_approval(
     if approval_data.action == "reject":
         # 拒绝，返回到上一步
         deviation.status = f"step_{current_approval.step}_rejected"
-        # TODO: 创建新的待处理记录返回给上一步
+        
+        # 如果不是第一步，创建返回给上一步的待处理记录
+        if current_approval.step > 1:
+            prev_step = APPROVAL_STEPS[current_approval.step - 2]
+            return_approval = DeviationApproval(
+                deviation_id=deviation.id,
+                step=current_approval.step - 1,
+                step_name=f"{prev_step['name']}（返回修改）",
+                role=prev_step["role"][0] if prev_step["role"] else None
+            )
+            db.add(return_approval)
     else:
         # 批准，进入下一步
         if current_approval.step < len(APPROVAL_STEPS):

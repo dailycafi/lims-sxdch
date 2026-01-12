@@ -31,11 +31,12 @@ export default function App({ Component, pageProps }: AppProps) {
       <Component {...pageProps} />
       <Toaster
         position="top-right"
+        reverseOrder={false}
+        gutter={8}
         toastOptions={{
           duration: 4000,
           style: {
-            background: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(8px)',
+            background: '#ffffff',
             color: '#18181b', // zinc-900
             borderRadius: '12px',
             border: '1px solid rgba(228, 228, 231, 0.5)', // zinc-200/50
@@ -45,12 +46,14 @@ export default function App({ Component, pageProps }: AppProps) {
             padding: '12px 16px',
           },
           success: {
+            duration: 4000,
             iconTheme: {
               primary: '#10b981', // emerald-500
               secondary: '#fff',
             },
           },
           error: {
+            duration: 4000,
             iconTheme: {
               primary: '#ef4444', // red-500
               secondary: '#fff',

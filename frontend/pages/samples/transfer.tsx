@@ -8,7 +8,6 @@ import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -498,10 +497,7 @@ export default function SampleTransferPage() {
       <div className="max-w-7xl mx-auto">
         {/* 页面标题和操作按钮 */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>样本转移</Heading>
-            <Text className="mt-1 text-zinc-600">管理样本内部和外部转移</Text>
-          </div>
+          <Text className="text-zinc-600">管理样本内部和外部转移</Text>
           <div className="flex gap-2">
             <Button 
               onClick={() => setIsInternalTransferOpen(true)}

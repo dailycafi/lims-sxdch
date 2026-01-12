@@ -5,7 +5,6 @@ import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -706,8 +705,7 @@ export default function GlobalParamsPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <Heading>全局参数管理</Heading>
-          <Text className="mt-1 text-zinc-600">管理系统中的组织信息和样本类型配置</Text>
+          <Text className="text-zinc-600">管理系统中的组织信息和样本类型配置</Text>
         </div>
 
         {/* 标签页切换 */}

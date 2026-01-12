@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -285,8 +284,7 @@ export default function SamplesPage() {
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
         <div className="mb-6">
-          <Heading>样本查询</Heading>
-          <Text className="mt-1 text-zinc-600">查询和跟踪样本信息</Text>
+          <Text className="text-zinc-600">查询和跟踪样本信息</Text>
         </div>
 
         {/* 筛选区域 - 可折叠 */}

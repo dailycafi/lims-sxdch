@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -137,30 +138,11 @@ export default function NewProjectPage() {
 
     setIsLoading(true);
     try {
-      // 检查是否有新的检测类型需要添加到全局
-      const newTypes = selectedTestTypes.filter(t => !globalTestTypes.includes(t));
-      if (newTypes.length > 0) {
-        // 将新的检测类型添加到全局参数
-        try {
-          await api.post('/global-params/sample-types', {
-            category: 'clinical',
-            test_type: newTypes.join(','),
-            primary_count: 0,
-            backup_count: 0,
-          });
-          toast.success(`已将新检测类型 ${newTypes.join(', ')} 添加到全局参数`);
-        } catch (error) {
-          console.error('Failed to add new test types to global:', error);
-          // 继续创建项目，不阻止
-        }
-      }
-
       await createProjectMutation.mutateAsync({
         ...data,
         sponsor_id: Number(data.sponsor_id),
         clinical_org_ids: orgIds,
         clinical_org_id: orgIds[0], // 兼容性：设置第一个为 clinical_org_id
-        test_types: selectedTestTypes, // 传递选中的检测类型
       } as any);
     } finally {
       setIsLoading(false);
@@ -225,7 +207,7 @@ export default function NewProjectPage() {
                   <button
                     type="button"
                     onClick={() => { setDialogType('sponsor'); setDialogOpen(true); }}
-                    className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                    className="flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900 transition-colors"
                   >
                     <PlusIcon className="size-3" />
                     <span>新建申办方</span>
@@ -253,7 +235,7 @@ export default function NewProjectPage() {
                     <button
                       type="button"
                       onClick={() => { setDialogType('clinical'); setDialogOpen(true); }}
-                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                      className="flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900 transition-colors"
                     >
                       <PlusIcon className="size-3" />
                       <span>新建临床机构</span>
@@ -261,7 +243,7 @@ export default function NewProjectPage() {
                     <button
                       type="button"
                       onClick={() => append({ value: '' })}
-                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                      className="flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900 transition-colors"
                     >
                       <PlusIcon className="size-3" />
                       <span>添加临床机构</span>
@@ -297,87 +279,6 @@ export default function NewProjectPage() {
                 ))}
               </div>
 
-              {/* 检测类型选择 */}
-              <Field>
-                <Label>检测类型（可选）</Label>
-                <Text className="text-xs text-zinc-500 mb-2">
-                  从已有类型中选择，或输入新类型（新类型会自动添加到全局参数）
-                </Text>
-                
-                {/* 已选择的检测类型 */}
-                {selectedTestTypes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {selectedTestTypes.map((type, i) => (
-                      <Badge key={i} color={globalTestTypes.includes(type) ? 'green' : 'blue'}>
-                        {type}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTestType(type)}
-                          className="ml-1.5 hover:text-red-500"
-                        >
-                          <XMarkIcon className="size-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                
-                {/* 输入框和下拉选项 */}
-                <div className="relative">
-                  <Input
-                    value={newTestTypeInput}
-                    onChange={(e) => {
-                      setNewTestTypeInput(e.target.value);
-                      setShowTestTypeDropdown(true);
-                    }}
-                    onFocus={() => setShowTestTypeDropdown(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (newTestTypeInput.trim()) {
-                          handleAddTestType(newTestTypeInput);
-                        }
-                      }
-                    }}
-                    placeholder="输入检测类型（如 PK、ADA）后回车添加"
-                  />
-                  
-                  {/* 下拉选项 */}
-                  {showTestTypeDropdown && (filteredTestTypes.length > 0 || newTestTypeInput.trim()) && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredTestTypes.map((type, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => handleAddTestType(type)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center justify-between"
-                        >
-                          <span>{type}</span>
-                          <Badge color="zinc" className="text-xs">已有</Badge>
-                        </button>
-                      ))}
-                      {newTestTypeInput.trim() && !globalTestTypes.includes(newTestTypeInput.trim()) && !selectedTestTypes.includes(newTestTypeInput.trim()) && (
-                        <button
-                          type="button"
-                          onClick={() => handleAddTestType(newTestTypeInput)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 text-blue-600 flex items-center justify-between border-t border-zinc-100"
-                        >
-                          <span>添加 "{newTestTypeInput.trim()}"</span>
-                          <Badge color="blue" className="text-xs">新建</Badge>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* 点击外部关闭下拉 */}
-                {showTestTypeDropdown && (
-                  <div 
-                    className="fixed inset-0 z-0" 
-                    onClick={() => setShowTestTypeDropdown(false)}
-                  />
-                )}
-              </Field>
             </FieldGroup>
           </Fieldset>
 

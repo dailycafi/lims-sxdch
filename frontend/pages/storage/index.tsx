@@ -1,6 +1,5 @@
 import React from 'react';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
@@ -68,10 +67,7 @@ export default function StorageListPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <Heading>存储设备管理</Heading>
-            <Text className="mt-1 text-zinc-600">管理冰箱、液氮罐等存储设备及其层级结构</Text>
-          </div>
+          <Text className="text-zinc-600">管理冰箱、液氮罐等存储设备及其层级结构</Text>
           <div className="flex gap-2">
             <Button href="/storage/scan" outline className="whitespace-nowrap !px-5 !py-2.5 gap-x-2">
                 <QrCodeIcon className="!w-5 !h-5" />

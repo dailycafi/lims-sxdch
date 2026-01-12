@@ -3,7 +3,6 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -175,10 +174,7 @@ export default function AuditPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <Heading>审计日志</Heading>
-            <Text className="mt-1 text-zinc-600">查看系统所有操作记录，记录不可删除</Text>
-          </div>
+          <Text className="text-zinc-600">查看系统所有操作记录，记录不可删除</Text>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 px-3 py-1.5 bg-red-100 rounded-lg">
               <LockClosedIcon className="h-4 w-4 text-red-600" />

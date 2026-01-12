@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
@@ -417,7 +416,7 @@ function ReturnTab({ projectId }: { projectId: number | null }) {
                                             <TableCell>{req.target_location}</TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
-                                                    <Button plain className="text-blue-600 hover:text-blue-800" onClick={() => router.push(`/samples/return/${req.id}`)}>
+                                                    <Button plain className="text-zinc-900 font-medium hover:text-black" onClick={() => router.push(`/samples/return/${req.id}`)}>
                                                         归还
                                                     </Button>
                                                     <Button plain onClick={() => {
@@ -1112,8 +1111,7 @@ export default function SampleOperationsPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-            <Heading>样本作业中心</Heading>
-            <Text className="mt-1 text-zinc-600">一站式管理样本领用、归还及特殊入库</Text>
+            <Text className="text-zinc-600">一站式管理样本领用、归还及特殊入库</Text>
         </div>
 
         {/* 主要导航 Tabs */}

@@ -7,7 +7,6 @@ import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Checkbox } from '@/components/checkbox';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
-import { Heading } from '@/components/heading';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
@@ -108,11 +107,15 @@ const defaultCryoTubeTemplate: LabelTemplate = {
 const LabelPreview = ({ 
   template, 
   previewData,
-  projectCode 
+  projectCode,
+  hoveredRowId,
+  onHoverRow
 }: { 
   template: LabelTemplate;
   previewData: Record<string, string>;
   projectCode: string;
+  hoveredRowId: string | null;
+  onHoverRow: (id: string | null) => void;
 }) => {
   const getBarcodeUrl = (text: string) => {
     if (!text || typeof window === 'undefined') return '';
@@ -151,15 +154,23 @@ const LabelPreview = ({
   const barcodeText = previewData[template.barcodeField] || 'S001-PK-a1';
 
   return (
-    <div className="border-2 border-dashed border-zinc-300 rounded-lg p-4 bg-white w-[280px] font-mono text-sm">
+    <div className="border-2 border-dashed border-zinc-300 rounded-lg p-4 bg-white w-[320px] font-mono text-sm shadow-sm">
       <div className="text-xs text-zinc-400 mb-2 font-sans">
         {template.labelType === 'sampling_tube' ? 'PK:' : 'IR:'}
       </div>
       <div className="space-y-1.5 mb-3">
         {template.rows.map(row => (
-          <div key={row.id} className="flex">
-            <span className="text-zinc-600 w-24 flex-shrink-0">{row.label}：</span>
-            <span className="text-zinc-900 font-medium underline underline-offset-2 decoration-zinc-300">
+          <div 
+            key={row.id} 
+            className={clsx(
+              "flex transition-all duration-200 rounded px-1 -mx-1",
+              hoveredRowId === row.id ? "bg-blue-50 ring-1 ring-blue-200" : ""
+            )}
+            onMouseEnter={() => onHoverRow(row.id)}
+            onMouseLeave={() => onHoverRow(null)}
+          >
+            <span className="text-zinc-600 w-28 flex-shrink-0">{row.label}：</span>
+            <span className="text-zinc-900 font-medium underline underline-offset-2 decoration-zinc-300 break-all">
               {getRowValue(row)}
             </span>
           </div>
@@ -208,6 +219,7 @@ const LabelSettingsTab = ({
 }) => {
   const [settingType, setSettingType] = useState<'sampling_tube' | 'cryo_tube'>('sampling_tube');
   const [template, setTemplate] = useState<LabelTemplate>(defaultSamplingTubeTemplate);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<Record<string, string>>({
     subject: 'S001',
     testType: 'PK',
@@ -219,7 +231,16 @@ const LabelSettingsTab = ({
   // 切换标签类型时更新模板
   useEffect(() => {
     if (settingType === 'sampling_tube') {
-      setTemplate(defaultSamplingTubeTemplate);
+      // 修正默认模板，确保包含代码
+      const updatedDefault = {
+        ...defaultSamplingTubeTemplate,
+        rows: defaultSamplingTubeTemplate.rows.map(row => 
+          row.id === 'purpose' 
+            ? { ...row, combinedFields: { field1: 'testType', field2: 'code', separator: '-' } }
+            : row
+        )
+      };
+      setTemplate(updatedDefault);
       setPreviewData({
         subject: 'S001',
         testType: 'PK',
@@ -228,7 +249,16 @@ const LabelSettingsTab = ({
         time: 'D1 给药前 30min'
       });
     } else {
-      setTemplate(defaultCryoTubeTemplate);
+      // 修正默认模板，确保包含代码
+      const updatedDefault = {
+        ...defaultCryoTubeTemplate,
+        rows: defaultCryoTubeTemplate.rows.map(row => 
+          row.id === 'purpose' 
+            ? { ...row, combinedFields: { field1: 'testType', field2: 'code', separator: '-' } }
+            : row
+        )
+      };
+      setTemplate(updatedDefault);
       setPreviewData({
         subject: 'S001',
         testType: 'IR 检测',
@@ -269,228 +299,306 @@ const LabelSettingsTab = ({
   const updatePreview = (field: string, value: string) => {
     setPreviewData({ ...previewData, [field]: value });
   };
+  
+  const handleSaveTemplate = () => {
+    // 这里后续可以对接后端 API 保存配置
+    // await LabelsService.createConfig({ ... });
+    toast.success('模板配置已保存');
+  };
 
   return (
     <div className="space-y-6">
-      {/* 标签类型选择 */}
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-        <Text className="font-semibold text-zinc-900 mb-4">选择标签类型</Text>
-        <div className="flex gap-4">
+      {/* 标签类型选择 - 紧凑设计 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <div className={clsx(
+            "p-3 rounded-xl transition-colors shrink-0",
+            settingType === 'sampling_tube' ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500"
+          )}>
+            {settingType === 'sampling_tube' ? (
+              <BeakerIcon className="w-6 h-6" />
+            ) : (
+              <DocumentTextIcon className="w-6 h-6" />
+            )}
+          </div>
+          <div>
+            <Text className="text-base font-bold text-zinc-900">
+              {settingType === 'sampling_tube' ? '采样管标签' : '冻存管标签'}
+            </Text>
+            <Text className="text-sm text-zinc-500 mt-0.5">
+              为{settingType === 'sampling_tube' ? '采样管' : '冻存管'}配置打印格式、内容字段和条形码展示
+            </Text>
+          </div>
+        </div>
+
+        <div className="flex p-1 bg-zinc-100 rounded-xl w-full sm:w-auto">
           <button
             onClick={() => setSettingType('sampling_tube')}
             className={clsx(
-              "flex-1 p-3 rounded-lg border-2 transition-all text-center",
+              "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200",
               settingType === 'sampling_tube'
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-zinc-200 hover:border-zinc-300 text-zinc-600"
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
+                : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50"
             )}
           >
-            <BeakerIcon className="w-6 h-6 mx-auto mb-1" />
-            <span className="text-sm font-medium">采样管标签</span>
+            <BeakerIcon className="w-4 h-4" />
+            采样管
           </button>
           <button
             onClick={() => setSettingType('cryo_tube')}
             className={clsx(
-              "flex-1 p-3 rounded-lg border-2 transition-all text-center",
+              "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200",
               settingType === 'cryo_tube'
-                ? "border-purple-500 bg-purple-50 text-purple-700"
-                : "border-zinc-200 hover:border-zinc-300 text-zinc-600"
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
+                : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50"
             )}
           >
-            <DocumentTextIcon className="w-6 h-6 mx-auto mb-1" />
-            <span className="text-sm font-medium">冻存管标签</span>
+            <DocumentTextIcon className="w-4 h-4" />
+            冻存管
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 左侧：标签行配置 */}
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <Text className="font-semibold text-zinc-900">标签内容配置</Text>
-            <Button outline onClick={addRow}>
-              <PlusIcon className="w-4 h-4 mr-1" />
-              添加行
+        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <Text className="text-base font-bold text-zinc-900">标签内容配置</Text>
+              <Text className="text-xs text-zinc-500 mt-0.5">定义标签上显示的每一行内容及其数据来源</Text>
+            </div>
+            <Button outline onClick={addRow} className="rounded-xl">
+              <PlusIcon className="w-4 h-4 mr-1.5" />
+              <span className="text-sm font-medium">添加新行</span>
             </Button>
           </div>
           
           <div className="space-y-3">
             {template.rows.map((row, index) => (
-              <div key={row.id} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-lg">
-                <div className="flex-1 grid grid-cols-3 gap-2">
+              <div 
+                key={row.id} 
+                className={clsx(
+                  "flex items-start gap-3 p-4 rounded-xl border transition-all duration-200 group",
+                  hoveredRowId === row.id 
+                    ? "bg-blue-50 border-blue-200 ring-1 ring-blue-100 shadow-sm" 
+                    : "bg-zinc-50/50 border-zinc-100 hover:border-zinc-200"
+                )}
+                onMouseEnter={() => setHoveredRowId(row.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
+              >
+                <div className="flex-1 grid grid-cols-3 gap-3">
                   {/* 行标签 */}
-                  <Input
-                    value={row.label}
-                    onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                    placeholder="字段名称"
-                    className="text-sm"
-                  />
-                  {/* 类型选择 */}
-                  <Select
-                    value={row.type}
-                    onChange={(e) => updateRow(row.id, { type: e.target.value as LabelRow['type'] })}
-                    className="text-sm"
-                  >
-                    <option value="static">固定文本</option>
-                    <option value="dynamic">下拉选择</option>
-                    <option value="combined">组合字段</option>
-                  </Select>
-                  {/* 值/配置 */}
-                  {row.type === 'static' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">字段名称</label>
                     <Input
-                      value={row.value || ''}
-                      onChange={(e) => updateRow(row.id, { value: e.target.value })}
-                      placeholder="固定值"
-                      className="text-sm"
+                      value={row.label}
+                      onChange={(e) => updateRow(row.id, { label: e.target.value })}
+                      placeholder="如：方案编号"
+                      className="text-sm bg-white"
                     />
-                  )}
-                  {row.type === 'dynamic' && (
+                  </div>
+                  {/* 类型选择 */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">数据来源</label>
                     <Select
-                      value={row.value || ''}
-                      onChange={(e) => {
-                        updateRow(row.id, { value: e.target.value });
-                        updatePreview(row.id, e.target.value);
-                      }}
-                      className="text-sm"
+                      value={row.type}
+                      onChange={(e) => updateRow(row.id, { type: e.target.value as LabelRow['type'] })}
+                      className="text-sm bg-white"
                     >
-                      <option value="">选择数据源</option>
-                      <option value="subject">筛选号</option>
-                      <option value="testType">检测类型</option>
-                      <option value="cycle">周期</option>
-                      <option value="time">采样时间</option>
+                      <option value="static">固定文本</option>
+                      <option value="dynamic">下拉选择</option>
+                      <option value="combined">组合字段</option>
                     </Select>
-                  )}
-                  {row.type === 'combined' && (
-                    <div className="flex items-center gap-1 text-xs text-zinc-500">
-                      <span>检测类型</span>
+                  </div>
+                  {/* 值/配置 */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">内容配置</label>
+                    {row.type === 'static' && (
                       <Input
-                        value={row.combinedFields?.separator || '-'}
-                        onChange={(e) => updateRow(row.id, { 
-                          combinedFields: { 
-                            ...row.combinedFields!, 
-                            separator: e.target.value 
-                          }
-                        })}
-                        className="w-8 text-center !px-1"
-                        maxLength={2}
+                        value={row.value || ''}
+                        onChange={(e) => updateRow(row.id, { value: e.target.value })}
+                        placeholder="请输入文本"
+                        className="text-sm bg-white"
                       />
-                      <span>代码</span>
-                    </div>
-                  )}
+                    )}
+                    {row.type === 'dynamic' && (
+                      <Select
+                        value={row.value || ''}
+                        onChange={(e) => {
+                          updateRow(row.id, { value: e.target.value });
+                          updatePreview(row.id, e.target.value);
+                        }}
+                        className="text-sm bg-white"
+                      >
+                        <option value="">选择字段...</option>
+                        <option value="subject">筛选号</option>
+                        <option value="testType">检测类型</option>
+                        <option value="cycle">周期</option>
+                        <option value="time">采样时间</option>
+                      </Select>
+                    )}
+                    {row.type === 'combined' && (
+                      <div className="flex items-center gap-2 h-9 px-3 bg-white border border-zinc-200 rounded-lg">
+                        <span className="text-xs text-zinc-500 whitespace-nowrap">检测类型</span>
+                        <Input
+                          value={row.combinedFields?.separator || '-'}
+                          onChange={(e) => updateRow(row.id, { 
+                            combinedFields: { 
+                              ...row.combinedFields!, 
+                              separator: e.target.value 
+                            }
+                          })}
+                          className="w-10 text-center !px-0 !h-6 text-sm"
+                          maxLength={2}
+                        />
+                        <span className="text-xs text-zinc-500 whitespace-nowrap">代码</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Button plain onClick={() => removeRow(row.id)} className="text-red-500 hover:text-red-600">
-                  <XMarkIcon className="w-4 h-4" />
-                </Button>
+                <div className="pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button plain onClick={() => removeRow(row.id)} className="text-zinc-400 hover:text-red-500 p-1">
+                    <XMarkIcon className="w-5 h-5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
 
           {/* 条形码设置 */}
-          <div className="mt-4 pt-4 border-t border-zinc-200">
-            <div className="flex items-center gap-4">
-              <Checkbox
-                checked={template.showBarcode}
-                onChange={(checked) => setTemplate({ ...template, showBarcode: checked })}
-              />
-              <Text className="text-sm">显示条形码</Text>
+          <div className="mt-6 pt-6 border-t border-zinc-100">
+            <div className="bg-zinc-50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={template.showBarcode}
+                  onChange={(checked) => setTemplate({ ...template, showBarcode: checked })}
+                  className="w-5 h-5"
+                />
+                <div>
+                  <Text className="text-sm font-bold text-zinc-900">显示条形码</Text>
+                  <Text className="text-xs text-zinc-500">在标签底部生成唯一识别条码</Text>
+                </div>
+              </div>
               {template.showBarcode && (
-                <Select
-                  value={template.barcodeField}
-                  onChange={(e) => setTemplate({ ...template, barcodeField: e.target.value })}
-                  className="text-sm w-32"
-                >
-                  <option value="subject">筛选号</option>
-                  <option value="full">完整编号</option>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">条码数据源：</span>
+                  <Select
+                    value={template.barcodeField}
+                    onChange={(e) => setTemplate({ ...template, barcodeField: e.target.value })}
+                    className="text-sm w-36 bg-white"
+                  >
+                    <option value="subject">受试者编号</option>
+                    <option value="full">完整样本编号</option>
+                  </Select>
+                </div>
               )}
             </div>
           </div>
         </div>
 
         {/* 右侧：标签预览 */}
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-          <Text className="font-semibold text-zinc-900 mb-4">标签预览</Text>
-          
-          {/* 预览数据输入 */}
-          <div className="mb-4 p-3 bg-zinc-50 rounded-lg">
-            <Text className="text-xs font-medium text-zinc-500 mb-2">预览数据（选择后参数自动填充至右方下划线中）</Text>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-zinc-500">筛选号</label>
-                <Input
-                  value={previewData.subject}
-                  onChange={(e) => updatePreview('subject', e.target.value)}
-                  className="text-sm"
-                  placeholder="S001"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">检测类型</label>
-                <Select
-                  value={previewData.testType}
-                  onChange={(e) => updatePreview('testType', e.target.value)}
-                  className="text-sm"
-                >
-                  <option value="">选择...</option>
-                  {availableOptions.testTypes.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                  <option value="PK">PK</option>
-                  <option value="IR 检测">IR 检测</option>
-                </Select>
-              </div>
-              {settingType === 'sampling_tube' && (
-                <div>
-                  <label className="text-xs text-zinc-500">备注</label>
-                  <Input
-                    value={previewData.note}
-                    onChange={(e) => updatePreview('note', e.target.value)}
-                    className="text-sm"
-                    placeholder="采血(HS)"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="text-xs text-zinc-500">正/备份代码</label>
-                <Select
-                  value={previewData.code}
-                  onChange={(e) => updatePreview('code', e.target.value)}
-                  className="text-sm"
-                >
-                  <option value="">选择...</option>
-                  {availableOptions.primaryCodes.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value="a">a</option>
-                  <option value="b">b</option>
-                </Select>
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-zinc-500">计划采样时间</label>
-                <Input
-                  value={previewData.time}
-                  onChange={(e) => updatePreview('time', e.target.value)}
-                  className="text-sm"
-                  placeholder="D1 给药前 30min"
-                />
-              </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <Text className="text-base font-bold text-zinc-900">打印效果预览</Text>
+              <Text className="text-xs text-zinc-500 mt-0.5">实时查看标签在打印纸上的呈现效果</Text>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-zinc-100 rounded-full">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-zinc-500 uppercase">Live Preview</span>
             </div>
           </div>
+          
+          <div className="flex-1 space-y-8 flex flex-col">
+            {/* 标签预览容器 */}
+            <div className="flex justify-center py-10 bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200">
+              <LabelPreview 
+                template={template}
+                previewData={previewData}
+                projectCode={currentProject?.sponsor_project_code || currentProject?.lab_project_code || 'LT2158CHN005'}
+                hoveredRowId={hoveredRowId}
+                onHoverRow={setHoveredRowId}
+              />
+            </div>
 
-          {/* 标签预览 */}
-          <div className="flex justify-center">
-            <LabelPreview 
-              template={template}
-              previewData={previewData}
-              projectCode={currentProject?.sponsor_project_code || currentProject?.lab_project_code || ''}
-            />
-          </div>
+            {/* 预览数据输入 */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+              <Text className="text-xs font-bold text-zinc-400 uppercase tracking-wider">预览测试数据</Text>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">筛选号</label>
+                  <Input
+                    value={previewData.subject}
+                    onChange={(e) => updatePreview('subject', e.target.value)}
+                    className="text-sm"
+                    placeholder="S001"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">检测类型</label>
+                  <Select
+                    value={previewData.testType}
+                    onChange={(e) => updatePreview('testType', e.target.value)}
+                    className="text-sm"
+                  >
+                    <option value="">选择类型...</option>
+                    {availableOptions.testTypes.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                    <option value="PK">PK</option>
+                    <option value="IR 检测">IR 检测</option>
+                  </Select>
+                </div>
+                {settingType === 'sampling_tube' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">备注</label>
+                    <Input
+                      value={previewData.note}
+                      onChange={(e) => updatePreview('note', e.target.value)}
+                      className="text-sm"
+                      placeholder="采血(HS)"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
+                    {settingType === 'sampling_tube' ? '正份代码' : '备份代码'}
+                  </label>
+                  <Select
+                    value={previewData.code}
+                    onChange={(e) => updatePreview('code', e.target.value)}
+                    className="text-sm"
+                  >
+                    <option value="">选择代码...</option>
+                    {availableOptions.primaryCodes.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="a">a</option>
+                    <option value="b">b</option>
+                  </Select>
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">计划采样时间</label>
+                  <Input
+                    value={previewData.time}
+                    onChange={(e) => updatePreview('time', e.target.value)}
+                    className="text-sm"
+                    placeholder="D1 给药前 30min"
+                  />
+                </div>
+              </div>
+            </div>
 
-          {/* 保存按钮 */}
-          <div className="mt-4 flex justify-end">
-            <Button color="dark">
-              保存标签模板
-            </Button>
+            {/* 保存按钮 */}
+            <div className="flex justify-end pt-4">
+              <Button 
+                color="dark" 
+                onClick={handleSaveTemplate}
+                className="px-10 h-11 text-base font-bold rounded-xl shadow-lg shadow-zinc-200"
+              >
+                保存当前模板
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -1197,14 +1305,18 @@ const OptionColumn = ({
   options, 
   selected, 
   onSelectionChange,
-  emptyText = "暂无选项"
+  emptyText = "暂无选项",
+  configLink
 }: { 
   title: string;
   options: string[];
   selected: string[];
   onSelectionChange: (selected: string[]) => void;
   emptyText?: string;
+  configLink?: string;
 }) => {
+  const router = useRouter();
+  
   const toggle = (opt: string) => {
     const next = new Set(selected);
     if (next.has(opt)) next.delete(opt);
@@ -1218,25 +1330,34 @@ const OptionColumn = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
-      <div className="px-3 py-2.5 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
+    <div className="flex flex-col h-full bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm hover:border-zinc-300 transition-colors">
+      <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-zinc-900 uppercase tracking-wider">{title}</span>
-          <Badge color="zinc" className="!px-1.5 !py-0 !text-[9px]">{options.length}</Badge>
+          <span className="text-xs font-bold text-zinc-900 uppercase tracking-wider">{title}</span>
+          <Badge color="zinc" className="!px-2 !py-0.5 !text-[10px]">{options.length}</Badge>
         </div>
         {options.length > 0 && (
           <button 
             onClick={toggleAll} 
-            className="text-[9px] font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-tight"
+            className="text-[10px] font-bold text-zinc-600 hover:text-zinc-900 transition-colors uppercase tracking-tight"
           >
             {selected.length === options.length ? '取消' : '全选'}
           </button>
         )}
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 min-h-[200px] max-h-[350px]">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-[240px] max-h-[400px]">
         {options.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
-            <span className="text-[10px]">{emptyText}</span>
+            <MagnifyingGlassIcon className="w-8 h-8 mb-3 opacity-20" />
+            <span className="text-xs text-center mb-3">{emptyText}</span>
+            {configLink && (
+              <button
+                onClick={() => router.push(configLink)}
+                className="text-xs text-zinc-600 hover:text-zinc-900 underline underline-offset-2 transition-colors"
+              >
+                前往配置 →
+              </button>
+            )}
           </div>
         ) : (
           options.map(opt => (
@@ -1244,21 +1365,25 @@ const OptionColumn = ({
               key={opt} 
               onClick={() => toggle(opt)}
               className={clsx(
-                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all border",
+                "flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all border",
                 selected.includes(opt) 
-                  ? "bg-blue-50 text-blue-700 border-blue-100 font-bold shadow-sm" 
-                  : "bg-white border-transparent text-zinc-600 hover:bg-zinc-50"
+                  ? "bg-zinc-100 text-zinc-900 border-zinc-300 font-bold shadow-sm ring-1 ring-zinc-200" 
+                  : "bg-white border-transparent text-zinc-600 hover:bg-zinc-50 hover:border-zinc-200"
               )}
             >
               <div className={clsx(
-                "w-3 h-3 rounded flex-shrink-0 flex items-center justify-center border transition-all",
+                "w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-all",
                 selected.includes(opt) 
-                  ? "bg-blue-600 border-blue-600" 
+                  ? "bg-zinc-900 border-zinc-900 shadow-sm" 
                   : "border-zinc-300 bg-white"
               )}>
-                {selected.includes(opt) && <div className="w-1 h-1 bg-white rounded-full" />}
+                {selected.includes(opt) && (
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
               </div>
-              <span className="text-[11px] truncate leading-none font-mono">{opt}</span>
+              <span className="text-xs truncate leading-none font-medium">{opt}</span>
             </div>
           ))
         )}
@@ -1534,8 +1659,7 @@ export default function LabelsPage() {
         <div className="max-w-4xl mx-auto py-12">
           <div className="text-center">
             <TagIcon className="w-16 h-16 mx-auto text-zinc-300 mb-4" />
-            <Heading>标签管理</Heading>
-            <Text className="mt-2 text-zinc-600">请先在顶部选择一个项目</Text>
+            <Text className="text-zinc-600">请先在顶部选择一个项目</Text>
           </div>
         </div>
       </AppLayout>
@@ -1546,14 +1670,9 @@ export default function LabelsPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <Heading>标签管理</Heading>
-              <Text className="mt-1 text-zinc-600">
-                当前项目：{currentProject?.lab_project_code || '加载中...'}
-              </Text>
-            </div>
-          </div>
+          <Text className="text-zinc-600">
+            当前项目：{currentProject?.lab_project_code || '加载中...'}
+          </Text>
         </div>
 
         {/* 标签页切换 */}
@@ -1572,146 +1691,164 @@ export default function LabelsPage() {
         {/* 生成编号 */}
         {activeTab === 'generate' && (
           <div className="space-y-6">
-            {/* 标签类型选择 */}
-            <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-              <div className="flex items-center justify-between mb-4">
+            {/* 标签类型选择 - 紧凑设计 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className={clsx(
+                  "p-3 rounded-xl transition-colors shrink-0",
+                  labelType === 'sampling_tube' ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500"
+                )}>
+                  {labelType === 'sampling_tube' ? (
+                    <BeakerIcon className="w-6 h-6" />
+                  ) : (
+                    <DocumentTextIcon className="w-6 h-6" />
+                  )}
+                </div>
                 <div>
-                  <Text className="font-semibold text-zinc-900">选择标签类型</Text>
-                  <Text className="text-sm text-zinc-500 mt-1">采样管和冻存管编号分别生成</Text>
+                  <Text className="text-base font-bold text-zinc-900">
+                    {labelType === 'sampling_tube' ? '采样管编号' : '冻存管编号'}
+                  </Text>
+                  <Text className="text-sm text-zinc-500 mt-0.5">
+                    {labelType === 'sampling_tube' ? '用于样本采集时的标签' : '用于样本存储时的标签'}
+                  </Text>
                 </div>
               </div>
-              <div className="flex gap-4">
+
+              <div className="flex p-1 bg-zinc-100 rounded-xl w-full sm:w-auto">
                 <button
                   onClick={() => setLabelType('sampling_tube')}
                   className={clsx(
-                    "flex-1 p-4 rounded-xl border-2 transition-all",
+                    "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200",
                     labelType === 'sampling_tube'
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-zinc-200 hover:border-zinc-300"
+                      ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
+                      : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50"
                   )}
                 >
-                  <BeakerIcon className={clsx(
-                    "w-8 h-8 mx-auto mb-2",
-                    labelType === 'sampling_tube' ? "text-blue-600" : "text-zinc-400"
-                  )} />
-                  <Text className={clsx(
-                    "font-semibold text-center",
-                    labelType === 'sampling_tube' ? "text-blue-700" : "text-zinc-600"
-                  )}>采样管编号</Text>
-                  <Text className="text-xs text-center text-zinc-500 mt-1">用于样本采集时的标签</Text>
+                  <BeakerIcon className="w-4 h-4" />
+                  采样管
                 </button>
                 <button
                   onClick={() => setLabelType('cryo_tube')}
                   className={clsx(
-                    "flex-1 p-4 rounded-xl border-2 transition-all",
+                    "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200",
                     labelType === 'cryo_tube'
-                      ? "border-purple-500 bg-purple-50"
-                      : "border-zinc-200 hover:border-zinc-300"
+                      ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
+                      : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50"
                   )}
                 >
-                  <DocumentTextIcon className={clsx(
-                    "w-8 h-8 mx-auto mb-2",
-                    labelType === 'cryo_tube' ? "text-purple-600" : "text-zinc-400"
-                  )} />
-                  <Text className={clsx(
-                    "font-semibold text-center",
-                    labelType === 'cryo_tube' ? "text-purple-700" : "text-zinc-600"
-                  )}>冻存管编号</Text>
-                  <Text className="text-xs text-center text-zinc-500 mt-1">用于样本存储时的标签</Text>
+                  <DocumentTextIcon className="w-4 h-4" />
+                  冻存管
                 </button>
               </div>
             </div>
 
-            {/* 预览框 */}
-            <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Text className="font-semibold text-zinc-900">编号预览</Text>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Text className="text-sm text-zinc-500">分隔符：</Text>
-                    <Select
-                      value={separator}
-                      onChange={(e) => setSeparator(e.target.value)}
-                      className="w-24"
-                    >
-                      <option value="-">横杠 (-)</option>
-                      <option value="_">下划线 (_)</option>
-                      <option value="">无分隔符</option>
-                    </Select>
+            {/* 预览和选项区域 */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+              {/* 左侧：编号预览 */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-6">
+                    <Text className="text-base font-bold text-zinc-900">编号预览</Text>
+                    <Badge color="blue" className="!px-2 !py-0.5">预计 {estimatedCount} 个</Badge>
                   </div>
-                  <Badge color="blue">预计生成 {estimatedCount} 个</Badge>
+                  
+                  <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200 text-center mb-6">
+                    <span className={clsx(
+                      "font-mono font-bold break-all leading-tight",
+                      previewCode === '请选择选项...' ? "text-xl text-zinc-400 italic" : "text-2xl text-zinc-900"
+                    )}>
+                      {previewCode}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-zinc-100">
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">间隔符设置</label>
+                      <Select
+                        value={separator}
+                        onChange={(e) => setSeparator(e.target.value)}
+                        className="w-full text-sm"
+                      >
+                        <option value="-">中横杠 (-)</option>
+                        <option value="_">下划线 (_)</option>
+                        <option value="">无分隔符</option>
+                      </Select>
+                    </div>
+                    <Button
+                      color="dark"
+                      onClick={handleGenerate}
+                      disabled={loading || estimatedCount === 0}
+                      className="w-full h-11 text-base font-bold rounded-xl"
+                    >
+                      {loading ? '正在生成...' : `生成 ${estimatedCount} 个标签`}
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="bg-zinc-50 rounded-lg p-6 text-center border border-zinc-200">
-                <span className="font-mono text-2xl font-bold text-zinc-900">{previewCode}</span>
-              </div>
-            </div>
 
-            {/* 选项矩阵 */}
-            <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <Text className="font-semibold text-zinc-900">选择选项</Text>
-                  <Text className="text-sm text-zinc-500 mt-1">从下方选择各维度的选项，系统将自动组合生成编号</Text>
+              {/* 右侧：选项矩阵 */}
+              <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <Text className="text-base font-bold text-zinc-900">选择生成维度</Text>
+                    <Text className="text-sm text-zinc-500 mt-0.5">系统将自动按照您勾选的选项进行组合生成</Text>
+                  </div>
+                  <Button 
+                    plain 
+                    onClick={resetSelection}
+                    className="text-zinc-500 hover:text-red-600 transition-colors"
+                  >
+                    <XMarkIcon className="w-4 h-4 mr-1.5" />
+                    <span className="text-sm font-medium">重置全部</span>
+                  </Button>
                 </div>
-                <Button plain onClick={resetSelection}>
-                  <XMarkIcon className="w-4 h-4 mr-1" />
-                  重置选择
-                </Button>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <OptionColumn
-                  title="周期/剂量组"
-                  options={availableOptions.cycles}
-                  selected={selectedOptions.cycles}
-                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, cycles: vals })}
-                  emptyText="请在全局参数中配置"
-                />
-                <OptionColumn
-                  title="采血点/时间点"
-                  options={availableOptions.collectionPoints.map(p => `${p.code}:${p.name}`)}
-                  selected={selectedOptions.collectionPoints}
-                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, collectionPoints: vals })}
-                  emptyText="请在全局参数中配置"
-                />
-                <OptionColumn
-                  title="检测类型"
-                  options={availableOptions.testTypes}
-                  selected={selectedOptions.testTypes}
-                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, testTypes: vals })}
-                  emptyText="请在全局参数中配置"
-                />
-                {labelType === 'sampling_tube' ? (
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <OptionColumn
-                    title="正份代码"
-                    options={availableOptions.primaryCodes}
-                    selected={selectedOptions.primaryCodes}
-                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, primaryCodes: vals })}
+                    title="周期/剂量组"
+                    options={availableOptions.cycles}
+                    selected={selectedOptions.cycles}
+                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, cycles: vals })}
                     emptyText="请在全局参数中配置"
+                    configLink="/global-params"
                   />
-                ) : (
                   <OptionColumn
-                    title="备份代码"
-                    options={availableOptions.backupCodes}
-                    selected={selectedOptions.backupCodes}
-                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, backupCodes: vals })}
+                    title="采血点/时间点"
+                    options={availableOptions.collectionPoints.map(p => `${p.code}:${p.name}`)}
+                    selected={selectedOptions.collectionPoints}
+                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, collectionPoints: vals })}
                     emptyText="请在全局参数中配置"
+                    configLink="/global-params"
                   />
-                )}
+                  <OptionColumn
+                    title="检测类型"
+                    options={availableOptions.testTypes}
+                    selected={selectedOptions.testTypes}
+                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, testTypes: vals })}
+                    emptyText="请在全局参数中配置"
+                    configLink="/global-params"
+                  />
+                  {labelType === 'sampling_tube' ? (
+                    <OptionColumn
+                      title="正份代码"
+                      options={availableOptions.primaryCodes}
+                      selected={selectedOptions.primaryCodes}
+                      onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, primaryCodes: vals })}
+                      emptyText="请在全局参数中配置"
+                      configLink="/global-params"
+                    />
+                  ) : (
+                    <OptionColumn
+                      title="备份代码"
+                      options={availableOptions.backupCodes}
+                      selected={selectedOptions.backupCodes}
+                      onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, backupCodes: vals })}
+                      emptyText="请在全局参数中配置"
+                      configLink="/global-params"
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* 生成按钮 */}
-            <div className="flex justify-end gap-4">
-              <Button
-                color="dark"
-                onClick={handleGenerate}
-                disabled={loading || estimatedCount === 0}
-                className="px-8"
-              >
-                {loading ? '生成中...' : `生成 ${estimatedCount} 个编号`}
-              </Button>
             </div>
           </div>
         )}

@@ -199,10 +199,10 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
           ...submitData,
           audit_reason: auditReason.trim(),
         });
-        toast.success('试验组更新成功');
+        toast.success('试验组更新成功', { duration: 4000 });
       } else {
         await testGroupsAPI.createTestGroup(submitData);
-        toast.success('试验组创建成功');
+        toast.success('试验组创建成功', { duration: 4000 });
       }
       closeDialog();
       fetchTestGroups();
@@ -215,7 +215,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     if (!confirm('确定要删除此试验组吗？')) return;
     try {
       await testGroupsAPI.deleteTestGroup(groupId);
-      toast.success('试验组已删除');
+      toast.success('试验组已删除', { duration: 4000 });
       fetchTestGroups();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || '删除失败');
@@ -225,7 +225,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
   const handleCopy = async (group: TestGroup) => {
     try {
       await testGroupsAPI.copyTestGroup(group.id, `${group.name || '试验组'} (副本)`);
-      toast.success('试验组复制成功');
+      toast.success('试验组复制成功', { duration: 4000 });
       fetchTestGroups();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || '复制失败');
@@ -236,7 +236,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     if (!confirmingGroupId) return;
     try {
       await testGroupsAPI.confirmTestGroup(confirmingGroupId, password, reason);
-      toast.success('试验组已确认并锁定');
+      toast.success('试验组已确认并锁定', { duration: 4000 });
       setIsConfirmDialogOpen(false);
       setConfirmingGroupId(null);
       fetchTestGroups();

@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -250,10 +249,7 @@ export default function StatisticsPage() {
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>统计查询</Heading>
-            <Text className="mt-1 text-zinc-600">查看样本操作记录和统计数据</Text>
-          </div>
+          <Text className="text-zinc-600">查看样本操作记录和统计数据</Text>
           <Button onClick={handleExportData}>
             <ArrowDownTrayIcon className="h-4 w-4" />
             导出数据

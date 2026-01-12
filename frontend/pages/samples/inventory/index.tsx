@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/date-utils';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Select } from '@/components/select';
@@ -58,10 +57,7 @@ export default function PendingInventoryListPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>待清点任务列表</Heading>
-            <Text className="mt-1 text-zinc-600">显示所有项目的接收记录，可进入清点流程</Text>
-          </div>
+          <Text className="text-zinc-600">显示所有项目的接收记录，可进入清点流程</Text>
           <div className="flex gap-3">
             <Select
               value={status}

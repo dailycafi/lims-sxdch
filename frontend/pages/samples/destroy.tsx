@@ -8,7 +8,6 @@ import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -475,12 +474,9 @@ export default function SampleDestroyPage() {
       <div className="max-w-7xl mx-auto">
         {/* 页面标题和操作按钮 */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>样本销毁</Heading>
-            <Text className="mt-1 text-zinc-600">
-              流程：项目负责人申请 &rarr; 分析测试主管审批 &rarr; 研究室主任审批 &rarr; 样本管理员销毁
-            </Text>
-          </div>
+          <Text className="text-zinc-600">
+            流程：项目负责人申请 &rarr; 分析测试主管审批 &rarr; 研究室主任审批 &rarr; 样本管理员销毁
+          </Text>
           {canRequest && (
           <Button onClick={() => setIsRequestDialogOpen(true)}>
             <TrashIcon className="h-4 w-4" />
@@ -705,7 +701,7 @@ export default function SampleDestroyPage() {
                         <TableCell>{request.reason}</TableCell>
                         <TableCell>
                           {request.approval_file_path ? (
-                            <Button plain className="text-blue-600 p-0 h-auto" onClick={() => handleViewApprovalFile(request.approval_file_path)}>
+                            <Button plain className="text-zinc-900 p-0 h-auto font-medium hover:underline" onClick={() => handleViewApprovalFile(request.approval_file_path)}>
                               查看
                             </Button>
                           ) : '-'}

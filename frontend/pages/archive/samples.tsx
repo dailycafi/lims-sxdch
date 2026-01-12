@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
@@ -94,10 +93,7 @@ export default function SampleArchivePage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <Heading>样本归档</Heading>
-            <Text className="mt-1 text-zinc-600">管理样本归档申请与执行</Text>
-          </div>
+          <Text className="text-zinc-600">管理样本归档申请与执行</Text>
           <Button onClick={() => setIsRequestDialogOpen(true)}>
             申请归档
           </Button>

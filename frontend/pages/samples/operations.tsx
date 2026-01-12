@@ -333,7 +333,7 @@ function ReturnTab({ projectId }: { projectId: number | null }) {
                                     <TableCell>{req.target_location}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">
-                                            <Button plain className="text-blue-600" onClick={() => router.push(`/samples/return/${req.id}`)}>
+                                            <Button plain className="text-zinc-900" onClick={() => router.push(`/samples/return/${req.id}`)}>
                                                 归还
                                             </Button>
                                             {/* 跟踪表功能在归还页面或此处皆可，这里演示 */}

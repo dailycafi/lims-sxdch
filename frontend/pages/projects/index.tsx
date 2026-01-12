@@ -284,7 +284,7 @@ export default function ProjectsPage() {
                     {filteredProjects.map((project, index) => (
                       <AnimatedTableRow key={project.id} index={index}>
                         <TableCell className="font-medium pl-6">
-                          <Link href={`/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
+                          <Link href={`/projects/${project.id}`} className="text-zinc-900 hover:text-black font-medium">
                             {project.lab_project_code}
                           </Link>
                         </TableCell>

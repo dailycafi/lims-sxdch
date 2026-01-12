@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { formatDate, formatDateTime } from '@/lib/date-utils';
 import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -123,8 +122,7 @@ export default function TrackingFormPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <Heading>样本跟踪表打印</Heading>
-          <Text className="mt-1 text-zinc-600">查询并打印领用/归还记录的跟踪表</Text>
+          <Text className="text-zinc-600">查询并打印领用/归还记录的跟踪表</Text>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">

@@ -38,7 +38,7 @@ import {
 import { TagInput } from '@/components/tag-input';
 import { TestGroupManager } from '@/components/test-group-manager';
 
-const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
 interface Project {
   id: number;
@@ -63,7 +63,7 @@ interface SampleCodeElement {
 
 const sampleCodeElements: SampleCodeElement[] = [
   { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号', number: '①' },
-  { id: 'lab_code', name: 'lab_code', label: '临床试验研究室项目编号', number: '②' },
+  { id: 'lab_code', name: 'lab_code', label: '实验室项目编号', number: '②' },
   { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号', number: '③' },
   { id: 'subject_id', name: 'subject_id', label: '受试者编号', number: '④' },
   { id: 'test_type', name: 'test_type', label: '检测类型', number: '⑤' },
@@ -72,16 +72,6 @@ const sampleCodeElements: SampleCodeElement[] = [
   { id: 'cycle_group', name: 'cycle_group', label: '周期/组别', number: '⑧' },
   { id: 'sample_type', name: 'sample_type', label: '正份备份', number: '⑨' },
 ];
-
-const SLOT_ALLOWED_ELEMENTS: Record<number, string[]> = {
-  0: ['sponsor_code', 'lab_code'],
-  1: ['clinic_code'],
-  2: ['subject_id'],
-  3: ['test_type'],
-  4: ['sample_seq', 'sample_time'],
-  5: ['cycle_group'],
-  6: ['sample_type'],
-};
 
 interface SampleType {
   id: number;
@@ -119,7 +109,7 @@ export default function ProjectDetailPage() {
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [configTab, setConfigTab] = useState('rules'); 
   
-  const [slots, setSlots] = useState<(string | null)[]>(Array(7).fill(null));
+  const [slots, setSlots] = useState<string[]>([]);
   
   const [dictionaries, setDictionaries] = useState({
     cycles: [] as string[],
@@ -226,16 +216,17 @@ export default function ProjectDetailPage() {
 
   const initSlotsFromRule = (ruleStr: any) => {
     const rule = typeof ruleStr === 'string' ? JSON.parse(ruleStr) : ruleStr;
-    const newSlots = Array(7).fill(null);
     if (rule && rule.elements && rule.order) {
-      rule.elements.forEach((elementId: string) => {
-        const position = rule.order[elementId];
-        if (position !== undefined && position < 7) {
-          newSlots[position] = elementId;
-        }
+      // 根据 order 对 elements 进行排序，确保顺序正确
+      const newSlots = [...rule.elements].sort((a, b) => {
+        const orderA = rule.order[a] !== undefined ? rule.order[a] : 999;
+        const orderB = rule.order[b] !== undefined ? rule.order[b] : 999;
+        return orderA - orderB;
       });
+      setSlots(newSlots);
+    } else {
+      setSlots([]);
     }
-    setSlots(newSlots);
     
     if (rule && rule.dictionaries) {
       setDictionaries({
@@ -290,7 +281,7 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveCodeRule = async () => {
-    const hasSlots = slots.some(s => s !== null);
+    const hasSlots = slots.some(s => !!s);
     const hasOptions = Object.values(dictionaries).some(arr => arr && arr.length > 0);
     const hasSelectedCounts = Object.values(selectedCounts).some(c => c > 0);
 
@@ -299,13 +290,10 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const enabledElements = slots.filter(s => s !== null) as string[];
+    const enabledElements = slots.filter(s => !!s);
     const orderMap: Record<string, number> = {};
-    
-    slots.forEach((elementId, index) => {
-      if (elementId) {
-        orderMap[elementId] = index;
-      }
+    enabledElements.forEach((elementId, index) => {
+      orderMap[elementId] = index;
     });
 
     // 根据选择数量生成实际使用的选项
@@ -369,7 +357,17 @@ export default function ProjectDetailPage() {
 
   const handleSlotChange = (index: number, value: string) => {
     const newSlots = [...slots];
-    newSlots[index] = value === '' ? null : value;
+    newSlots[index] = value;
+    setSlots(newSlots);
+  };
+
+  const handleAddSlot = () => {
+    setSlots([...slots, '']);
+  };
+
+  const handleRemoveSlot = (index: number) => {
+    const newSlots = [...slots];
+    newSlots.splice(index, 1);
     setSlots(newSlots);
   };
 
@@ -378,7 +376,7 @@ export default function ProjectDetailPage() {
       <div className="font-mono text-xl tracking-wide">
         {slots.map((slot, index) => {
           if (!slot) return null;
-          const isLast = slots.slice(index + 1).every(s => s === null);
+          const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s);
           let example = '???';
           const element = sampleCodeElements.find(e => e.id === slot);
           if (element) {
@@ -394,8 +392,8 @@ export default function ProjectDetailPage() {
             </span>
           );
         })}
-        {slots.every(s => s === null) && (
-          <span className="text-zinc-400 text-base italic">暂未配置规则，请在下方选择...</span>
+        {(slots.length === 0 || slots.every(s => !s)) && (
+          <span className="text-zinc-400 text-base italic">暂未配置规则，请点击下方按钮添加...</span>
         )}
       </div>
     );
@@ -616,37 +614,47 @@ export default function ProjectDetailPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <Text className="text-base font-semibold text-zinc-900">规则配置</Text>
-                  <button onClick={() => setSlots(Array(7).fill(null))} className="text-xs text-blue-600 font-medium hover:text-blue-700">重置所有</button>
+                  <button onClick={() => setSlots([])} className="text-xs text-zinc-600 font-medium hover:text-zinc-900">重置所有</button>
                 </div>
                 <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                  {SLOT_LABELS.map((label, index) => {
-                    const currentSlotValue = slots[index];
+                  {slots.map((currentSlotValue, index) => {
+                    const label = SLOT_LABELS[index] || String.fromCharCode(65 + index);
                     const currentElement = sampleCodeElements.find(e => e.id === currentSlotValue);
                     return (
-                      <div key={label} className="group flex items-center p-4 hover:bg-zinc-50 transition-colors relative">
+                      <div key={index} className="group flex items-center p-4 hover:bg-zinc-50 transition-colors relative">
                         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-mono font-bold text-lg mr-4 group-hover:bg-white group-hover:shadow-sm transition-all">{label}</div>
                         <div className="flex-grow min-w-0">
                           <div className="relative">
-                            <select value={currentSlotValue || ''} onChange={(e) => handleSlotChange(index, e.target.value)} className="w-full appearance-none bg-transparent py-2 pl-0 pr-8 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer">
-                              <option value="">未配置 (跳过)</option>
-                              <optgroup label="该位置可用选项">
-                                {sampleCodeElements.filter(el => SLOT_ALLOWED_ELEMENTS[index]?.includes(el.id)).map(el => (
-                                  <option key={el.id} value={el.id}>{el.number} {el.label}</option>
-                                ))}
-                              </optgroup>
+                            <select 
+                              value={currentSlotValue || ''} 
+                              onChange={(e) => handleSlotChange(index, e.target.value)} 
+                              className="w-full appearance-none bg-transparent py-2 pl-0 pr-8 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer"
+                            >
+                              <option value="" disabled>请选择编号要素</option>
+                              {sampleCodeElements.map(el => (
+                                <option key={el.id} value={el.id}>{el.number} {el.label}</option>
+                              ))}
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-400">
                               <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
                             </div>
                           </div>
-                          <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '该位置将不显示任何内容'}</div>
+                          <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '请选择一个编号要素'}</div>
                         </div>
-                        {currentSlotValue && (
-                          <button onClick={() => handleSlotChange(index, '')} className="ml-4 p-1 text-zinc-300 hover:text-red-500 transition-colors"><XMarkIcon className="w-5 h-5" /></button>
-                        )}
+                        <button onClick={() => handleRemoveSlot(index)} className="ml-4 p-1 text-zinc-300 hover:text-red-500 transition-colors"><XMarkIcon className="w-5 h-5" /></button>
                       </div>
                     );
                   })}
+                  
+                  <div className="p-4 bg-zinc-50/50 flex justify-center">
+                    <button 
+                      onClick={handleAddSlot}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加位置
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

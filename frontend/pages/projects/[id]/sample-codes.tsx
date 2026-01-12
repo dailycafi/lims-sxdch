@@ -214,7 +214,7 @@ const MatrixColumn = ({ title, options, selected, onSelectionChange, action, emp
                     <Badge color="zinc" className="!px-1.5 !py-0 !text-[9px]">{options.length}</Badge>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <button onClick={toggleAll} className="text-[9px] font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-tight">
+                    <button onClick={toggleAll} className="text-[9px] font-bold text-zinc-600 hover:text-zinc-900 transition-colors uppercase tracking-tight">
                         {selected.length === options.length ? '取消' : '全选'}
                     </button>
                     {onAddOption && (
@@ -222,7 +222,7 @@ const MatrixColumn = ({ title, options, selected, onSelectionChange, action, emp
                             onClick={() => setIsAdding(!isAdding)} 
                             className={clsx(
                                 "p-1 rounded transition-colors",
-                                isAdding ? "text-red-500 hover:bg-red-50" : "text-blue-600 hover:bg-blue-50"
+                                isAdding ? "text-red-500 hover:bg-red-50" : "text-zinc-600 hover:bg-zinc-100"
                             )}
                         >
                             {isAdding ? <XMarkIcon className="w-3 h-3"/> : <PlusIcon className="w-3 h-3"/>}
@@ -705,7 +705,7 @@ export default function ProjectSampleCodesPage() {
                                                     </Heading>
                                                     <p className="text-[10px] text-zinc-500 mt-0.5">批量添加受试者并分配至临床机构</p>
                                                 </div>
-                                                <Button plain className="!text-xs text-blue-600 hover:bg-blue-50 !py-1 !px-2">
+                                                <Button plain className="!text-xs text-zinc-600 hover:bg-zinc-100 !py-1 !px-2">
                                                     <ArrowUpOnSquareIcon className="w-3 h-3 mr-1" />
                                                     Excel 导入
                                                 </Button>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { Button } from '@/components/button';
 import { Tabs } from '@/components/tabs';
@@ -49,7 +48,7 @@ const tabConfig: { key: TaskTabKey; label: string }[] = [
 
 export default function TaskCenterPage() {
    const router = useRouter();
-   const { selectedProjectId, setSelectedProject } = useProjectStore();
+   const { projects, selectedProjectId, setSelectedProject } = useProjectStore();
    const [overview, setOverview] = useState<TaskOverview | null>(null);
    const [loading, setLoading] = useState(false);
    const [activeTab, setActiveTab] = useState<TaskTabKey>('all');
@@ -126,26 +125,25 @@ export default function TaskCenterPage() {
    return (
      <AppLayout>
        <div className="max-w-7xl mx-auto">
-         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-           <div>
-             <Heading>任务中心</Heading>
-             <Text className="mt-1 text-zinc-600">
-               查看当前项目下的样本相关任务，点击任务可快速跳转到对应流程页面
-             </Text>
-           </div>
-           <div className="flex items-center gap-2">
-             <Button outline onClick={fetchTasks} disabled={loading}>
-               <ArrowPathIcon className={clsx('h-4 w-4', loading && 'animate-spin')} />
-               刷新
-             </Button>
-           </div>
-         </div>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Text className="text-zinc-600">
+            查看当前项目下的样本相关任务，点击任务可快速跳转到对应流程页面
+          </Text>
+          <div className="flex items-center gap-2">
+            <Button outline onClick={fetchTasks} disabled={loading}>
+              <ArrowPathIcon className={clsx('h-4 w-4', loading && 'animate-spin')} />
+              刷新
+            </Button>
+          </div>
+        </div>
 
-         <div className="mb-4 rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-           <Text className="text-sm text-zinc-500">
-             当前筛选项目：{selectedProjectId ? `#${selectedProjectId}` : '全部项目'}
-           </Text>
-         </div>
+        {selectedProjectId && (
+          <div className="mb-4 rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+            <Text className="text-sm text-zinc-500">
+              当前筛选项目：{projects.find(p => p.id === selectedProjectId)?.lab_project_code || '加载中...'}
+            </Text>
+          </div>
+        )}
 
          <div className="mb-4 rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-sm">
            <Tabs

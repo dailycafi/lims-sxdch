@@ -7,7 +7,6 @@ import { Input } from '@/components/input';
 import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
-import { Heading } from '@/components/heading';
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@/components/table';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
@@ -284,10 +283,7 @@ export default function DeviationManagement() {
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Heading>偏差管理</Heading>
-            <Text className="mt-1 text-zinc-600">管理和跟踪实验室偏差事件</Text>
-          </div>
+          <Text className="text-zinc-600">管理和跟踪实验室偏差事件</Text>
           <Button onClick={() => setIsReportDialogOpen(true)}>
             <PlusIcon className="h-4 w-4" />
             报告偏差

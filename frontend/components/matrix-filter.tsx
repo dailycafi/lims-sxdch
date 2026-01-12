@@ -86,7 +86,7 @@ export function MatrixFilter({
             onKeyDown={e => e.key === 'Enter' && onAdd()}
             placeholder="输入并回车"
           />
-          <button onClick={onAdd} className="text-blue-600 px-1 hover:text-blue-800">
+          <button onClick={onAdd} className="text-zinc-600 px-1 hover:text-zinc-900">
             <CheckCircleIcon className="w-5 h-5" />
           </button>
           <button onClick={() => setIsAdding(false)} className="text-zinc-400 px-1 hover:text-zinc-600">
@@ -115,7 +115,7 @@ export function MatrixFilter({
           <div className="flex flex-col items-center justify-center h-full py-8 text-zinc-400 text-xs">
             <span>{emptyText}</span>
             {onAddOption && (
-              <button onClick={() => setIsAdding(true)} className="mt-2 text-blue-500 hover:text-blue-600 underline">
+              <button onClick={() => setIsAdding(true)} className="mt-2 text-zinc-500 hover:text-zinc-700 underline">
                 点击添加
               </button>
             )}
