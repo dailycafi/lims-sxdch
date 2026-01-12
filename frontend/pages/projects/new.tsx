@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,17 +8,20 @@ import { Heading } from '@/components/heading';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Select } from '@/components/select';
+import { Badge } from '@/components/badge';
+import { Text } from '@/components/text';
 import { Fieldset, Field, Label, FieldGroup } from '@/components/fieldset';
 import { projectsAPI, api } from '@/lib/api';
 import { useProjectStore } from '@/store/project';
 import { OrganizationDialog } from '@/components/organization-dialog';
-import { PlusIcon, TrashIcon } from '@heroicons/react/20/solid';
+import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid';
 
 interface ProjectForm {
   sponsor_project_code: string;
   lab_project_code: string;
   sponsor_id: number;
   clinical_org_ids: { value: string }[]; // 使用 field array
+  test_types: string[]; // 检测类型
 }
 
 export default function NewProjectPage() {
@@ -27,6 +30,12 @@ export default function NewProjectPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<'sponsor' | 'clinical'>('sponsor');
+  
+  // 检测类型相关状态
+  const [globalTestTypes, setGlobalTestTypes] = useState<string[]>([]);
+  const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([]);
+  const [newTestTypeInput, setNewTestTypeInput] = useState('');
+  const [showTestTypeDropdown, setShowTestTypeDropdown] = useState(false);
   
   const addProject = useProjectStore((state) => state.addProject);
   const refreshProjects = useProjectStore((state) => state.fetchProjects);
@@ -38,6 +47,29 @@ export default function NewProjectPage() {
       return response.data;
     },
   });
+
+  // 获取全局检测类型
+  useEffect(() => {
+    const fetchGlobalTestTypes = async () => {
+      try {
+        const response = await api.get('/global-params/sample-types');
+        const configs = response.data;
+        const testTypes = new Set<string>();
+        
+        configs.forEach((config: any) => {
+          if (config.test_type) {
+            config.test_type.split(',').forEach((t: string) => testTypes.add(t.trim()));
+          }
+        });
+        
+        setGlobalTestTypes(Array.from(testTypes));
+      } catch (error) {
+        console.error('Failed to fetch global test types:', error);
+      }
+    };
+    
+    fetchGlobalTestTypes();
+  }, []);
 
   const sponsors = organizations?.filter((org: any) => org.org_type === 'sponsor') || [];
   const clinicalOrgs = organizations?.filter((org: any) => org.org_type === 'clinical') || [];
@@ -51,9 +83,31 @@ export default function NewProjectPage() {
     formState: { errors },
   } = useForm<ProjectForm>({
     defaultValues: {
-      clinical_org_ids: [{ value: '' }]
+      clinical_org_ids: [{ value: '' }],
+      test_types: []
     }
   });
+
+  // 添加检测类型
+  const handleAddTestType = (type: string) => {
+    const trimmedType = type.trim();
+    if (trimmedType && !selectedTestTypes.includes(trimmedType)) {
+      setSelectedTestTypes([...selectedTestTypes, trimmedType]);
+      setNewTestTypeInput('');
+      setShowTestTypeDropdown(false);
+    }
+  };
+
+  // 移除检测类型
+  const handleRemoveTestType = (type: string) => {
+    setSelectedTestTypes(selectedTestTypes.filter(t => t !== type));
+  };
+
+  // 过滤下拉选项
+  const filteredTestTypes = globalTestTypes.filter(
+    t => !selectedTestTypes.includes(t) && 
+         t.toLowerCase().includes(newTestTypeInput.toLowerCase())
+  );
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -83,11 +137,30 @@ export default function NewProjectPage() {
 
     setIsLoading(true);
     try {
+      // 检查是否有新的检测类型需要添加到全局
+      const newTypes = selectedTestTypes.filter(t => !globalTestTypes.includes(t));
+      if (newTypes.length > 0) {
+        // 将新的检测类型添加到全局参数
+        try {
+          await api.post('/global-params/sample-types', {
+            category: 'clinical',
+            test_type: newTypes.join(','),
+            primary_count: 0,
+            backup_count: 0,
+          });
+          toast.success(`已将新检测类型 ${newTypes.join(', ')} 添加到全局参数`);
+        } catch (error) {
+          console.error('Failed to add new test types to global:', error);
+          // 继续创建项目，不阻止
+        }
+      }
+
       await createProjectMutation.mutateAsync({
         ...data,
         sponsor_id: Number(data.sponsor_id),
         clinical_org_ids: orgIds,
         clinical_org_id: orgIds[0], // 兼容性：设置第一个为 clinical_org_id
+        test_types: selectedTestTypes, // 传递选中的检测类型
       } as any);
     } finally {
       setIsLoading(false);
@@ -223,6 +296,88 @@ export default function NewProjectPage() {
                   </div>
                 ))}
               </div>
+
+              {/* 检测类型选择 */}
+              <Field>
+                <Label>检测类型（可选）</Label>
+                <Text className="text-xs text-zinc-500 mb-2">
+                  从已有类型中选择，或输入新类型（新类型会自动添加到全局参数）
+                </Text>
+                
+                {/* 已选择的检测类型 */}
+                {selectedTestTypes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {selectedTestTypes.map((type, i) => (
+                      <Badge key={i} color={globalTestTypes.includes(type) ? 'green' : 'blue'}>
+                        {type}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTestType(type)}
+                          className="ml-1.5 hover:text-red-500"
+                        >
+                          <XMarkIcon className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                
+                {/* 输入框和下拉选项 */}
+                <div className="relative">
+                  <Input
+                    value={newTestTypeInput}
+                    onChange={(e) => {
+                      setNewTestTypeInput(e.target.value);
+                      setShowTestTypeDropdown(true);
+                    }}
+                    onFocus={() => setShowTestTypeDropdown(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newTestTypeInput.trim()) {
+                          handleAddTestType(newTestTypeInput);
+                        }
+                      }
+                    }}
+                    placeholder="输入检测类型（如 PK、ADA）后回车添加"
+                  />
+                  
+                  {/* 下拉选项 */}
+                  {showTestTypeDropdown && (filteredTestTypes.length > 0 || newTestTypeInput.trim()) && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredTestTypes.map((type, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleAddTestType(type)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center justify-between"
+                        >
+                          <span>{type}</span>
+                          <Badge color="zinc" className="text-xs">已有</Badge>
+                        </button>
+                      ))}
+                      {newTestTypeInput.trim() && !globalTestTypes.includes(newTestTypeInput.trim()) && !selectedTestTypes.includes(newTestTypeInput.trim()) && (
+                        <button
+                          type="button"
+                          onClick={() => handleAddTestType(newTestTypeInput)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 text-blue-600 flex items-center justify-between border-t border-zinc-100"
+                        >
+                          <span>添加 "{newTestTypeInput.trim()}"</span>
+                          <Badge color="blue" className="text-xs">新建</Badge>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* 点击外部关闭下拉 */}
+                {showTestTypeDropdown && (
+                  <div 
+                    className="fixed inset-0 z-0" 
+                    onClick={() => setShowTestTypeDropdown(false)}
+                  />
+                )}
+              </Field>
             </FieldGroup>
           </Fieldset>
 

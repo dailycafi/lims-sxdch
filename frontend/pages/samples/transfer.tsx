@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -740,7 +741,7 @@ export default function SampleTransferPage() {
                         <TableCell className="text-sm">{transfer.to_location}</TableCell>
                         <TableCell>{transfer.requested_by.full_name}</TableCell>
                         <TableCell className="text-sm">
-                          {new Date(transfer.created_at).toLocaleDateString('zh-CN')}
+                          {formatDate(transfer.created_at)}
                         </TableCell>
                         <TableCell>{getStatusBadge(transfer.status)}</TableCell>
                         <TableCell>
@@ -1188,7 +1189,7 @@ export default function SampleTransferPage() {
                 </div>
                 <div>
                   <div className="text-xs text-zinc-500">创建时间</div>
-                  <div>{new Date(selectedTransfer.created_at).toLocaleString('zh-CN')}</div>
+                  <div>{formatDateTime(selectedTransfer.created_at)}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

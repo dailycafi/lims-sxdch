@@ -21,3 +21,5 @@ from app.models.project_organization import ProjectOrganization
 from app.models.deviation import Deviation
 from app.models.auth import RefreshToken
 from app.models.storage import StorageFreezer, StorageShelf, StorageRack, StorageBox
+from app.models.test_group import TestGroup, CollectionPoint
+from app.models.label import LabelConfig, LabelBatch, Label

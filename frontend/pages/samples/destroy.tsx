@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -710,7 +711,7 @@ export default function SampleDestroyPage() {
                           ) : '-'}
                         </TableCell>
                         <TableCell>{request.current_approver || '-'}</TableCell>
-                        <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatDate(request.created_at)}</TableCell>
                         <TableCell>
                           <Badge color={getStatusColor(request.status)}>
                             {getStatusText(request.status)}
@@ -969,7 +970,7 @@ export default function SampleDestroyPage() {
                         <Text className="font-medium">{getRoleLabel(flow.approver.role)}</Text>
                         <Text className="text-sm text-zinc-600">
                           {flow.approver.full_name}
-                          {flow.approved_at && ` · ${new Date(flow.approved_at).toLocaleDateString('zh-CN')}`}
+                          {flow.approved_at && ` · ${formatDate(flow.approved_at)}`}
                         </Text>
                         {flow.comments && (
                           <Text className="text-sm mt-1">{flow.comments}</Text>

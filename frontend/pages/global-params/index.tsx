@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -58,7 +59,19 @@ interface SampleType {
   updated_at: string;
 }
 
-type TabType = 'organizations' | 'clinical-samples' | 'qc-stability-samples';
+type TabType = 'organizations' | 'clinical-samples' | 'collection-points' | 'qc-stability-samples';
+
+// 采血点配置接口
+interface CollectionPoint {
+  id: number;
+  code: string;  // 采血点编号，如 01, 02
+  name: string;  // 采血点名称，如 给药前, 给药后0.5h
+  time_description?: string;  // 时间描述，如 D1 给药前 30min
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
 
 export default function GlobalParamsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('organizations');
@@ -67,16 +80,19 @@ export default function GlobalParamsPage() {
   const [orgTypes, setOrgTypes] = useState<OrganizationType[]>([]);
   const [clinicalSamples, setClinicalSamples] = useState<SampleType[]>([]);
   const [qcSamples, setQcSamples] = useState<SampleType[]>([]);
+  const [collectionPoints, setCollectionPoints] = useState<CollectionPoint[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
   const [isOrgTypeDialogOpen, setIsOrgTypeDialogOpen] = useState(false);
   const [isClinicalDialogOpen, setIsClinicalDialogOpen] = useState(false);
   const [isQCDialogOpen, setIsQCDialogOpen] = useState(false);
+  const [isCollectionPointDialogOpen, setIsCollectionPointDialogOpen] = useState(false);
   
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [editingOrgType, setEditingOrgType] = useState<OrganizationType | null>(null);
   const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
+  const [editingCollectionPoint, setEditingCollectionPoint] = useState<CollectionPoint | null>(null);
   const [selectedOrgType, setSelectedOrgType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -107,6 +123,15 @@ export default function GlobalParamsPage() {
     test_types: [''], // 检测类型数组
     primary_codes: [''], // 正份代码数组
     backup_codes: [''], // 备份代码数组
+    collection_points: [{ code: '', name: '', time_description: '' }], // 采血点数组
+  });
+
+  // 采血点表单数据
+  const [collectionPointForm, setCollectionPointForm] = useState({
+    code: '',
+    name: '',
+    time_description: '',
+    display_order: 0,
   });
 
   // 稳定性及质控样本表单数据 - 修改为数组形式
@@ -125,13 +150,15 @@ export default function GlobalParamsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [orgsRes, orgTypesRes, sampleTypesRes] = await Promise.all([
+      const [orgsRes, orgTypesRes, sampleTypesRes, collectionPointsRes] = await Promise.all([
         api.get('/global-params/organizations'),
         api.get('/global-params/organization-types'),
         api.get('/global-params/sample-types'),
+        api.get('/global-params/collection-points').catch(() => ({ data: [] })), // 如果接口不存在，返回空数组
       ]);
       setOrganizations(orgsRes.data);
       setOrgTypes(orgTypesRes.data);
+      setCollectionPoints(collectionPointsRes.data || []);
       
       const allSamples = sampleTypesRes.data as SampleType[];
       setClinicalSamples(allSamples.filter(s => s.category === 'clinical' || !s.category));
@@ -548,6 +575,110 @@ export default function GlobalParamsPage() {
     }
   };
 
+  // --- 采血点管理 ---
+  const handleCreateCollectionPoint = async () => {
+    if (!collectionPointForm.code.trim() || !collectionPointForm.name.trim()) {
+      toast.error('请填写采血点编号和名称');
+      return;
+    }
+    try {
+      await api.post('/global-params/collection-points', collectionPointForm);
+      setIsCollectionPointDialogOpen(false);
+      resetCollectionPointForm();
+      fetchData();
+      toast.success('采血点创建成功');
+    } catch (error) {
+      console.error('Failed to create collection point:', error);
+      toast.error('创建失败');
+    }
+  };
+
+  const handleUpdateCollectionPoint = async () => {
+    if (!editingCollectionPoint) return;
+    if (!collectionPointForm.code.trim() || !collectionPointForm.name.trim()) {
+      toast.error('请填写采血点编号和名称');
+      return;
+    }
+    if (!auditReason.trim()) {
+      toast.error('请输入修改理由');
+      return;
+    }
+    try {
+      await api.put(`/global-params/collection-points/${editingCollectionPoint.id}`, {
+        ...collectionPointForm,
+        audit_reason: auditReason.trim(),
+      });
+      setIsCollectionPointDialogOpen(false);
+      resetCollectionPointForm();
+      fetchData();
+      toast.success('采血点更新成功');
+    } catch (error) {
+      console.error('Failed to update collection point:', error);
+      toast.error('更新失败');
+    }
+  };
+
+  const handleDeleteCollectionPoint = async (id: number) => {
+    if (!confirm('确定要删除此采血点吗？')) return;
+    try {
+      await api.delete(`/global-params/collection-points/${id}`);
+      fetchData();
+      toast.success('采血点删除成功');
+    } catch (error) {
+      console.error('Failed to delete collection point:', error);
+      toast.error('删除失败');
+    }
+  };
+
+  const handleBatchAddCollectionPoints = async () => {
+    const textarea = document.getElementById('batch-collection-points') as HTMLTextAreaElement;
+    if (!textarea || !textarea.value.trim()) {
+      toast.error('请输入采血点数据');
+      return;
+    }
+
+    const lines = textarea.value.trim().split('\n').filter(line => line.trim());
+    const points: { code: string; name: string; time_description?: string; display_order: number }[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const parts = lines[i].split(',').map(s => s.trim());
+      if (parts.length < 2) {
+        toast.error(`第 ${i + 1} 行格式错误，至少需要编号和名称`);
+        return;
+      }
+      points.push({
+        code: parts[0],
+        name: parts[1],
+        time_description: parts[2] || '',
+        display_order: collectionPoints.length + i,
+      });
+    }
+
+    try {
+      // 逐个添加
+      for (const point of points) {
+        await api.post('/global-params/collection-points', point);
+      }
+      textarea.value = '';
+      fetchData();
+      toast.success(`成功添加 ${points.length} 个采血点`);
+    } catch (error) {
+      console.error('Failed to batch add collection points:', error);
+      toast.error('批量添加失败');
+    }
+  };
+
+  const resetCollectionPointForm = () => {
+    setCollectionPointForm({
+      code: '',
+      name: '',
+      time_description: '',
+      display_order: 0,
+    });
+    setAuditReason('');
+    setEditingCollectionPoint(null);
+  };
+
   const getOrgTypeLabel = (type: string) => {
     const orgType = orgTypes.find(t => t.value === type);
     return orgType?.label || type;
@@ -585,6 +716,7 @@ export default function GlobalParamsPage() {
             tabs={[
               { key: 'organizations', label: '组织管理' },
               { key: 'clinical-samples', label: '临床样本配置' },
+              { key: 'collection-points', label: '采血点配置' },
               { key: 'qc-stability-samples', label: '稳定性及质控样本配置' }
             ]}
             activeTab={activeTab}
@@ -725,7 +857,7 @@ export default function GlobalParamsPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-zinc-500">
-                              {new Date(orgType.created_at).toLocaleDateString('zh-CN')}
+                              {formatDate(orgType.created_at)}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
@@ -1091,6 +1223,94 @@ export default function GlobalParamsPage() {
           </>
         )}
 
+        {/* 采血点配置内容 */}
+        {activeTab === 'collection-points' && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <Text className="text-zinc-600">配置采血点编号和对应的时间描述，用于标签生成和样本管理</Text>
+              <Button onClick={() => {
+                setEditingCollectionPoint(null);
+                setCollectionPointForm({ code: '', name: '', time_description: '', display_order: collectionPoints.length });
+                setIsCollectionPointDialogOpen(true);
+              }}>
+                <PlusIcon className="w-4 h-4" />
+                新增采血点
+              </Button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>编号</TableHeader>
+                    <TableHeader>名称</TableHeader>
+                    <TableHeader>时间描述</TableHeader>
+                    <TableHeader>排序</TableHeader>
+                    <TableHeader>操作</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <AnimatedLoadingState colSpan={5} variant="skeleton" />
+                  ) : collectionPoints.length === 0 ? (
+                    <AnimatedEmptyState colSpan={5} text="暂无采血点配置，请点击上方按钮添加" />
+                  ) : (
+                    collectionPoints.map((point) => (
+                      <TableRow key={point.id}>
+                        <TableCell>
+                          <Badge color="blue">{point.code}</Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{point.name}</TableCell>
+                        <TableCell className="text-zinc-600">{point.time_description || '-'}</TableCell>
+                        <TableCell className="text-zinc-500">{point.display_order}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button plain onClick={() => {
+                              setEditingCollectionPoint(point);
+                              setCollectionPointForm({
+                                code: point.code,
+                                name: point.name,
+                                time_description: point.time_description || '',
+                                display_order: point.display_order,
+                              });
+                              setIsCollectionPointDialogOpen(true);
+                            }}>
+                              <PencilIcon className="w-4 h-4" />
+                            </Button>
+                            <Button plain onClick={() => handleDeleteCollectionPoint(point.id)}>
+                              <TrashIcon className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* 快速批量添加 */}
+            <div className="mt-6 bg-zinc-50 rounded-lg p-6 border border-zinc-200">
+              <Text className="font-semibold text-zinc-900 mb-4">快速批量添加</Text>
+              <Text className="text-sm text-zinc-600 mb-4">
+                输入多个采血点，每行一个，格式：编号,名称,时间描述（时间描述可选）
+              </Text>
+              <Textarea
+                placeholder={`例如：\n01,给药前,D1 给药前 30min\n02,给药后0.5h,D1 给药后 0.5h\n03,给药后1h,D1 给药后 1h`}
+                rows={6}
+                className="font-mono text-sm"
+                id="batch-collection-points"
+              />
+              <div className="mt-4 flex justify-end">
+                <Button onClick={handleBatchAddCollectionPoints}>
+                  <PlusIcon className="w-4 h-4" />
+                  批量添加
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* 稳定性及质控样本配置内容 */}
         {activeTab === 'qc-stability-samples' && (
           <>
@@ -1271,7 +1491,7 @@ export default function GlobalParamsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-zinc-500 text-sm">
-                            {new Date(sample.created_at).toLocaleDateString('zh-CN')}
+                            {formatDate(sample.created_at)}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
@@ -1604,16 +1824,50 @@ export default function GlobalParamsPage() {
               </div>
             </div>
 
+            {/* 备份 */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                备份（套）
+              <label className="block text-sm font-medium text-zinc-700 mb-2">
+                备份
               </label>
-              <Input
-                type="number"
-                value={clinicalForm.backup_count}
-                onChange={(e) => setClinicalForm({ ...clinicalForm, backup_count: parseInt(e.target.value) || 0 })}
-                min="0"
-              />
+              <div className="space-y-2">
+                {clinicalForm.backup_codes.map((code, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={code}
+                      onChange={(e) => {
+                        const newCodes = [...clinicalForm.backup_codes];
+                        newCodes[index] = e.target.value;
+                        setClinicalForm({ ...clinicalForm, backup_codes: newCodes });
+                      }}
+                      placeholder="如：b1、b2"
+                      className="flex-1"
+                    />
+                    {clinicalForm.backup_codes.length > 1 && (
+                      <Button
+                        plain
+                        onClick={() => {
+                          const newCodes = clinicalForm.backup_codes.filter((_, i) => i !== index);
+                          setClinicalForm({ ...clinicalForm, backup_codes: newCodes });
+                        }}
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {index === clinicalForm.backup_codes.length - 1 && (
+                      <Button
+                        onClick={() => {
+                          setClinicalForm({ 
+                            ...clinicalForm, 
+                            backup_codes: [...clinicalForm.backup_codes, ''] 
+                          });
+                        }}
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {editingSampleType && (
@@ -1659,8 +1913,8 @@ export default function GlobalParamsPage() {
                   检测类型 <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  value={qcForm.test_type}
-                  onChange={(e) => setQCForm({ ...qcForm, test_type: e.target.value })}
+                  value={qcForm.sample_categories.join(', ')}
+                  onChange={(e) => setQCForm({ ...qcForm, sample_categories: e.target.value.split(',').map(s => s.trim()) })}
                   placeholder="如：STB, QC"
                   required
                 />
@@ -1670,8 +1924,8 @@ export default function GlobalParamsPage() {
                   代码
                 </label>
                 <Input
-                  value={qcForm.code}
-                  onChange={(e) => setQCForm({ ...qcForm, code: e.target.value })}
+                  value={qcForm.codes.join(', ')}
+                  onChange={(e) => setQCForm({ ...qcForm, codes: e.target.value.split(',').map(s => s.trim()) })}
                   placeholder="如：L, M, H"
                 />
               </div>
@@ -1702,6 +1956,91 @@ export default function GlobalParamsPage() {
           </Button>
           <Button onClick={editingSampleType ? handleUpdateQC : handleCreateQC}>
             {editingSampleType ? '保存修改' : '创建'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 采血点对话框 */}
+      <Dialog open={isCollectionPointDialogOpen} onClose={() => { setIsCollectionPointDialogOpen(false); resetCollectionPointForm(); }}>
+        <DialogTitle>{editingCollectionPoint ? '编辑采血点' : '新增采血点'}</DialogTitle>
+        <DialogDescription>
+          {editingCollectionPoint ? '修改采血点配置' : '添加新的采血点配置'}
+        </DialogDescription>
+        <DialogBody>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  采血点编号 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={collectionPointForm.code}
+                  onChange={(e) => setCollectionPointForm({ ...collectionPointForm, code: e.target.value })}
+                  placeholder="如：01、02、03"
+                  required
+                />
+                <Text className="text-xs text-zinc-500 mt-1">用于标签和编号生成</Text>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  采血点名称 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={collectionPointForm.name}
+                  onChange={(e) => setCollectionPointForm({ ...collectionPointForm, name: e.target.value })}
+                  placeholder="如：给药前、给药后0.5h"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                时间描述
+              </label>
+              <Input
+                value={collectionPointForm.time_description}
+                onChange={(e) => setCollectionPointForm({ ...collectionPointForm, time_description: e.target.value })}
+                placeholder="如：D1 给药前 30min"
+              />
+              <Text className="text-xs text-zinc-500 mt-1">详细的时间描述，会显示在标签上</Text>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                显示排序
+              </label>
+              <Input
+                type="number"
+                value={collectionPointForm.display_order}
+                onChange={(e) => setCollectionPointForm({ ...collectionPointForm, display_order: parseInt(e.target.value) || 0 })}
+                placeholder="数字越小越靠前"
+                min="0"
+              />
+            </div>
+            {editingCollectionPoint && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  修改理由 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={auditReason}
+                  onChange={(e) => setAuditReason(e.target.value)}
+                  placeholder="请输入修改理由"
+                  rows={2}
+                  required
+                />
+                <Text className="text-sm text-amber-600 mt-1">
+                  注意：修改信息将被记录在审计日志中
+                </Text>
+              </div>
+            )}
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => { setIsCollectionPointDialogOpen(false); resetCollectionPointForm(); }}>
+            取消
+          </Button>
+          <Button onClick={editingCollectionPoint ? handleUpdateCollectionPoint : handleCreateCollectionPoint}>
+            {editingCollectionPoint ? '保存修改' : '创建'}
           </Button>
         </DialogActions>
       </Dialog>

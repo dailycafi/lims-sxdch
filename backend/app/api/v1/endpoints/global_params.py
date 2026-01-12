@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.models.global_params import OrganizationType, Organization, SampleType, GlobalConfiguration, SystemSetting
+from app.models.test_group import CollectionPoint
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
@@ -130,6 +131,44 @@ class GlobalConfigurationResponse(BaseModel):
     category: str
     description: Optional[str] = None
     config_data: Dict[str, Any]
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+# 采血点 Schemas
+class CollectionPointCreate(BaseModel):
+    code: str
+    name: str
+    time_description: Optional[str] = None
+    display_order: int = 0
+
+
+class CollectionPointUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    time_description: Optional[str] = None
+    display_order: Optional[int] = None
+    is_active: Optional[bool] = None
+    audit_reason: str  # 修改理由
+
+    @field_validator("audit_reason")
+    @classmethod
+    def reason_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("修改理由不能为空")
+        return v
+
+
+class CollectionPointResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    time_description: Optional[str] = None
+    display_order: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -809,4 +848,211 @@ async def delete_organization_type(
     )
     
     return {"message": "组织类型删除成功"}
+
+
+# ==================== 采血点管理 ====================
+
+@router.get("/collection-points", response_model=List[CollectionPointResponse])
+async def get_collection_points(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取全局采血点列表"""
+    result = await db.execute(
+        select(CollectionPoint)
+        .where(CollectionPoint.is_active == True, CollectionPoint.project_id == None)
+        .order_by(CollectionPoint.display_order, CollectionPoint.code)
+    )
+    return result.scalars().all()
+
+
+@router.post("/collection-points", response_model=CollectionPointResponse)
+async def create_collection_point(
+    point_data: CollectionPointCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """创建采血点"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    # 检查编号是否已存在
+    existing = await db.execute(
+        select(CollectionPoint).where(
+            CollectionPoint.code == point_data.code,
+            CollectionPoint.project_id == None,
+            CollectionPoint.is_active == True
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"采血点编号 '{point_data.code}' 已存在"
+        )
+    
+    db_point = CollectionPoint(
+        code=point_data.code,
+        name=point_data.name,
+        time_description=point_data.time_description,
+        display_order=point_data.display_order,
+        project_id=None  # 全局采血点
+    )
+    db.add(db_point)
+    await db.commit()
+    await db.refresh(db_point)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="collection_point",
+        entity_id=db_point.id,
+        action="create",
+        details={
+            "code": db_point.code,
+            "name": db_point.name,
+            "time_description": db_point.time_description
+        }
+    )
+    
+    return db_point
+
+
+@router.put("/collection-points/{point_id}", response_model=CollectionPointResponse)
+async def update_collection_point(
+    point_id: int,
+    point_data: CollectionPointUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新采血点"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(CollectionPoint).where(CollectionPoint.id == point_id)
+    )
+    db_point = result.scalar_one_or_none()
+    
+    if not db_point:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="采血点不存在"
+        )
+    
+    # 记录原始数据
+    original_data = {
+        "code": db_point.code,
+        "name": db_point.name,
+        "time_description": db_point.time_description,
+        "display_order": db_point.display_order,
+        "is_active": db_point.is_active
+    }
+    
+    # 如果更新编号，检查是否重复
+    if point_data.code and point_data.code != db_point.code:
+        existing = await db.execute(
+            select(CollectionPoint).where(
+                CollectionPoint.code == point_data.code,
+                CollectionPoint.project_id == None,
+                CollectionPoint.is_active == True,
+                CollectionPoint.id != point_id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"采血点编号 '{point_data.code}' 已存在"
+            )
+    
+    # 更新字段
+    if point_data.code is not None:
+        db_point.code = point_data.code
+    if point_data.name is not None:
+        db_point.name = point_data.name
+    if point_data.time_description is not None:
+        db_point.time_description = point_data.time_description
+    if point_data.display_order is not None:
+        db_point.display_order = point_data.display_order
+    if point_data.is_active is not None:
+        db_point.is_active = point_data.is_active
+    
+    db_point.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(db_point)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="collection_point",
+        entity_id=db_point.id,
+        action="update",
+        details={
+            "original": original_data,
+            "updated": {
+                "code": db_point.code,
+                "name": db_point.name,
+                "time_description": db_point.time_description,
+                "display_order": db_point.display_order,
+                "is_active": db_point.is_active
+            }
+        },
+        reason=point_data.audit_reason
+    )
+    
+    return db_point
+
+
+@router.delete("/collection-points/{point_id}")
+async def delete_collection_point(
+    point_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """删除采血点（软删除）"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(CollectionPoint).where(CollectionPoint.id == point_id)
+    )
+    db_point = result.scalar_one_or_none()
+    
+    if not db_point:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="采血点不存在"
+        )
+    
+    # 软删除
+    db_point.is_active = False
+    db_point.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="collection_point",
+        entity_id=db_point.id,
+        action="delete",
+        details={
+            "code": db_point.code,
+            "name": db_point.name
+        }
+    )
+    
+    return {"message": "采血点删除成功"}
 

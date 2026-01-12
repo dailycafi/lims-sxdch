@@ -561,10 +561,16 @@ async def archive_project(
     return {"message": "项目已归档"}
 
 
+class ProjectDeleteRequest(BaseModel):
+    reason: str
+    password: Optional[str] = None
+
+
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
+    delete_data: Optional[ProjectDeleteRequest] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """删除项目（仅系统管理员，可删除无关联数据的项目；超级管理员可强制删除）"""
@@ -572,6 +578,17 @@ async def delete_project(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要系统管理员权限"
+        )
+
+    # 验证删除理由
+    delete_reason = "未提供理由"
+    if delete_data and delete_data.reason:
+        delete_reason = delete_data.reason.strip()
+    
+    if not delete_reason or delete_reason == "未提供理由":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="删除项目必须提供理由"
         )
 
     result = await db.execute(select(Project).where(Project.id == project_id))
@@ -612,21 +629,20 @@ async def delete_project(
                 )
 
     try:
-        # 超级管理员强制删除时，记录审计日志
-        if is_super_admin(current_user):
-            await create_audit_log(
-                db=db,
-                user_id=current_user.id,
-                entity_type="project",
-                entity_id=project.id,
-                action="force_delete",
-                details={
-                    "project_code": project.lab_project_code,
-                    "sponsor_code": project.sponsor_project_code,
-                    "is_archived": project.is_archived
-                },
-                reason="超级管理员强制删除"
-            )
+        # 记录审计日志（包含删除理由）
+        await create_audit_log(
+            db=db,
+            user_id=current_user.id,
+            entity_type="project",
+            entity_id=project.id,
+            action="delete" if not is_super_admin(current_user) else "force_delete",
+            details={
+                "project_code": project.lab_project_code,
+                "sponsor_code": project.sponsor_project_code,
+                "is_archived": project.is_archived
+            },
+            reason=delete_reason
+        )
         await db.delete(project)
         await db.commit()
     except IntegrityError:

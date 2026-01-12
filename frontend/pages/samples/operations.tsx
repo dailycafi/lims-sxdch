@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -328,7 +329,7 @@ function ReturnTab({ projectId }: { projectId: number | null }) {
                                     <TableCell className="font-mono">{req.request_code}</TableCell>
                                     <TableCell>{req.sample_count}</TableCell>
                                     <TableCell>{req.requested_by.full_name}</TableCell>
-                                    <TableCell>{new Date(req.created_at).toLocaleDateString()}</TableCell>
+                                    <TableCell>{formatDate(req.created_at)}</TableCell>
                                     <TableCell>{req.target_location}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">

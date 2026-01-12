@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import {
@@ -307,7 +308,7 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="text-sm text-gray-600">
-                    {new Date(user.created_at).toLocaleString('zh-CN')}
+                    {formatDateTime(user.created_at)}
                   </td>
                   <td>
                     <div className="flex items-center gap-2">

@@ -342,6 +342,62 @@ async def init_db(drop_existing=False):
         
         session.add_all([project1, project2])
         await session.flush()
+        
+        # 3.2 创建示例试验组
+        print("Creating Test Groups...")
+        from app.models.test_group import TestGroup
+        
+        test_group1 = TestGroup(
+            project_id=project1.id,
+            name="低剂量组",
+            cycle="V1",
+            dosage="100mg",
+            planned_count=10,
+            backup_count=2,
+            subject_prefix="R",
+            subject_start_number=1,
+            detection_configs=[
+                {"test_type": "PK", "sample_type": "血浆", "primary_sets": 4, "backup_sets": 2},
+                {"test_type": "ADA", "sample_type": "血清", "primary_sets": 2, "backup_sets": 1},
+            ],
+            collection_points=[
+                {"code": "C1", "name": "D1-0h"},
+                {"code": "C2", "name": "D1-1h"},
+                {"code": "C3", "name": "D1-2h"},
+                {"code": "C4", "name": "D1-4h"},
+                {"code": "C5", "name": "D1-8h"},
+            ],
+            display_order=1,
+            created_by=admin_user.id
+        )
+        
+        test_group2 = TestGroup(
+            project_id=project1.id,
+            name="高剂量组",
+            cycle="V2",
+            dosage="200mg",
+            planned_count=10,
+            backup_count=2,
+            subject_prefix="R",
+            subject_start_number=13,  # 接着低剂量组的编号
+            detection_configs=[
+                {"test_type": "PK", "sample_type": "血浆", "primary_sets": 4, "backup_sets": 2},
+                {"test_type": "ADA", "sample_type": "血清", "primary_sets": 2, "backup_sets": 1},
+                {"test_type": "Nab", "sample_type": "血清", "primary_sets": 2, "backup_sets": 1},
+            ],
+            collection_points=[
+                {"code": "C1", "name": "D1-0h"},
+                {"code": "C2", "name": "D1-1h"},
+                {"code": "C3", "name": "D1-2h"},
+                {"code": "C4", "name": "D1-4h"},
+                {"code": "C5", "name": "D1-8h"},
+            ],
+            display_order=2,
+            created_by=admin_user.id
+        )
+        
+        session.add_all([test_group1, test_group2])
+        await session.flush()
 
         # 3.1 项目授权（成员绑定）：用于“用户仅可见被授权项目”
         from app.models.project_member import ProjectMember

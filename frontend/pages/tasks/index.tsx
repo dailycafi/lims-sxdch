@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
@@ -208,9 +209,9 @@ export default function TaskCenterPage() {
                      </TableCell>
                      <TableCell>
                        <div className="flex flex-col">
-                         <span>{new Date(task.created_at).toLocaleString('zh-CN')}</span>
+                         <span>{formatDateTime(task.created_at)}</span>
                          {task.due_at && (
-                           <span className="text-xs text-zinc-500">截止：{new Date(task.due_at).toLocaleString('zh-CN')}</span>
+                           <span className="text-xs text-zinc-500">截止：{formatDateTime(task.due_at)}</span>
                          )}
                        </div>
                      </TableCell>

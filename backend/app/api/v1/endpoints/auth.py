@@ -89,7 +89,17 @@ async def get_token_expiration(db: AsyncSession) -> tuple[timedelta, int]:
     result = await db.execute(select(SystemSetting).where(SystemSetting.key == "session_timeout"))
     setting = result.scalar_one_or_none()
     
-    minutes = setting.value if setting and isinstance(setting.value, int) else settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    # setting.value 是 JSON 字段，可能是 int、float 或其他类型
+    minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES  # 默认值
+    if setting and setting.value is not None:
+        try:
+            # 尝试转换为整数
+            minutes = int(setting.value)
+            if minutes <= 0:
+                minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        except (ValueError, TypeError):
+            pass
+    
     delta = timedelta(minutes=minutes)
     return delta, int(delta.total_seconds())
 

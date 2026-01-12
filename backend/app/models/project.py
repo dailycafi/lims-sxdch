@@ -35,6 +35,9 @@ class Project(Base):
 
     # 关联的所有组织（包含临床机构等）
     associated_organizations = relationship("ProjectOrganization", back_populates="project", viewonly=True)
+    
+    # 试验组
+    test_groups = relationship("TestGroup", back_populates="project", order_by="TestGroup.display_order")
 
 
 class ProjectArchiveRequest(Base):

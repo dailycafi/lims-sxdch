@@ -629,6 +629,29 @@ async def read_sample_by_code(
     return sample
 
 
+async def create_audit_log(
+    db: AsyncSession,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    action: str,
+    details: dict,
+    reason: Optional[str] = None
+):
+    """创建审计日志"""
+    audit_log = AuditLog(
+        user_id=user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        action=action,
+        details=details,
+        reason=reason,
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+
+
 @router.patch("/{sample_id}", response_model=SampleResponse)
 async def update_sample(
     sample_id: int,
@@ -648,8 +671,16 @@ async def update_sample(
 
     await assert_project_access(db, current_user, sample.project_id)
     
+    # 记录原始值
+    original_data = {
+        "sample_code": sample.sample_code,
+        "status": sample.status,
+        "purpose": sample.purpose
+    }
+
     # 根据更新的内容检查权限
     update_data = sample_update.model_dump(exclude_unset=True)
+    
     if "status" in update_data:
         if not check_sample_permission(current_user, "inventory"):
             raise HTTPException(
@@ -657,11 +688,30 @@ async def update_sample(
                 detail="没有权限更新样本状态"
             )
     
+    # 获取审计原因
+    audit_reason = update_data.pop("audit_reason", None)
+
     for field, value in update_data.items():
-        setattr(sample, field, value)
+        if hasattr(sample, field):
+            setattr(sample, field, value)
     
     await db.commit()
     await db.refresh(sample)
+
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="sample",
+        entity_id=sample.id,
+        action="update",
+        details={
+            "original": original_data,
+            "updated": update_data
+        },
+        reason=audit_reason
+    )
+
     return sample
 
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -412,7 +413,7 @@ function ReturnTab({ projectId }: { projectId: number | null }) {
                                             <TableCell className="font-mono">{req.request_code}</TableCell>
                                             <TableCell>{req.sample_count}</TableCell>
                                             <TableCell>{req.requested_by.full_name}</TableCell>
-                                            <TableCell>{new Date(req.created_at).toLocaleDateString()}</TableCell>
+                                            <TableCell>{formatDate(req.created_at)}</TableCell>
                                             <TableCell>{req.target_location}</TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
@@ -587,8 +588,7 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
   const [isAddBoxOpen, setIsAddBoxOpen] = useState(false);
   const [isEditBoxOpen, setIsEditBoxOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isSampleDetailOpen, setIsSampleDetailOpen] = useState(false);
-  
+
   // 选中状态
   const [selectedSampleId, setSelectedSampleId] = useState<number | null>(null);
   const [highlightedPosition, setHighlightedPosition] = useState<string | null>(null);
@@ -672,7 +672,6 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
   const handleSampleClick = (sample: BoxSample) => {
     setSelectedSample(sample);
     setSelectedSampleId(sample.id);
-    setIsSampleDetailOpen(true);
   };
 
   // 添加样本盒
@@ -892,7 +891,7 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
                             {box.used_slots} / {box.total_slots}
                           </Badge>
                         </TableCell>
-                        <TableCell>{new Date(box.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                        <TableCell>{formatDate(box.created_at)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button plain onClick={() => handleBoxSelect(box)}>
@@ -1065,7 +1064,7 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
             {selectedSample?.status === 'in_storage' && (
               <>
                 <Button outline onClick={() => {
-                  setIsSampleDetailOpen(false);
+                  setIsBoxDetailOpen(false);
                   onCheckout([selectedSample]); // 传递数组
                 }}>
                   申请领用
@@ -1078,7 +1077,7 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
                 </Button>
               </>
             )}
-            <Button plain onClick={() => setIsSampleDetailOpen(false)}>关闭</Button>
+            <Button plain onClick={() => setIsBoxDetailOpen(false)}>关闭</Button>
           </div>
         </DialogActions>
       </Dialog>

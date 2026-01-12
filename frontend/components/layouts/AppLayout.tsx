@@ -83,6 +83,7 @@ import {
   PlusIcon,
   UserIcon,
   ShieldCheckIcon,
+  TagIcon,
 } from '@heroicons/react/20/solid';
 
 interface AppLayoutProps {
@@ -95,10 +96,6 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/users': [{ label: '系统管理', href: '#' }, { label: '用户管理' }],
   '/tasks': [
     { label: '任务中心', current: true }
-  ],
-  '/samples/receive': [
-    { label: '样本管理', href: '/samples' },
-    { label: '样本接收', current: true }
   ],
   '/samples/inventory': [
     { label: '样本管理', href: '/samples' },
@@ -167,6 +164,10 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/profile': [
     { label: '个人信息', current: true }
   ],
+  '/labels': [
+    { label: '工作台', href: '#' },
+    { label: '标签管理', current: true }
+  ],
 };
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -206,12 +207,32 @@ export function AppLayout({ children }: AppLayoutProps) {
         const timeoutMinutes = timeoutSetting.value || 30;
         const timeoutMs = timeoutMinutes * 60 * 1000;
 
+        console.log(`[AutoLogout] Session timeout set to ${timeoutMinutes} minutes (${timeoutMs}ms)`);
+
         const checkInactivity = () => {
           if (!isMounted) return;
 
           const now = Date.now();
-          const lastActivity = parseInt(localStorage.getItem(STORAGE_KEY) || now.toString());
+          const storedActivity = localStorage.getItem(STORAGE_KEY);
+          // 如果没有存储的活动时间或值无效，使用当前时间（不应该触发登出）
+          let lastActivity = now;
+          if (storedActivity) {
+            const parsed = parseInt(storedActivity, 10);
+            if (!isNaN(parsed) && parsed > 0) {
+              lastActivity = parsed;
+            }
+          }
           const inactiveTime = now - lastActivity;
+
+          // 防止负数或异常大的不活动时间（可能是时钟问题或数据损坏）
+          if (inactiveTime < 0 || inactiveTime > 24 * 60 * 60 * 1000) {
+            console.log(`[AutoLogout] Invalid inactive time: ${inactiveTime}ms, resetting activity`);
+            localStorage.setItem(STORAGE_KEY, now.toString());
+            timeoutIdRef.current = setTimeout(checkInactivity, 60000);
+            return;
+          }
+
+          console.log(`[AutoLogout] Check: inactive for ${Math.round(inactiveTime / 1000)}s / ${timeoutMinutes * 60}s`);
 
           if (inactiveTime >= timeoutMs) {
             console.log(`[AutoLogout] Inactive for ${timeoutMinutes} minutes. Logging out...`);
@@ -380,6 +401,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SidebarItem href="/projects" scroll={false} current={isCurrentPath('/projects')}>
                     <FolderIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>项目管理</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/labels" scroll={false} current={isCurrentPath('/labels')}>
+                    <TagIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>标签管理</SidebarLabel>
                   </SidebarItem>
                 </div>
               </div>

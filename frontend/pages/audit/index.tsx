@@ -404,7 +404,7 @@ export default function AuditPage() {
                 </div>
                 <div>
                   <Text className="text-sm text-zinc-600">时间戳</Text>
-                  <Text>{new Date(selectedLog.timestamp).toLocaleString('zh-CN')}</Text>
+                  <Text>{formatDateTime(selectedLog.timestamp)}</Text>
                 </div>
                 <div>
                   <Text className="text-sm text-zinc-600">操作人</Text>

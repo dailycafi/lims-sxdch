@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
@@ -132,7 +133,7 @@ export default function SampleArchivePage() {
                         {req.status === 'completed' ? '已归档' : '待处理'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(req.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                    <TableCell>{formatDate(req.created_at)}</TableCell>
                     <TableCell className="text-right">
                       {req.status !== 'completed' && (
                         <Button plain onClick={() => handleExecuteArchive(req.id)}>

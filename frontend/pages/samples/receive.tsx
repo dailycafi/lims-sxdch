@@ -310,7 +310,7 @@ export default function SampleReceivePage() {
                     <label className={!selectedProjectId ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
                     <input
                       type="file"
-                      accept=".csv,.xlsx,.xls,.txt,.pdf,.jpg,.jpeg,.png"
+                      accept=".csv,.xlsx,.xls,.txt,.pdf,.jpg,.jpeg,.png,.webp"
                       onChange={handleTemperatureFileChange}
                       className="hidden"
                         disabled={!selectedProjectId}
@@ -326,7 +326,7 @@ export default function SampleReceivePage() {
                         <Text className="text-xs text-zinc-500">{(temperatureFile.size / 1024).toFixed(1)} KB</Text>
                       </div>
                   ) : (
-                    <Text className="text-sm text-zinc-500">支持 CSV、Excel、TXT、PDF、JPG、PNG</Text>
+                    <Text className="text-sm text-zinc-500">支持 CSV、Excel、TXT、PDF 及图片格式</Text>
                   )}
                   </div>
                 </div>
@@ -436,7 +436,7 @@ export default function SampleReceivePage() {
                     <label className={!selectedProjectId ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
                     <input
                       type="file"
-                      accept=".jpg,.jpeg,.png"
+                      accept=".jpg,.jpeg,.png,.webp"
                       multiple
                       onChange={handleExpressPhotosChange}
                       className="hidden"
@@ -452,7 +452,7 @@ export default function SampleReceivePage() {
                         <Text className="text-sm font-medium text-green-600">已选择 {expressPhotos.length} 个文件</Text>
                       </div>
                   ) : (
-                    <Text className="text-sm text-zinc-500">支持 JPG, PNG 格式</Text>
+                    <Text className="text-sm text-zinc-500">支持 JPG, PNG, WEBP 等图片格式</Text>
                   )}
                 </div>
               </div>

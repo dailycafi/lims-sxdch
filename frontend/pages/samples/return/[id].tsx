@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -509,7 +510,7 @@ export default function SampleReturnPage() {
             <div>
               <DescriptionTerm>领用时间</DescriptionTerm>
               <DescriptionDetails>
-                {new Date(borrowRecord.borrowed_at).toLocaleString('zh-CN')}
+                {formatDateTime(borrowRecord.borrowed_at)}
               </DescriptionDetails>
             </div>
             <div>

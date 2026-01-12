@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatDateTime } from '@/lib/date-utils';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
@@ -107,7 +108,7 @@ export default function PendingInventoryListPage() {
                     <TableCell>{task.project_name || '-'}</TableCell>
                     <TableCell>{task.sample_count}</TableCell>
                     <TableCell>{task.received_by || '-'}</TableCell>
-                    <TableCell>{new Date(task.received_at).toLocaleString('zh-CN')}</TableCell>
+                    <TableCell>{formatDateTime(task.received_at)}</TableCell>
                     <TableCell>
                       <Badge color={task.status === 'completed' ? 'green' : task.status === 'pending' ? 'yellow' : 'blue'}>
                         {statusLabel[task.status] || task.status}

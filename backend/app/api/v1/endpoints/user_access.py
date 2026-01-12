@@ -1,8 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user
@@ -21,51 +22,54 @@ async def track_user_access(
     db: AsyncSession = Depends(get_db)
 ):
     """记录用户访问"""
-    # 检查是否已存在相同路径的记录
-    result = await db.execute(
-        select(UserAccessLog).where(
-            UserAccessLog.user_id == current_user.id,
+    user_id = current_user.id  # 先获取 user_id，避免后续 session 问题
+    
+    # 先尝试更新现有记录
+    update_result = await db.execute(
+        update(UserAccessLog)
+        .where(
+            UserAccessLog.user_id == user_id,
             UserAccessLog.path == path
-        ).limit(1)
-    )
-    existing_log = result.scalars().first()
-    
-    if existing_log:
-        # 更新访问次数和最后访问时间
-        existing_log.access_count += 1
-        existing_log.last_accessed_at = func.now()
-        existing_log.title = title  # 更新标题以防有变化
-        existing_log.icon = icon  # 更新图标
-    else:
-        # 创建新记录
-        new_log = UserAccessLog(
-            user_id=current_user.id,
-            path=path,
+        )
+        .values(
+            access_count=UserAccessLog.access_count + 1,
+            last_accessed_at=datetime.now(timezone.utc),
             title=title,
-            icon=icon,
-            access_count=1
+            icon=icon
         )
-        db.add(new_log)
+    )
     
-    try:
-        await db.commit()
-    except IntegrityError:
-        # 并发情况下可能出现唯一约束冲突，尝试回滚并更新
-        await db.rollback()
-        # 重新查找并更新
-        result = await db.execute(
-            select(UserAccessLog).where(
-                UserAccessLog.user_id == current_user.id,
-                UserAccessLog.path == path
-            ).limit(1)
-        )
-        existing_log = result.scalars().first()
-        if existing_log:
-            existing_log.access_count += 1
-            existing_log.last_accessed_at = func.now()
-            existing_log.title = title
-            existing_log.icon = icon
+    # 如果没有更新任何记录，说明不存在，需要创建
+    if update_result.rowcount == 0:
+        try:
+            new_log = UserAccessLog(
+                user_id=user_id,
+                path=path,
+                title=title,
+                icon=icon,
+                access_count=1
+            )
+            db.add(new_log)
             await db.commit()
+        except IntegrityError:
+            # 并发情况下可能刚好被其他请求创建了，回滚后再更新
+            await db.rollback()
+            await db.execute(
+                update(UserAccessLog)
+                .where(
+                    UserAccessLog.user_id == user_id,
+                    UserAccessLog.path == path
+                )
+                .values(
+                    access_count=UserAccessLog.access_count + 1,
+                    last_accessed_at=datetime.now(timezone.utc),
+                    title=title,
+                    icon=icon
+                )
+            )
+            await db.commit()
+    else:
+        await db.commit()
     
     return {"status": "success"}
 

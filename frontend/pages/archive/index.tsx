@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -99,7 +100,11 @@ export default function ArchivePage() {
       if (filters.end_date) params.end_date = filters.end_date;
       
       const response = await api.get('/projects', { params });
-      setProjects(response.data);
+      const transformed = response.data.map((p: any) => ({
+        ...p,
+        sponsor: p.sponsor?.name || ''
+      }));
+      setProjects(transformed);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     } finally {
@@ -130,7 +135,11 @@ export default function ArchivePage() {
       if (filters.end_date) params.end_date = filters.end_date;
       
       const response = await api.get('/projects', { params });
-      setProjects(response.data);
+      const transformed = response.data.map((p: any) => ({
+        ...p,
+        sponsor: p.sponsor?.name || ''
+      }));
+      setProjects(transformed);
     } catch (error) {
       console.error('Failed to fetch archived projects:', error);
     } finally {
@@ -395,7 +404,7 @@ export default function ArchivePage() {
                           <TableCell>{project.sponsor_project_code || '-'}</TableCell>
                           <TableCell>{project.sponsor || '-'}</TableCell>
                           <TableCell>{getStatusBadge(project.status)}</TableCell>
-                          <TableCell>{new Date(project.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                          <TableCell>{formatDate(project.created_at)}</TableCell>
                           <TableCell>{project.sample_count || 0}</TableCell>
                           <TableCell className="text-right pr-6">
                             <Button plain onClick={() => handleViewProjectDetail(project)}>
@@ -438,7 +447,7 @@ export default function ArchivePage() {
                           <TableCell>{request.project.sponsor_project_code || '-'}</TableCell>
                           <TableCell>{request.requested_by.full_name}</TableCell>
                           <TableCell>{request.reason}</TableCell>
-                          <TableCell>{new Date(request.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                          <TableCell>{formatDate(request.created_at)}</TableCell>
                           <TableCell>{getStatusBadge(request.status)}</TableCell>
                           <TableCell className="text-right pr-6">
                             <div className="flex justify-end gap-2">
@@ -485,7 +494,7 @@ export default function ArchivePage() {
                           <TableCell className="font-medium pl-6">{project.lab_project_code}</TableCell>
                           <TableCell>{project.sponsor_project_code || '-'}</TableCell>
                           <TableCell>{project.sponsor || '-'}</TableCell>
-                          <TableCell>{project.archived_at ? new Date(project.archived_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
+                          <TableCell>{project.archived_at ? formatDate(project.archived_at) : '-'}</TableCell>
                           <TableCell>{project.total_samples || 0}</TableCell>
                           <TableCell>{project.destroyed_samples || 0}</TableCell>
                           <TableCell className="text-right pr-6">
@@ -605,7 +614,7 @@ export default function ArchivePage() {
                       <DescriptionDetails>{getStatusBadge(selectedProject.status)}</DescriptionDetails>
                       
                       <DescriptionTerm>开始时间</DescriptionTerm>
-                      <DescriptionDetails>{new Date(selectedProject.created_at).toLocaleDateString('zh-CN')}</DescriptionDetails>
+                      <DescriptionDetails>{formatDate(selectedProject.created_at)}</DescriptionDetails>
                     </DescriptionList>
                   </div>
 

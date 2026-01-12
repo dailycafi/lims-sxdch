@@ -23,8 +23,10 @@ class SampleCreate(SampleBase):
 
 
 class SampleUpdate(BaseModel):
+    sample_code: Optional[str] = None
     status: Optional[SampleStatus] = None
     purpose: Optional[SamplePurpose] = None
+    audit_reason: Optional[str] = None
     freezer_id: Optional[str] = None
     shelf_level: Optional[str] = None
     rack_position: Optional[str] = None

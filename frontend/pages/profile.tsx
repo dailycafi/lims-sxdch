@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -152,7 +153,7 @@ export default function ProfilePage() {
     return null;
   }
 
-  const createdAtLabel = user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-';
+  const createdAtLabel = user.created_at ? formatDateTime(user.created_at) : '-';
 
   return (
     <AppLayout>

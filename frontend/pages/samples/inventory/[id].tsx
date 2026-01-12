@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -734,7 +735,7 @@ export default function SampleInventoryPage() {
           </div>
           <div class="info-item">
             <span class="info-label">接收时间:</span>
-            <span>${receiveRecord?.received_at ? new Date(receiveRecord.received_at).toLocaleString('zh-CN') : '-'}</span>
+            <span>${receiveRecord?.received_at ? formatDateTime(receiveRecord.received_at) : '-'}</span>
           </div>
           <div class="info-item">
             <span class="info-label">清点时间:</span>
@@ -899,7 +900,7 @@ export default function SampleInventoryPage() {
             <div>
               <DescriptionTerm>接收时间</DescriptionTerm>
               <DescriptionDetails>
-                {new Date(receiveRecord.received_at).toLocaleDateString('zh-CN')}
+                {formatDate(receiveRecord.received_at)}
               </DescriptionDetails>
             </div>
           </DescriptionList>

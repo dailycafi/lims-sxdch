@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -290,7 +291,7 @@ export default function ProjectsPage() {
                         <TableCell>{project.sponsor_project_code || '-'}</TableCell>
                         <TableCell>{project.sponsor || '-'}</TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
-                        <TableCell>{new Date(project.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                        <TableCell>{formatDate(project.created_at)}</TableCell>
                         <TableCell>{project.sample_count || 0}</TableCell>
                         <TableCell className="text-right pr-6">
                           <Link href={`/projects/${project.id}`}>

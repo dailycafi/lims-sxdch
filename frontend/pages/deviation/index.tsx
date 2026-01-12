@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -460,7 +461,7 @@ export default function DeviationManagement() {
                             </Text>
                           ) : '-'}
                         </TableCell>
-                        <TableCell>{new Date(deviation.created_at).toLocaleDateString('zh-CN')}</TableCell>
+                        <TableCell>{formatDate(deviation.created_at)}</TableCell>
                         <TableCell className="text-right pr-6">
                           <Button plain onClick={() => handleViewDetail(deviation)}>
                             查看详情
@@ -623,7 +624,7 @@ export default function DeviationManagement() {
                       </div>
                       <div>
                         <span className="text-sm text-zinc-600">报告时间：</span>
-                        <p className="font-medium">{new Date(selectedDeviation.created_at).toLocaleString('zh-CN')}</p>
+                        <p className="font-medium">{formatDateTime(selectedDeviation.created_at)}</p>
                       </div>
                     </div>
                   </div>
@@ -672,7 +673,7 @@ export default function DeviationManagement() {
                           )}
                           {approval.processed_at && (
                             <p className="mt-1 text-sm text-zinc-500">
-                              处理时间：{new Date(approval.processed_at).toLocaleString('zh-CN')}
+                              处理时间：{formatDateTime(approval.processed_at)}
                             </p>
                           )}
                         </div>

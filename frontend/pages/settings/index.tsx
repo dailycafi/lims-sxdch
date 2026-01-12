@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -576,7 +577,7 @@ export default function SettingsPage() {
                           <TableCell className="text-zinc-600 py-4 font-medium">{user.email}</TableCell>
                           <TableCell className="py-4">{getStatusBadge(user.is_active)}</TableCell>
                           <TableCell className="text-zinc-500 py-4 font-medium">
-                            {new Date(user.created_at).toLocaleDateString('zh-CN')}
+                            {formatDate(user.created_at)}
                           </TableCell>
                           <TableCell className="text-right pr-6 py-4">
                             <div className="flex justify-end gap-1">
@@ -670,7 +671,7 @@ export default function SettingsPage() {
                             <Badge color="blue" className="bg-blue-50 text-blue-700 border-blue-100">{role.permission_count || 0} 个权限</Badge>
                           </TableCell>
                           <TableCell className="text-zinc-500 py-4 font-medium">
-                            {new Date(role.created_at).toLocaleDateString('zh-CN')}
+                            {formatDate(role.created_at)}
                           </TableCell>
                           <TableCell className="text-right pr-6 py-4">
                             <div className="flex justify-end gap-1">

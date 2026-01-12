@@ -11,6 +11,7 @@ import { ArchiveService } from './archive.service';
 import { TasksService } from './tasks.service';
 import { UserAccessService } from './user-access.service';
 import { SettingsService } from './settings.service';
+import { testGroupsAPI } from './test-groups.service';
 
 // 统一导出所有服务
 export {
@@ -26,6 +27,7 @@ export {
   TasksService,
   UserAccessService,
   SettingsService,
+  testGroupsAPI,
 };
 
 // 为了方便使用，也可以创建一个统一的 API 对象
@@ -42,4 +44,5 @@ export const API = {
   tasks: TasksService,
   userAccess: UserAccessService,
   settings: SettingsService,
+  testGroups: testGroupsAPI,
 } as const;

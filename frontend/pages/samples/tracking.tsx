@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Heading } from '@/components/heading';
@@ -75,7 +76,7 @@ export default function TrackingFormPage() {
               <div>申请单号: ${record.request_code}</div>
               <div>类型: ${record.type === 'borrow' ? '领用' : '归还'}</div>
               <div>申请人: ${record.requester}</div>
-              <div>日期: ${new Date(record.created_at).toLocaleDateString()}</div>
+              <div>日期: ${formatDate(record.created_at)}</div>
             </div>
             
             <table>
@@ -163,7 +164,7 @@ export default function TrackingFormPage() {
                     <TableCell>{record.type === 'borrow' ? '领用' : '归还'}</TableCell>
                     <TableCell>{record.requester}</TableCell>
                     <TableCell>{record.sample_count}</TableCell>
-                    <TableCell>{new Date(record.created_at).toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(record.created_at)}</TableCell>
                     <TableCell>
                       <Button plain onClick={() => handlePrint(record)}>
                         <DocumentTextIcon className="h-4 w-4" />

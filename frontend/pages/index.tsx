@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AnimatedLoadingState } from '@/components/animated-table';
 import Link from 'next/link';
 import { TasksService, StatisticsService, UserAccessService } from '@/services';
+import { formatDate } from '@/lib/date-utils';
 import { SmartShortcuts } from '@/components/smart-shortcuts';
 import { TaskOverview, Statistics } from '@/types/api';
 import { 
@@ -498,7 +499,7 @@ export default function HomePage() {
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <span className="font-mono">{task.project_code}</span>
                             <span>•</span>
-                            <span>{new Date(task.created_at).toLocaleDateString('zh-CN')}</span>
+                            <span>{formatDate(task.created_at)}</span>
                           </div>
                         </div>
                         <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
