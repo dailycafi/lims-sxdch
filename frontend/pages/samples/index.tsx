@@ -107,30 +107,32 @@ export default function SamplesPage() {
   // 新增视图模式
   const [viewMode, setViewMode] = useState<'all' | 'in_storage' | 'checked_out' | 'transferred'>('all');
 
-  const cycleGroups = useMemo(
-    () => Array.from(new Set(samples.map(sample => sample.cycle_group).filter(Boolean))).sort(),
-    [samples]
-  );
+  // 合并多个 useMemo 为单次遍历，避免重复迭代数组
+  // 参考: React Best Practices - 7.6 Combine Multiple Array Iterations
+  const { cycleGroups, testTypes, collectionSeqs, transportConditions, storageLocations } = useMemo(() => {
+    const cycleGroupSet = new Set<string>();
+    const testTypeSet = new Set<string>();
+    const collectionSeqSet = new Set<string>();
+    const transportConditionSet = new Set<string>();
+    const storageLocationSet = new Set<string>();
 
-  const testTypes = useMemo(
-    () => Array.from(new Set(samples.map(sample => sample.test_type).filter(Boolean))).sort(),
-    [samples]
-  );
+    for (const sample of samples) {
+      if (sample.cycle_group) cycleGroupSet.add(sample.cycle_group);
+      if (sample.test_type) testTypeSet.add(sample.test_type);
+      if (sample.collection_seq) collectionSeqSet.add(sample.collection_seq);
+      if (sample.transport_condition) transportConditionSet.add(sample.transport_condition);
+      const location = formatStorageLocation(sample);
+      if (location && location !== '-') storageLocationSet.add(location);
+    }
 
-  const collectionSeqs = useMemo(
-    () => Array.from(new Set(samples.map(sample => sample.collection_seq).filter(Boolean))).sort(),
-    [samples]
-  );
-
-  const transportConditions = useMemo(
-    () => Array.from(new Set(samples.map(sample => sample.transport_condition).filter(Boolean))).sort(),
-    [samples]
-  );
-
-  const storageLocations = useMemo(
-    () => Array.from(new Set(samples.map(sample => formatStorageLocation(sample)).filter(location => location && location !== '-'))).sort(),
-    [samples]
-  );
+    return {
+      cycleGroups: Array.from(cycleGroupSet).sort(),
+      testTypes: Array.from(testTypeSet).sort(),
+      collectionSeqs: Array.from(collectionSeqSet).sort(),
+      transportConditions: Array.from(transportConditionSet).sort(),
+      storageLocations: Array.from(storageLocationSet).sort(),
+    };
+  }, [samples]);
 
   useEffect(() => {
     fetchProjects();
@@ -163,20 +165,43 @@ export default function SamplesPage() {
     }
   };
 
-  // 应用视图模式过滤
-  const filteredByViewMode = (samples: any[]) => {
+  // 应用视图模式过滤 - 使用 useMemo 缓存结果
+  const filteredByViewMode = useMemo(() => {
     if (viewMode === 'all') return samples;
-    if (viewMode === 'in_storage') return samples.filter(s => s.status === 'in_storage');
-    if (viewMode === 'checked_out') return samples.filter(s => s.status === 'checked_out');
-    if (viewMode === 'transferred') return samples.filter(s => s.status === 'transferred');
-    return samples;
-  };
+    // 参考: React Best Practices - 7.8 Early Return from Functions
+    return samples.filter(s => s.status === viewMode);
+  }, [samples, viewMode]);
 
-  // 应用筛选
-  const applyFilters = (samples: any[]) => {
-    return samples.filter(sample => {
-      // 样本编号筛选（前端过滤）
-      if (filters.sampleCode && !(sample.sample_code || '').toLowerCase().includes(filters.sampleCode.toLowerCase())) {
+  // 应用筛选 - 使用 useMemo 缓存结果
+  // 参考: React Best Practices - 7.8 Early Return from Functions
+  const filteredSamples = useMemo(() => {
+    // 预处理日期，避免在循环中重复创建 Date 对象
+    let filterDateFrom: Date | null = null;
+    let filterDateTo: Date | null = null;
+    
+    if (filters.dateFrom) {
+      const date = new Date(filters.dateFrom);
+      if (!Number.isNaN(date.getTime())) {
+        date.setHours(0, 0, 0, 0);
+        filterDateFrom = date;
+      }
+    }
+    
+    if (filters.dateTo) {
+      const date = new Date(filters.dateTo);
+      if (!Number.isNaN(date.getTime())) {
+        date.setHours(23, 59, 59, 999);
+        filterDateTo = date;
+      }
+    }
+    
+    // 预处理搜索关键词为小写
+    const sampleCodeLower = filters.sampleCode.toLowerCase();
+    const subjectCodeLower = filters.subjectCode.toLowerCase();
+    
+    return filteredByViewMode.filter(sample => {
+      // 样本编号筛选（前端过滤）- 使用预处理的小写字符串
+      if (sampleCodeLower && !(sample.sample_code || '').toLowerCase().includes(sampleCodeLower)) {
         return false;
       }
 
@@ -206,7 +231,7 @@ export default function SamplesPage() {
         return false;
       }
 
-      if (filters.subjectCode && !(sample.subject_code || '').toLowerCase().includes(filters.subjectCode.toLowerCase())) {
+      if (subjectCodeLower && !(sample.subject_code || '').toLowerCase().includes(subjectCodeLower)) {
         return false;
       }
 
@@ -222,37 +247,24 @@ export default function SamplesPage() {
         return false;
       }
 
-      if (filters.dateFrom) {
-        const filterDateFrom = new Date(filters.dateFrom);
-        if (!Number.isNaN(filterDateFrom.getTime())) {
-          filterDateFrom.setHours(0, 0, 0, 0);
-        }
-        if (!Number.isNaN(filterDateFrom.getTime())) {
-          const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
-          if (!sampleDate || sampleDate < filterDateFrom) {
-            return false;
-          }
+      // 使用预处理的日期对象
+      if (filterDateFrom) {
+        const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
+        if (!sampleDate || sampleDate < filterDateFrom) {
+          return false;
         }
       }
 
-      if (filters.dateTo) {
-        const filterDateTo = new Date(filters.dateTo);
-        if (!Number.isNaN(filterDateTo.getTime())) {
-          filterDateTo.setHours(23, 59, 59, 999);
-        }
-        if (!Number.isNaN(filterDateTo.getTime())) {
-          const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
-          if (!sampleDate || sampleDate > filterDateTo) {
-            return false;
-          }
+      if (filterDateTo) {
+        const sampleDate = sample.collection_time ? new Date(sample.collection_time) : null;
+        if (!sampleDate || sampleDate > filterDateTo) {
+          return false;
         }
       }
       
       return true;
     });
-  };
-
-  const filteredSamples = applyFilters(filteredByViewMode(samples));
+  }, [filteredByViewMode, filters]);
 
   // 计算活跃筛选器数量
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {

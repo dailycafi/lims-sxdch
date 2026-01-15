@@ -12,19 +12,33 @@ from app.models.test_group import CollectionPoint
 from app.models.user import User, UserRole
 from app.models.audit import AuditLog
 from app.api.v1.endpoints.auth import get_current_user
+from app.core.security import verify_password
 
 router = APIRouter()
 
 # Pydantic schemas
 class OrganizationTypeCreate(BaseModel):
-    value: str
     label: str
-    display_order: Optional[int] = 0
+    value: Optional[str] = None  # 可选，如果不提供则自动生成
 
 class OrganizationTypeUpdate(BaseModel):
     label: Optional[str] = None
     display_order: Optional[int] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = None  # 电子签名密码
+    audit_reason: Optional[str] = None  # 修改理由
+
+
+class OrganizationTypeDeleteRequest(BaseModel):
+    audit_reason: str
+    password: Optional[str] = None
+
+    @field_validator("audit_reason")
+    @classmethod
+    def reason_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("删除理由不能为空")
+        return v
 
 class OrganizationTypeResponse(BaseModel):
     id: int
@@ -57,12 +71,25 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationUpdate(OrganizationCreate):
     audit_reason: str  # 修改理由
+    password: Optional[str] = None  # 电子签名密码
 
     @field_validator("audit_reason")
     @classmethod
     def reason_must_not_be_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("修改理由不能为空")
+        return v
+
+
+class OrganizationDeleteRequest(BaseModel):
+    audit_reason: str
+    password: Optional[str] = None
+
+    @field_validator("audit_reason")
+    @classmethod
+    def reason_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("删除理由不能为空")
         return v
 
 class SampleTypeCreate(BaseModel):
@@ -195,6 +222,13 @@ def check_global_params_permission(user: User) -> bool:
     """检查全局参数管理权限"""
     allowed_roles = [UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]
     return user.role in allowed_roles
+
+
+def verify_e_signature(user: User, password: str) -> bool:
+    """验证电子签名（密码）"""
+    if not password:
+        return False
+    return verify_password(password, user.hashed_password)
 
 
 async def create_audit_log(
@@ -388,6 +422,13 @@ async def update_organization(
             detail="没有权限管理全局参数"
         )
     
+    # 验证电子签名
+    if not org_data.password or not verify_e_signature(current_user, org_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
+        )
+    
     # 查找组织
     result = await db.execute(
         select(Organization).where(Organization.id == org_id)
@@ -411,7 +452,7 @@ async def update_organization(
     }
     
     # 更新数据
-    update_data = org_data.dict(exclude={"audit_reason"})
+    update_data = org_data.dict(exclude={"audit_reason", "password"})
     for key, value in update_data.items():
         setattr(db_org, key, value)
     
@@ -440,6 +481,7 @@ async def update_organization(
 @router.delete("/organizations/{org_id}")
 async def delete_organization(
     org_id: int,
+    delete_data: OrganizationDeleteRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
@@ -448,6 +490,13 @@ async def delete_organization(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限管理全局参数"
+        )
+    
+    # 验证电子签名
+    if not delete_data.password or not verify_e_signature(current_user, delete_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
         )
     
     # 查找组织
@@ -475,7 +524,8 @@ async def delete_organization(
         entity_type="organization",
         entity_id=db_org.id,
         action="delete",
-        details={"name": db_org.name, "org_type": db_org.org_type}
+        details={"name": db_org.name, "org_type": db_org.org_type},
+        reason=delete_data.audit_reason
     )
     
     return {"message": "组织删除成功"}
@@ -667,6 +717,27 @@ async def read_organization_types(
     return result.scalars().all()
 
 
+def generate_org_type_value(label: str) -> str:
+    """根据标签生成唯一的类型值"""
+    import re
+    import unicodedata
+    from datetime import datetime
+    
+    # 移除非字母数字字符，将空格替换为下划线
+    # 对中文使用拼音或时间戳
+    normalized = unicodedata.normalize('NFKD', label)
+    ascii_label = normalized.encode('ascii', 'ignore').decode('ascii')
+    
+    if ascii_label:
+        # 如果能转换为ASCII，使用转换后的值
+        value = re.sub(r'[^a-zA-Z0-9]+', '_', ascii_label.lower()).strip('_')
+    else:
+        # 否则使用时间戳
+        value = f"custom_{int(datetime.utcnow().timestamp())}"
+    
+    return value or f"custom_{int(datetime.utcnow().timestamp())}"
+
+
 @router.post("/organization-types", response_model=OrganizationTypeResponse)
 async def create_organization_type(
     org_type_data: OrganizationTypeCreate,
@@ -680,22 +751,29 @@ async def create_organization_type(
             detail="没有权限管理全局参数"
         )
     
-    # 检查value是否已存在
-    result = await db.execute(
-        select(OrganizationType).where(OrganizationType.value == org_type_data.value)
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="组织类型值已存在"
-        )
+    # 如果没有提供value，则自动生成
+    type_value = org_type_data.value
+    if not type_value:
+        type_value = generate_org_type_value(org_type_data.label)
     
-    # 创建新的组织类型
+    # 检查value是否已存在，如果存在则添加后缀
+    base_value = type_value
+    suffix = 1
+    while True:
+        result = await db.execute(
+            select(OrganizationType).where(OrganizationType.value == type_value)
+        )
+        existing = result.scalar_one_or_none()
+        if not existing:
+            break
+        type_value = f"{base_value}_{suffix}"
+        suffix += 1
+    
+    # 创建新的组织类型（取消排序字段，默认为0）
     db_org_type = OrganizationType(
-        value=org_type_data.value,
+        value=type_value,
         label=org_type_data.label,
-        display_order=org_type_data.display_order or 0,
+        display_order=0,
         is_system=False,  # 用户创建的不是系统预置
         is_active=True
     )
@@ -712,7 +790,7 @@ async def create_organization_type(
         entity_id=db_org_type.id,
         action="create",
         details={
-            "value": org_type_data.value,
+            "value": type_value,
             "label": org_type_data.label
         }
     )
@@ -732,6 +810,13 @@ async def update_organization_type(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限管理全局参数"
+        )
+    
+    # 验证电子签名
+    if not org_type_data.password or not verify_e_signature(current_user, org_type_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
         )
     
     result = await db.execute(
@@ -779,7 +864,8 @@ async def update_organization_type(
                 "display_order": db_org_type.display_order,
                 "is_active": db_org_type.is_active
             }
-        }
+        },
+        reason=org_type_data.audit_reason
     )
     
     return db_org_type
@@ -788,6 +874,7 @@ async def update_organization_type(
 @router.delete("/organization-types/{type_id}")
 async def delete_organization_type(
     type_id: int,
+    delete_data: OrganizationTypeDeleteRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
@@ -796,6 +883,13 @@ async def delete_organization_type(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限管理全局参数"
+        )
+    
+    # 验证电子签名
+    if not delete_data.password or not verify_e_signature(current_user, delete_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
         )
     
     result = await db.execute(
@@ -844,7 +938,8 @@ async def delete_organization_type(
         details={
             "value": db_org_type.value,
             "label": db_org_type.label
-        }
+        },
+        reason=delete_data.audit_reason
     )
     
     return {"message": "组织类型删除成功"}
@@ -1055,4 +1150,249 @@ async def delete_collection_point(
     )
     
     return {"message": "采血点删除成功"}
+
+
+# ==================== 临床样本配置选项管理 ====================
+
+class ClinicalSampleOptionsResponse(BaseModel):
+    """临床样本配置选项响应"""
+    cycles: List[str] = []  # 周期
+    test_types: List[str] = []  # 检测类型
+    primary_codes: List[str] = []  # 正份代码
+    backup_codes: List[str] = []  # 备份代码
+    sample_types: List[str] = []  # 样本类型
+    purposes: List[str] = []  # 用途
+    transport_methods: List[str] = []  # 运输方式
+    sample_statuses: List[str] = []  # 样本状态
+    special_notes: List[str] = []  # 特殊事项
+
+
+class ClinicalSampleOptionsUpdate(BaseModel):
+    """临床样本配置选项更新"""
+    cycles: Optional[List[str]] = None
+    test_types: Optional[List[str]] = None
+    primary_codes: Optional[List[str]] = None
+    backup_codes: Optional[List[str]] = None
+    sample_types: Optional[List[str]] = None
+    purposes: Optional[List[str]] = None
+    transport_methods: Optional[List[str]] = None
+    sample_statuses: Optional[List[str]] = None
+    special_notes: Optional[List[str]] = None
+
+
+# 配置选项的键名
+CLINICAL_OPTIONS_KEY = "clinical_sample_options"
+
+
+@router.get("/clinical-sample-options", response_model=ClinicalSampleOptionsResponse)
+async def get_clinical_sample_options(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取临床样本配置选项"""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == CLINICAL_OPTIONS_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    
+    if not setting:
+        # 返回默认空配置
+        return ClinicalSampleOptionsResponse()
+    
+    # 返回配置数据
+    data = setting.value or {}
+    return ClinicalSampleOptionsResponse(
+        cycles=data.get("cycles", []),
+        test_types=data.get("test_types", []),
+        primary_codes=data.get("primary_codes", []),
+        backup_codes=data.get("backup_codes", []),
+        sample_types=data.get("sample_types", []),
+        purposes=data.get("purposes", []),
+        transport_methods=data.get("transport_methods", []),
+        sample_statuses=data.get("sample_statuses", []),
+        special_notes=data.get("special_notes", []),
+    )
+
+
+@router.put("/clinical-sample-options", response_model=ClinicalSampleOptionsResponse)
+async def update_clinical_sample_options(
+    options: ClinicalSampleOptionsUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新临床样本配置选项"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == CLINICAL_OPTIONS_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    
+    # 准备新的配置数据
+    new_data = {}
+    update_fields = options.dict(exclude_unset=True)
+    
+    if setting:
+        # 合并现有数据
+        new_data = setting.value.copy() if setting.value else {}
+        original_data = new_data.copy()
+        
+        for key, value in update_fields.items():
+            if value is not None:
+                # 过滤空字符串
+                new_data[key] = [v.strip() for v in value if v.strip()]
+        
+        setting.value = new_data
+        setting.updated_at = datetime.utcnow()
+    else:
+        # 创建新的设置
+        for key, value in update_fields.items():
+            if value is not None:
+                new_data[key] = [v.strip() for v in value if v.strip()]
+        
+        setting = SystemSetting(
+            key=CLINICAL_OPTIONS_KEY,
+            value=new_data,
+            description="临床样本配置选项"
+        )
+        db.add(setting)
+        original_data = {}
+    
+    await db.commit()
+    await db.refresh(setting)
+    
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="system_setting",
+        entity_id=setting.id if hasattr(setting, 'id') else 0,
+        action="update",
+        details={
+            "key": CLINICAL_OPTIONS_KEY,
+            "original": original_data,
+            "updated": new_data
+        }
+    )
+    
+    return ClinicalSampleOptionsResponse(
+        cycles=new_data.get("cycles", []),
+        test_types=new_data.get("test_types", []),
+        primary_codes=new_data.get("primary_codes", []),
+        backup_codes=new_data.get("backup_codes", []),
+        sample_types=new_data.get("sample_types", []),
+        purposes=new_data.get("purposes", []),
+        transport_methods=new_data.get("transport_methods", []),
+        sample_statuses=new_data.get("sample_statuses", []),
+        special_notes=new_data.get("special_notes", []),
+    )
+
+
+# ==================== 稳定性及质控样本配置选项管理 ====================
+
+class QCSampleOptionsResponse(BaseModel):
+    """稳定性及质控样本配置选项响应"""
+    sample_categories: List[str] = []  # 样本类别 (STB/QC)
+    codes: List[str] = []  # 代码 (L/M/H)
+
+
+class QCSampleOptionsUpdate(BaseModel):
+    """稳定性及质控样本配置选项更新"""
+    sample_categories: Optional[List[str]] = None
+    codes: Optional[List[str]] = None
+
+
+# 配置选项的键名
+QC_OPTIONS_KEY = "qc_sample_options"
+
+
+@router.get("/qc-sample-options", response_model=QCSampleOptionsResponse)
+async def get_qc_sample_options(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """获取稳定性及质控样本配置选项"""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == QC_OPTIONS_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    
+    if not setting:
+        return QCSampleOptionsResponse()
+    
+    data = setting.value or {}
+    return QCSampleOptionsResponse(
+        sample_categories=data.get("sample_categories", []),
+        codes=data.get("codes", []),
+    )
+
+
+@router.put("/qc-sample-options", response_model=QCSampleOptionsResponse)
+async def update_qc_sample_options(
+    options: QCSampleOptionsUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新稳定性及质控样本配置选项"""
+    if not check_global_params_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有权限管理全局参数"
+        )
+    
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == QC_OPTIONS_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    
+    new_data = {}
+    update_fields = options.dict(exclude_unset=True)
+    
+    if setting:
+        new_data = setting.value.copy() if setting.value else {}
+        original_data = new_data.copy()
+        
+        for key, value in update_fields.items():
+            if value is not None:
+                new_data[key] = [v.strip() for v in value if v.strip()]
+        
+        setting.value = new_data
+        setting.updated_at = datetime.utcnow()
+    else:
+        for key, value in update_fields.items():
+            if value is not None:
+                new_data[key] = [v.strip() for v in value if v.strip()]
+        
+        setting = SystemSetting(
+            key=QC_OPTIONS_KEY,
+            value=new_data,
+            description="稳定性及质控样本配置选项"
+        )
+        db.add(setting)
+        original_data = {}
+    
+    await db.commit()
+    await db.refresh(setting)
+    
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="system_setting",
+        entity_id=setting.id if hasattr(setting, 'id') else 0,
+        action="update",
+        details={
+            "key": QC_OPTIONS_KEY,
+            "original": original_data,
+            "updated": new_data
+        }
+    )
+    
+    return QCSampleOptionsResponse(
+        sample_categories=new_data.get("sample_categories", []),
+        codes=new_data.get("codes", []),
+    )
 

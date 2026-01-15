@@ -9,11 +9,15 @@ import uuid
 import re
 
 from app.core.database import get_db
+from app.core.security import verify_password
 from app.models.user import User
 from app.models.role import Role, Permission
+from app.models.audit import AuditLog
+from datetime import datetime
 from app.schemas.role import (
     RoleCreate,
     RoleUpdate,
+    RoleDeleteRequest,
     RoleResponse,
     RoleListResponse,
     PermissionCreate,
@@ -268,11 +272,39 @@ async def update_role(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """更新角色（仅系统管理员）"""
+    """更新角色（仅系统管理员，需要电子签名验证）"""
     if not check_admin_permission(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅系统管理员可以更新角色"
+        )
+    
+    # 验证电子签名：用户名和密码
+    if role_update.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名与当前登录用户不匹配"
+        )
+    
+    if not verify_password(role_update.password, current_user.hashed_password):
+        # 记录失败的签名尝试
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="role",
+            entity_id=role_id,
+            action="update_signature_failed",
+            details={
+                "reason": role_update.audit_reason,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        await db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
         )
     
     # 获取角色
@@ -295,8 +327,19 @@ async def update_role(
             detail="系统内置角色不允许修改"
         )
     
-    # 更新基本信息
-    update_data = role_update.model_dump(exclude_unset=True, exclude={'permission_ids'})
+    # 记录修改前的状态
+    old_data = {
+        "name": role.name,
+        "description": role.description,
+        "is_active": role.is_active,
+        "permission_ids": [p.id for p in role.permissions]
+    }
+    
+    # 更新基本信息（排除签名验证字段）
+    update_data = role_update.model_dump(
+        exclude_unset=True, 
+        exclude={'permission_ids', 'audit_reason', 'username', 'password'}
+    )
     for field, value in update_data.items():
         setattr(role, field, value)
     
@@ -309,6 +352,30 @@ async def update_role(
         role.permissions = permissions
     
     try:
+        # 记录审计日志
+        new_data = {
+            "name": role.name,
+            "description": role.description,
+            "is_active": role.is_active,
+            "permission_ids": role_update.permission_ids if role_update.permission_ids is not None else old_data["permission_ids"]
+        }
+        
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="role",
+            entity_id=role_id,
+            action="update",
+            details={
+                "reason": role_update.audit_reason,
+                "old_data": old_data,
+                "new_data": new_data,
+                "timestamp": datetime.utcnow().isoformat(),
+                "signed_by": current_user.username
+            },
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        
         await db.commit()
         await db.refresh(role)
         
@@ -332,14 +399,43 @@ async def update_role(
 @router.delete("/roles/{role_id}")
 async def delete_role(
     role_id: int,
+    delete_request: RoleDeleteRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """删除角色（仅系统管理员）"""
+    """删除角色（仅系统管理员，需要电子签名验证）"""
     if not check_admin_permission(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅系统管理员可以删除角色"
+        )
+    
+    # 验证电子签名：用户名和密码
+    if delete_request.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名与当前登录用户不匹配"
+        )
+    
+    if not verify_password(delete_request.password, current_user.hashed_password):
+        # 记录失败的签名尝试
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="role",
+            entity_id=role_id,
+            action="delete_signature_failed",
+            details={
+                "reason": delete_request.audit_reason,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        await db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
         )
     
     result = await db.execute(select(Role).where(Role.id == role_id))
@@ -368,6 +464,30 @@ async def delete_role(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"有 {user_count} 个用户正在使用此角色，无法删除"
         )
+    
+    # 记录删除的角色信息用于审计
+    deleted_role_data = {
+        "id": role.id,
+        "code": role.code,
+        "name": role.name,
+        "description": role.description
+    }
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="role",
+        entity_id=role_id,
+        action="delete",
+        details={
+            "reason": delete_request.audit_reason,
+            "deleted_role": deleted_role_data,
+            "timestamp": datetime.utcnow().isoformat(),
+            "signed_by": current_user.username
+        },
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
     
     await db.delete(role)
     await db.commit()

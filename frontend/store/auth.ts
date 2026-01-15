@@ -13,12 +13,16 @@ interface User {
   roles?: RoleSimple[];
   is_active: boolean;
   is_superuser: boolean;
+  must_change_password?: boolean;
+  password_changed_at?: string;
   created_at?: string;
   updated_at?: string;
 }
 
 interface LoginResult {
   success: boolean;
+  mustChangePassword?: boolean;  // 是否需要修改密码
+  passwordExpired?: boolean;  // 密码是否因过期而需要修改
   error?: {
     type: 'network' | 'auth' | 'server' | 'unknown';
     message: string;
@@ -64,7 +68,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       // 登录成功后，强制移除可能存在的 auth-expired toast
       toast.remove('auth-expired');
       
-      return { success: true };
+      // 检查是否需要修改密码
+      const mustChangePassword = loginResponse.must_change_password || false;
+      const passwordExpired = loginResponse.password_expired || false;
+      
+      return { 
+        success: true,
+        mustChangePassword,
+        passwordExpired,
+      };
     } catch (error: any) {
       // 返回错误对象而不是抛出，避免 Next.js 开发模式的错误覆盖层
       if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {

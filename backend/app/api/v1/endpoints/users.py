@@ -1,3 +1,6 @@
+import secrets
+import string
+from datetime import datetime, timezone
 from typing import List, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,10 +14,48 @@ from app.core.password_validator import PasswordValidator
 from app.models.user import User, UserRole
 from app.models.global_params import SystemSetting
 from app.models.role import Role
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange, PasswordReset
+from app.models.audit import AuditLog
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange, PasswordReset, UserDelete
 from app.api.v1.endpoints.auth import get_current_user, get_current_active_superuser
 
 router = APIRouter()
+
+
+def generate_random_password(length: int = 12) -> str:
+    """生成随机密码，包含大小写字母、数字和特殊字符"""
+    # 确保包含每种字符类型
+    lowercase = secrets.choice(string.ascii_lowercase)
+    uppercase = secrets.choice(string.ascii_uppercase)
+    digit = secrets.choice(string.digits)
+    special = secrets.choice("!@#$%^&*()_+-=")
+    
+    # 剩余字符随机选择
+    all_chars = string.ascii_letters + string.digits + "!@#$%^&*()_+-="
+    remaining = ''.join(secrets.choice(all_chars) for _ in range(length - 4))
+    
+    # 组合并打乱顺序
+    password_chars = list(lowercase + uppercase + digit + special + remaining)
+    secrets.SystemRandom().shuffle(password_chars)
+    
+    return ''.join(password_chars)
+
+
+async def verify_audit_credentials(
+    db: AsyncSession,
+    current_user: User,
+    audit_username: str,
+    audit_password: str
+) -> bool:
+    """验证审计操作时的用户名密码"""
+    if not audit_username or not audit_password:
+        return False
+    
+    # 必须是当前登录用户的用户名
+    if audit_username != current_user.username:
+        return False
+    
+    # 验证密码
+    return verify_password(audit_password, current_user.hashed_password)
 
 
 def check_user_permission(current_user: User, target_role: UserRole = None) -> bool:
@@ -62,13 +103,21 @@ async def validate_password_complexity(password: str, username: str, db: AsyncSe
             )
 
 
-@router.post("/", response_model=UserResponse)
+class CreateUserResponse(UserResponse):
+    """创建用户响应，包含初始密码"""
+    initial_password: str = None  # 仅在创建时返回
+
+
+@router.post("/", response_model=CreateUserResponse)
 async def create_user(
     user_data: UserCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """创建新用户"""
+    """创建新用户
+    
+    密码由系统自动生成，用户首次登录时需要强制修改密码。
+    """
     # 检查权限
     if not check_user_permission(current_user, user_data.role):
         raise HTTPException(
@@ -76,8 +125,8 @@ async def create_user(
             detail="没有权限创建该角色的用户"
         )
     
-    # 验证密码强度
-    await validate_password_complexity(user_data.password, user_data.username, db)
+    # 系统生成随机密码
+    initial_password = generate_random_password(12)
     
     # 检查用户名是否已存在
     result = await db.execute(select(User).where(User.username == user_data.username))
@@ -113,14 +162,37 @@ async def create_user(
             username=user_data.username,
             email=user_data.email,
             full_name=user_data.full_name,
-            hashed_password=get_password_hash(user_data.password),
+            hashed_password=get_password_hash(initial_password),
             role=user_data.role,  # 保留用于向后兼容
-            is_superuser=any(r.code == 'system_admin' for r in roles)
+            is_superuser=any(r.code == 'system_admin' for r in roles),
+            must_change_password=True,  # 首次登录需要修改密码
+            password_changed_at=None  # 密码未被用户修改过
         )
         db_user.roles = roles
         db.add(db_user)
+        
+        # 记录审计日志
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="user",
+            entity_id=0,  # 新用户ID待定
+            action="create",
+            details={
+                "username": user_data.username,
+                "full_name": user_data.full_name,
+                "email": user_data.email,
+                "role_ids": user_data.role_ids
+            },
+            timestamp=datetime.now(timezone.utc)
+        )
+        db.add(audit_log)
+        
         await db.commit()
         await db.refresh(db_user)
+        
+        # 更新审计日志的entity_id
+        audit_log.entity_id = db_user.id
+        await db.commit()
         
         # 重新加载以包含角色信息
         result = await db.execute(
@@ -130,7 +202,23 @@ async def create_user(
         )
         db_user = result.scalar_one()
         
-        return db_user
+        # 返回包含初始密码的响应
+        response_data = {
+            "id": db_user.id,
+            "username": db_user.username,
+            "email": db_user.email,
+            "full_name": db_user.full_name,
+            "role": db_user.role,
+            "is_active": db_user.is_active,
+            "is_superuser": db_user.is_superuser,
+            "must_change_password": db_user.must_change_password,
+            "password_changed_at": db_user.password_changed_at,
+            "created_at": db_user.created_at,
+            "updated_at": db_user.updated_at,
+            "roles": db_user.roles,
+            "initial_password": initial_password
+        }
+        return response_data
     except IntegrityError:
         await db.rollback()
         raise HTTPException(
@@ -187,7 +275,10 @@ async def update_user(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """更新用户信息"""
+    """更新用户信息
+    
+    编辑用户时需要填写理由，并输入当前登录用户的用户名密码验证。
+    """
     # 获取要更新的用户
     result = await db.execute(
         select(User)
@@ -209,8 +300,42 @@ async def update_user(
             detail="没有权限修改此用户"
         )
     
-    # 更新基本信息
-    update_data = user_update.model_dump(exclude_unset=True, exclude={'role_ids'})
+    # 检查是否尝试禁用自己
+    if user_update.is_active is False and user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能禁用自己的账户"
+        )
+    
+    # 验证审计信息（管理员编辑他人时需要）
+    if user_id != current_user.id:
+        if not user_update.audit_reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="请填写修改理由"
+            )
+        
+        if not await verify_audit_credentials(
+            db, current_user,
+            user_update.audit_username,
+            user_update.audit_password
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码验证失败"
+            )
+    
+    # 记录修改前的状态
+    old_data = {
+        "email": user.email,
+        "full_name": user.full_name,
+        "role_ids": [r.id for r in user.roles] if user.roles else [],
+        "is_active": user.is_active
+    }
+    
+    # 更新基本信息（排除审计字段和角色ID）
+    exclude_fields = {'role_ids', 'audit_reason', 'audit_username', 'audit_password'}
+    update_data = user_update.model_dump(exclude_unset=True, exclude=exclude_fields)
     for field, value in update_data.items():
         setattr(user, field, value)
     
@@ -238,6 +363,29 @@ async def update_user(
         user.is_superuser = any(r.code == 'system_admin' for r in roles)
     
     try:
+        # 记录审计日志
+        if user_id != current_user.id:
+            new_data = {
+                "email": user.email,
+                "full_name": user.full_name,
+                "role_ids": [r.id for r in user.roles] if user.roles else [],
+                "is_active": user.is_active
+            }
+            audit_log = AuditLog(
+                user_id=current_user.id,
+                entity_type="user",
+                entity_id=user_id,
+                action="update",
+                details={
+                    "reason": user_update.audit_reason,
+                    "old_data": old_data,
+                    "new_data": new_data,
+                    "target_username": user.username
+                },
+                timestamp=datetime.now(timezone.utc)
+            )
+            db.add(audit_log)
+        
         await db.commit()
         await db.refresh(user)
         
@@ -288,6 +436,22 @@ async def change_password(
     
     # 更新密码
     current_user.hashed_password = get_password_hash(password_data.new_password)
+    current_user.password_changed_at = datetime.now(timezone.utc)  # 记录密码修改时间
+    current_user.must_change_password = False  # 清除首次登录标记
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=current_user.id,
+        action="change_password",
+        details={
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        },
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(audit_log)
+    
     await db.commit()
     
     return {"message": "密码修改成功"}
@@ -300,7 +464,10 @@ async def reset_password(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """重置密码（管理员操作）"""
+    """重置密码（管理员操作）
+    
+    管理员重置密码后，用户需要在下次登录时强制修改密码。
+    """
     if not check_user_permission(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -326,9 +493,26 @@ async def reset_password(
     
     # 更新密码
     user.hashed_password = get_password_hash(password_data.new_password)
+    user.must_change_password = True  # 设置首次登录修改密码标记
+    # 注意：不更新 password_changed_at，因为这是管理员操作，不是用户自己修改
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=user_id,
+        action="reset_password",
+        details={
+            "target_username": user.username,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        },
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(audit_log)
+    
     await db.commit()
     
-    return {"message": "密码重置成功"}
+    return {"message": "密码重置成功，用户下次登录需要修改密码"}
 
 
 @router.get("/password-requirements/info")
@@ -353,10 +537,14 @@ async def get_password_requirements(db: AsyncSession = Depends(get_db)):
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
+    delete_data: UserDelete,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """删除用户（系统管理员）"""
+    """删除用户（系统管理员）
+    
+    删除用户时需要填写理由，并输入当前登录用户的用户名密码验证。
+    """
     # 检查权限 - 只有系统管理员可以删除用户
     if not check_user_permission(current_user):
         raise HTTPException(
@@ -378,6 +566,40 @@ async def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="不能删除自己"
         )
+    
+    # 验证审计信息
+    if not delete_data.audit_reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请填写删除理由"
+        )
+    
+    if not await verify_audit_credentials(
+        db, current_user,
+        delete_data.audit_username,
+        delete_data.audit_password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码验证失败"
+        )
+    
+    # 记录审计日志（在删除前记录）
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=user_id,
+        action="delete",
+        details={
+            "reason": delete_data.audit_reason,
+            "deleted_username": user.username,
+            "deleted_full_name": user.full_name,
+            "deleted_email": user.email,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        },
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(audit_log)
     
     await db.delete(user)
     await db.commit()

@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import { User, UserCreate, UserUpdate } from '@/types/api';
+import { User, UserCreate, UserUpdate, UserDelete, UserCreateResponse } from '@/types/api';
 
 export class UsersService {
   /**
@@ -23,14 +23,16 @@ export class UsersService {
 
   /**
    * 创建新用户
+   * 密码由系统自动生成，返回包含初始密码
    */
-  static async createUser(data: UserCreate): Promise<User> {
-    const response = await api.post<User>('/users', data);
+  static async createUser(data: UserCreate): Promise<UserCreateResponse> {
+    const response = await api.post<UserCreateResponse>('/users', data);
     return response.data;
   }
 
   /**
    * 更新用户
+   * 编辑其他用户时需要提供审计信息（理由、用户名、密码）
    */
   static async updateUser(id: number, data: UserUpdate): Promise<User> {
     const response = await api.patch<User>(`/users/${id}`, data);
@@ -68,8 +70,9 @@ export class UsersService {
 
   /**
    * 删除用户
+   * 需要提供审计信息（理由、用户名、密码）
    */
-  static async deleteUser(id: number): Promise<void> {
-    await api.delete(`/users/${id}`);
+  static async deleteUser(id: number, data: UserDelete): Promise<void> {
+    await api.delete(`/users/${id}`, { data });
   }
 }

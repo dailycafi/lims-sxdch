@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { Badge } from '@/components/badge';
 import JsBarcode from 'jsbarcode';
 import { PrinterIcon, PlusIcon, QrCodeIcon } from '@heroicons/react/20/solid';
+import { Tooltip } from '@/components/tooltip';
 
 interface Freezer {
   id: number;
@@ -118,9 +119,11 @@ export default function StorageListPage() {
                     <TableCell>
                       <div className="flex gap-2">
                         <Button plain href={`/storage/${freezer.id}`}>查看详情</Button>
-                        <Button plain onClick={() => handlePrintBarcode(freezer.barcode || freezer.name, freezer.name)}>
-                            <PrinterIcon className="w-4 h-4"/>
-                        </Button>
+                        <Tooltip content="打印条码">
+                          <Button plain onClick={() => handlePrintBarcode(freezer.barcode || freezer.name, freezer.name)}>
+                              <PrinterIcon className="w-4 h-4"/>
+                          </Button>
+                        </Tooltip>
                       </div>
                     </TableCell>
                   </TableRow>

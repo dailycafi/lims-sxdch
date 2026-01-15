@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { Image } from '@/components/image';
@@ -9,6 +9,27 @@ import { TasksService } from '@/services/tasks.service';
 import { SettingsService } from '@/services/settings.service';
 import { tokenManager } from '@/lib/token-manager';
 import { Breadcrumb, BreadcrumbItem } from '@/components/breadcrumb';
+
+// localStorage 缓存 - 避免重复读取
+// 参考: React Best Practices - 7.5 Cache Storage API Calls
+const storageCache = new Map<string, string | null>();
+
+function getCachedStorage(key: string): string | null {
+  if (!storageCache.has(key)) {
+    storageCache.set(key, localStorage.getItem(key));
+  }
+  return storageCache.get(key) ?? null;
+}
+
+function setCachedStorage(key: string, value: string): void {
+  localStorage.setItem(key, value);
+  storageCache.set(key, value);
+}
+
+function removeCachedStorage(key: string): void {
+  localStorage.removeItem(key);
+  storageCache.delete(key);
+}
 import { 
   Sidebar, 
   SidebarBody, 
@@ -93,7 +114,6 @@ interface AppLayoutProps {
 // 路由到面包屑的映射
 const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/': [],
-  '/users': [{ label: '系统管理', href: '#' }, { label: '用户管理' }],
   '/tasks': [
     { label: '任务中心', current: true }
   ],
@@ -178,25 +198,30 @@ export function AppLayout({ children }: AppLayoutProps) {
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const STORAGE_KEY = 'lims_last_activity';
 
+  // 使用 useCallback 稳定化 handleActivity 函数
+  // 参考: React Best Practices - 8.1 Store Event Handlers in Refs
+  const handleActivityRef = useRef<() => void>();
+  handleActivityRef.current = useCallback(() => {
+    const now = Date.now();
+    setCachedStorage(STORAGE_KEY, now.toString());
+  }, []);
+
   // 处理活动检测
   useEffect(() => {
     if (!user) return;
 
     let isMounted = true;
 
-    const handleActivity = () => {
-      const now = Date.now();
-      localStorage.setItem(STORAGE_KEY, now.toString());
-    };
+    // 稳定的事件处理器，避免重复注册/注销
+    const handleActivity = () => handleActivityRef.current?.();
 
     // 每次组件挂载或用户变更时，重置活动时间为当前，防止读取到旧会话的残留记录
     handleActivity();
 
     // 监听各种用户活动事件
-    window.addEventListener('mousedown', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('scroll', handleActivity);
-    window.addEventListener('touchstart', handleActivity);
+    // 参考: React Best Practices - 4.1 Deduplicate Global Event Listeners
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach(event => window.addEventListener(event, handleActivity));
 
     // 获取并启动自动登出检查
     const setupAutoLogout = async () => {
@@ -213,7 +238,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           if (!isMounted) return;
 
           const now = Date.now();
-          const storedActivity = localStorage.getItem(STORAGE_KEY);
+          // 使用缓存的 localStorage 读取
+          const storedActivity = getCachedStorage(STORAGE_KEY);
           // 如果没有存储的活动时间或值无效，使用当前时间（不应该触发登出）
           let lastActivity = now;
           if (storedActivity) {
@@ -227,7 +253,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           // 防止负数或异常大的不活动时间（可能是时钟问题或数据损坏）
           if (inactiveTime < 0 || inactiveTime > 24 * 60 * 60 * 1000) {
             console.log(`[AutoLogout] Invalid inactive time: ${inactiveTime}ms, resetting activity`);
-            localStorage.setItem(STORAGE_KEY, now.toString());
+            setCachedStorage(STORAGE_KEY, now.toString());
             timeoutIdRef.current = setTimeout(checkInactivity, 60000);
             return;
           }
@@ -255,10 +281,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('mousedown', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('scroll', handleActivity);
-      window.removeEventListener('touchstart', handleActivity);
+      events.forEach(event => window.removeEventListener(event, handleActivity));
       if (timeoutIdRef.current) {
         clearTimeout(timeoutIdRef.current);
       }
@@ -266,7 +289,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [user]);
 
   const handleLogout = async () => {
-    localStorage.removeItem(STORAGE_KEY);
+    removeCachedStorage(STORAGE_KEY);
     await logout();
     router.push('/login');
   };
@@ -477,9 +500,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <div>
                   <SidebarHeading>系统管理</SidebarHeading>
                   <div className="space-y-1">
-                    <SidebarItem href="/users" scroll={false} current={isCurrentPath('/users')}>
-                      <UsersIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>用户管理</SidebarLabel>
+                    <SidebarItem href="/settings" scroll={false} current={isCurrentPath('/settings')}>
+                      <Cog6ToothIcon data-slot="icon" className="!w-4 !h-4" />
+                      <SidebarLabel>系统设置</SidebarLabel>
                     </SidebarItem>
                     <SidebarItem href="/global-params" scroll={false} current={isCurrentPath('/global-params')}>
                       <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
@@ -488,10 +511,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <SidebarItem href="/audit" scroll={false} current={isCurrentPath('/audit')}>
                       <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
                       <SidebarLabel>审计日志</SidebarLabel>
-                    </SidebarItem>
-                    <SidebarItem href="/settings" scroll={false} current={isCurrentPath('/settings')}>
-                      <Cog6ToothIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>系统设置</SidebarLabel>
                     </SidebarItem>
                   </div>
                 </div>

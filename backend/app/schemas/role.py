@@ -49,6 +49,17 @@ class RoleUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     permission_ids: Optional[List[int]] = None
+    # 电子签名验证字段
+    audit_reason: str  # 操作原因（必填）
+    username: str  # 用户名（必填）
+    password: str  # 密码（必填）
+
+
+class RoleDeleteRequest(BaseModel):
+    """删除角色请求"""
+    audit_reason: str  # 操作原因（必填）
+    username: str  # 用户名（必填）
+    password: str  # 密码（必填）
 
 
 class RoleResponse(RoleBase):

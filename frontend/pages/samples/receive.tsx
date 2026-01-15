@@ -14,6 +14,20 @@ import {
 import { toast } from 'react-hot-toast';
 import { GlobalParamsService } from '@/services';
 import { useProjectStore } from '@/store/project';
+import { Tooltip } from '@/components/tooltip';
+
+// 临床样本配置选项接口
+interface ClinicalSampleOptions {
+  cycles: string[];
+  test_types: string[];
+  primary_codes: string[];
+  backup_codes: string[];
+  sample_types: string[];
+  purposes: string[];
+  transport_methods: string[];
+  sample_statuses: string[];
+  special_notes: string[];
+}
 
 export default function SampleReceivePage() {
   const router = useRouter();
@@ -24,6 +38,17 @@ export default function SampleReceivePage() {
   } = useProjectStore();
   
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [clinicalOptions, setClinicalOptions] = useState<ClinicalSampleOptions>({
+    cycles: [],
+    test_types: [],
+    primary_codes: [],
+    backup_codes: [],
+    sample_types: [],
+    purposes: [],
+    transport_methods: [],
+    sample_statuses: [],
+    special_notes: [],
+  });
   const [temperatureFile, setTemperatureFile] = useState<File | null>(null);
   const [expressPhotos, setExpressPhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -46,6 +71,7 @@ export default function SampleReceivePage() {
 
   useEffect(() => {
     fetchOrganizations();
+    fetchClinicalOptions();
   }, []);
 
   useEffect(() => {
@@ -66,6 +92,17 @@ export default function SampleReceivePage() {
     } catch (error: any) {
       if (error?.response?.status !== 401 && !error?.isAuthError) {
         console.error('Failed to fetch organizations:', error);
+      }
+    }
+  };
+
+  const fetchClinicalOptions = async () => {
+    try {
+      const response = await api.get('/global-params/clinical-sample-options');
+      setClinicalOptions(response.data || {});
+    } catch (error: any) {
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to fetch clinical options:', error);
       }
     }
   };
@@ -259,10 +296,21 @@ export default function SampleReceivePage() {
                     disabled={!selectedProjectId}
                 >
                   <option value="">请选择运输方式</option>
-                  <option value="dry_ice">干冰</option>
-                  <option value="ice_pack">冰袋</option>
-                  <option value="room_temp">室温</option>
-                  <option value="other">其它</option>
+                  {clinicalOptions.transport_methods && clinicalOptions.transport_methods.length > 0 ? (
+                    <>
+                      {clinicalOptions.transport_methods.map((method) => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                      <option value="other">其它</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="dry_ice">干冰</option>
+                      <option value="ice_pack">冰袋</option>
+                      <option value="room_temp">室温</option>
+                      <option value="other">其它</option>
+                    </>
+                  )}
                 </Select>
                 {formData.transport_method === 'other' && (
                   <div className="mt-2">
@@ -376,10 +424,21 @@ export default function SampleReceivePage() {
                     disabled={!selectedProjectId}
                 >
                   <option value="">请选择样本状态</option>
-                  <option value="frozen">冰冻</option>
-                  <option value="partially_thawed">部分融化</option>
-                  <option value="completely_thawed">完全融化</option>
-                  <option value="other">其它</option>
+                  {clinicalOptions.sample_statuses && clinicalOptions.sample_statuses.length > 0 ? (
+                    <>
+                      {clinicalOptions.sample_statuses.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                      <option value="other">其它</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="frozen">冰冻</option>
+                      <option value="partially_thawed">部分融化</option>
+                      <option value="completely_thawed">完全融化</option>
+                      <option value="other">其它</option>
+                    </>
+                  )}
                 </Select>
                 {formData.sample_status === 'other' && (
                   <div className="mt-2">
@@ -422,9 +481,11 @@ export default function SampleReceivePage() {
                       className="flex-1"
                       disabled={!selectedProjectId}
                   />
-                    <Button plain className="px-3" disabled={!selectedProjectId}>
-                      <QrCodeIcon className="w-5 h-5" />
-                  </Button>
+                    <Tooltip content="扫描条码">
+                      <Button plain className="px-3" disabled={!selectedProjectId}>
+                        <QrCodeIcon className="w-5 h-5" />
+                      </Button>
+                    </Tooltip>
                 </div>
               </div>
 

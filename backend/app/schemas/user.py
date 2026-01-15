@@ -25,7 +25,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     full_name: str
-    password: str
+    password: Optional[str] = None  # 可选，不提供则系统自动生成
     role_ids: List[int] = []  # 新增：角色ID列表
     role: Optional[UserRole] = None  # 保留用于向后兼容
     
@@ -43,12 +43,18 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     role_ids: Optional[List[int]] = None  # 新增：角色ID列表
     is_active: Optional[bool] = None
+    # 审计验证字段
+    audit_reason: Optional[str] = None  # 修改理由
+    audit_username: Optional[str] = None  # 验证用户名
+    audit_password: Optional[str] = None  # 验证密码
 
 
 class UserResponse(UserBase):
     id: int
     is_active: bool
     is_superuser: bool
+    must_change_password: bool = False  # 是否需要修改密码
+    password_changed_at: Optional[datetime] = None  # 密码最后修改时间
     created_at: datetime
     updated_at: Optional[datetime] = None
     roles: List[RoleSimple] = []  # 新增：用户的角色列表
@@ -71,4 +77,11 @@ class PasswordChange(BaseModel):
 class PasswordReset(BaseModel):
     """重置密码（管理员操作）"""
     new_password: str
+
+
+class UserDelete(BaseModel):
+    """删除用户请求"""
+    audit_reason: str  # 删除理由
+    audit_username: str  # 验证用户名
+    audit_password: str  # 验证密码
 

@@ -236,14 +236,16 @@ async def init_db(drop_existing=False):
         # 2. 创建用户
         from app.models.user import User, UserRole
         
-        # 系统管理员
+        # 系统管理员（初始用户，不需要修改密码）
         admin_user = User(
             username="admin",
             email="admin@lims.com",
             full_name="系统管理员",
             hashed_password=get_password_hash("admin123"),
             role=UserRole.SYSTEM_ADMIN,
-            is_superuser=True
+            is_superuser=True,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'system_admin' in role_objects_map:
             admin_user.roles = [role_objects_map['system_admin']]
@@ -254,7 +256,9 @@ async def init_db(drop_existing=False):
             email="sample@lims.com",
             full_name="样本管理员",
             hashed_password=get_password_hash("sample123"),
-            role=UserRole.SAMPLE_ADMIN
+            role=UserRole.SAMPLE_ADMIN,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'sample_admin' in role_objects_map:
             sample_admin.roles = [role_objects_map['sample_admin']]
@@ -265,7 +269,9 @@ async def init_db(drop_existing=False):
             email="project@lims.com",
             full_name="项目负责人",
             hashed_password=get_password_hash("project123"),
-            role=UserRole.PROJECT_LEAD
+            role=UserRole.PROJECT_LEAD,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'project_lead' in role_objects_map:
             project_lead.roles = [role_objects_map['project_lead']]
@@ -276,7 +282,9 @@ async def init_db(drop_existing=False):
             email="test@lims.com",
             full_name="分析测试主管",
             hashed_password=get_password_hash("test123"),
-            role=UserRole.TEST_MANAGER
+            role=UserRole.TEST_MANAGER,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'test_manager' in role_objects_map:
             test_manager.roles = [role_objects_map['test_manager']]
@@ -287,7 +295,9 @@ async def init_db(drop_existing=False):
             email="director@lims.com",
             full_name="研究室主任",
             hashed_password=get_password_hash("director123"),
-            role=UserRole.LAB_DIRECTOR
+            role=UserRole.LAB_DIRECTOR,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'lab_director' in role_objects_map:
             lab_director.roles = [role_objects_map['lab_director']]
@@ -298,7 +308,9 @@ async def init_db(drop_existing=False):
             email="analyst@lims.com",
             full_name="分析员",
             hashed_password=get_password_hash("analyst123"),
-            role=UserRole.ANALYST
+            role=UserRole.ANALYST,
+            must_change_password=False,
+            password_changed_at=datetime.now(UTC)
         )
         if 'analyst' in role_objects_map:
             analyst.roles = [role_objects_map['analyst']]
@@ -486,14 +498,6 @@ async def init_db(drop_existing=False):
         await session.commit()
         
         print("✅ 数据库初始化完成")
-        
-        print("\n📊 当前系统状态：")
-        print("  - 数据库表: 已重建")
-        print("  - 角色权限: 已初始化")
-        print("  - 测试数据: 已生成 (含测试用户、项目、样本)")
-        print("\n🚀 可以开始测试了！")
-        print("   用户管理: http://localhost:3000/users")
-        print("   角色管理: http://localhost:3000/roles")
     
     await engine.dispose()
 

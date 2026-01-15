@@ -28,8 +28,22 @@ import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/co
 import { ArrowsRightLeftIcon as ArrowsRightLeftIconOutline } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
+import { Tooltip } from '@/components/tooltip';
 import { useProjectStore } from '@/store/project';
 import clsx from 'clsx';
+
+// 临床样本配置选项接口
+interface ClinicalSampleOptions {
+  cycles: string[];
+  test_types: string[];
+  primary_codes: string[];
+  backup_codes: string[];
+  sample_types: string[];
+  purposes: string[];
+  transport_methods: string[];
+  sample_statuses: string[];
+  special_notes: string[];
+}
 
 interface TransferRequest {
   id: number;
@@ -84,6 +98,17 @@ export default function SampleTransferPage() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedSamples, setSelectedSamples] = useState<string[]>([]);
   const [availableSamples, setAvailableSamples] = useState<Sample[]>([]);
+  const [clinicalOptions, setClinicalOptions] = useState<ClinicalSampleOptions>({
+    cycles: [],
+    test_types: [],
+    primary_codes: [],
+    backup_codes: [],
+    sample_types: [],
+    purposes: [],
+    transport_methods: [],
+    sample_statuses: [],
+    special_notes: [],
+  });
   
   // 新增筛选状态
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
@@ -119,7 +144,19 @@ export default function SampleTransferPage() {
   useEffect(() => {
     fetchTransfers();
     fetchOrganizations();
+    fetchClinicalOptions();
   }, [viewMode]); // 依赖项改为 viewMode
+
+  const fetchClinicalOptions = async () => {
+    try {
+      const response = await api.get('/global-params/clinical-sample-options');
+      setClinicalOptions(response.data || {});
+    } catch (error: any) {
+      if (error?.response?.status !== 401 && !error?.isAuthError) {
+        console.error('Failed to fetch clinical options:', error);
+      }
+    }
+  };
 
   useEffect(() => {
     if (projects.length === 0) {
@@ -817,9 +854,17 @@ export default function SampleTransferPage() {
                   required
                 >
                   <option value="">请选择运输方式</option>
-                  <option value="cold_chain">冷链运输</option>
-                  <option value="frozen">冷冻运输</option>
-                  <option value="room_temp">常温运输</option>
+                  {clinicalOptions.transport_methods && clinicalOptions.transport_methods.length > 0 ? (
+                    clinicalOptions.transport_methods.map((method) => (
+                      <option key={method} value={method}>{method}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="cold_chain">冷链运输</option>
+                      <option value="frozen">冷冻运输</option>
+                      <option value="room_temp">常温运输</option>
+                    </>
+                  )}
                 </Select>
               </div>
 
@@ -1029,9 +1074,11 @@ export default function SampleTransferPage() {
                       onChange={(e) => setInternalForm({...internalForm, from_location: e.target.value})}
                       placeholder="扫描或输入位置条码"
                     />
-                    <Button plain onClick={() => {}}>
-                      <QrCodeIcon />
-                    </Button>
+                    <Tooltip content="扫描条码">
+                      <Button plain onClick={() => {}}>
+                        <QrCodeIcon />
+                      </Button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1055,9 +1102,17 @@ export default function SampleTransferPage() {
                     onChange={(e) => setInternalForm({...internalForm, transport_method: e.target.value})}
                   >
                     <option value="">请选择</option>
-                    <option value="cart">推车运输</option>
-                    <option value="portable_freezer">便携式冷冻箱</option>
-                    <option value="manual">人工搬运</option>
+                    {clinicalOptions.transport_methods && clinicalOptions.transport_methods.length > 0 ? (
+                      clinicalOptions.transport_methods.map((method) => (
+                        <option key={method} value={method}>{method}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="cart">推车运输</option>
+                        <option value="portable_freezer">便携式冷冻箱</option>
+                        <option value="manual">人工搬运</option>
+                      </>
+                    )}
                   </Select>
                 </div>
 
@@ -1070,9 +1125,17 @@ export default function SampleTransferPage() {
                     onChange={(e) => setInternalForm({...internalForm, sample_status: e.target.value})}
                   >
                     <option value="">请选择</option>
-                    <option value="good">完好</option>
-                    <option value="thawed">疑似解冻</option>
-                    <option value="damaged">包装破损</option>
+                    {clinicalOptions.sample_statuses && clinicalOptions.sample_statuses.length > 0 ? (
+                      clinicalOptions.sample_statuses.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="good">完好</option>
+                        <option value="thawed">疑似解冻</option>
+                        <option value="damaged">包装破损</option>
+                      </>
+                    )}
                   </Select>
                 </div>
               </div>
@@ -1091,9 +1154,11 @@ export default function SampleTransferPage() {
                       }
                     }}
                   />
-                  <Button plain>
-                    <QrCodeIcon />
-                  </Button>
+                  <Tooltip content="扫描条码">
+                    <Button plain>
+                      <QrCodeIcon />
+                    </Button>
+                  </Tooltip>
                 </div>
                 {internalForm.samples.length > 0 && (
                   <div className="mt-2 p-2 bg-zinc-50 rounded">
@@ -1118,9 +1183,11 @@ export default function SampleTransferPage() {
                     onChange={(e) => setInternalForm({...internalForm, to_location: e.target.value})}
                     placeholder="扫描或输入目标位置条码"
                   />
-                  <Button plain onClick={() => {}}>
-                    <QrCodeIcon />
-                  </Button>
+                  <Tooltip content="扫描条码">
+                    <Button plain onClick={() => {}}>
+                      <QrCodeIcon />
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
             </div>

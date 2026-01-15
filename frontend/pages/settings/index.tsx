@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { formatDate } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
@@ -10,6 +11,7 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { UserDialog } from '@/components/user-dialog';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
+import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { Field, Label } from '@/components/fieldset';
 import { Textarea } from '@/components/textarea';
 import { Checkbox, CheckboxField } from '@/components/checkbox';
@@ -31,12 +33,34 @@ import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/co
 import { UsersService } from '@/services/users.service';
 import { RolesService } from '@/services/roles.service';
 import { SettingsService, SystemSetting } from '@/services/settings.service';
-import { User, Role, Permission, RoleCreate, RoleUpdate } from '@/types/api';
+import { User, Role, Permission, RoleCreate, RoleUpdate, RoleDeleteRequest } from '@/types/api';
 import { extractDetailMessage } from '@/lib/api';
 
 export default function SettingsPage() {
-  // 标签页状态
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'system'>('system');
+  const router = useRouter();
+  
+  // 标签页状态 - 从 URL 参数初始化
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'system'>(() => {
+    const tab = router.query.tab as string;
+    if (tab === 'users' || tab === 'roles' || tab === 'system') {
+      return tab;
+    }
+    return 'system';
+  });
+
+  // 监听 URL 参数变化
+  useEffect(() => {
+    const tab = router.query.tab as string;
+    if (tab === 'users' || tab === 'roles' || tab === 'system') {
+      setActiveTab(tab);
+    }
+  }, [router.query.tab]);
+
+  // 切换标签页时更新 URL
+  const handleTabChange = (tab: 'users' | 'roles' | 'system') => {
+    setActiveTab(tab);
+    router.push({ pathname: '/settings', query: { tab } }, undefined, { shallow: true });
+  };
   
   // 系统设置相关状态
   const [settings, setSettings] = useState<SystemSetting[]>([]);
@@ -54,6 +78,17 @@ export default function SettingsPage() {
   // 用户对话框状态
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  // 删除用户对话框状态
+  const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [deleteUserFormData, setDeleteUserFormData] = useState({
+    audit_reason: '',
+    audit_username: '',
+    audit_password: '',
+  });
+  const [deleteUserLoading, setDeleteUserLoading] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState('');
   
   // 角色相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -77,6 +112,11 @@ export default function SettingsPage() {
     description: '',
     permission_ids: []
   });
+  
+  // 电子签名对话框状态
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+  const [signatureAction, setSignatureAction] = useState<'edit' | 'delete'>('edit');
+  const [pendingDeleteRole, setPendingDeleteRole] = useState<Role | null>(null);
 
   useEffect(() => {
     if (activeTab === 'users') {
@@ -213,13 +253,65 @@ export default function SettingsPage() {
 
     try {
       await UsersService.resetPassword(user.id, newPassword);
-      toast.success('密码重置成功');
+      toast.success('密码重置成功，用户下次登录需要修改密码');
     } catch (error: any) {
       const errorMsg = extractDetailMessage(error.response?.data) || error.message || '重置密码失败';
       toast.error(errorMsg);
     }
   };
-  
+
+  // 删除用户
+  const handleDeleteUserClick = (user: User) => {
+    if (user.id === currentUser?.id) {
+      toast.error('不能删除自己的账户');
+      return;
+    }
+    setDeletingUser(user);
+    setDeleteUserFormData({
+      audit_reason: '',
+      audit_username: currentUser?.username || '',
+      audit_password: '',
+    });
+    setDeleteUserError('');
+    setDeleteUserDialogOpen(true);
+  };
+
+  const handleDeleteUserConfirm = async () => {
+    if (!deletingUser) return;
+
+    if (!deleteUserFormData.audit_reason.trim()) {
+      setDeleteUserError('请填写删除理由');
+      return;
+    }
+    if (!deleteUserFormData.audit_username.trim()) {
+      setDeleteUserError('请输入您的用户名进行验证');
+      return;
+    }
+    if (!deleteUserFormData.audit_password.trim()) {
+      setDeleteUserError('请输入您的密码进行验证');
+      return;
+    }
+
+    setDeleteUserLoading(true);
+    setDeleteUserError('');
+
+    try {
+      await UsersService.deleteUser(deletingUser.id, {
+        audit_reason: deleteUserFormData.audit_reason,
+        audit_username: deleteUserFormData.audit_username,
+        audit_password: deleteUserFormData.audit_password,
+      });
+      toast.success('用户已删除');
+      setDeleteUserDialogOpen(false);
+      fetchUsers();
+    } catch (error: any) {
+      const errorMsg = extractDetailMessage(error.response?.data) || error.message || '删除用户失败';
+      setDeleteUserError(errorMsg);
+    } finally {
+      setDeleteUserLoading(false);
+    }
+  };
+
   // 角色操作
   const handleCreateRole = () => {
     setEditingRole(null);
@@ -249,18 +341,10 @@ export default function SettingsPage() {
   };
 
   const handleDeleteRole = async (role: Role) => {
-    if (!confirm(`确定要删除角色"${role.name}"吗？\n\n系统会检查是否有用户正在使用此角色。`)) {
-      return;
-    }
-
-    try {
-      await RolesService.deleteRole(role.id);
-      await fetchRolesData();
-      toast.success('角色删除成功');
-    } catch (error: any) {
-      const errorMsg = extractDetailMessage(error.response?.data) || error.message || '删除失败';
-      toast.error(errorMsg);
-    }
+    // 打开电子签名对话框进行删除确认
+    setPendingDeleteRole(role);
+    setSignatureAction('delete');
+    setSignatureDialogOpen(true);
   };
 
   const handleRoleSubmit = async () => {
@@ -271,31 +355,73 @@ export default function SettingsPage() {
       return;
     }
 
+    // 编辑模式需要电子签名验证
+    if (editingRole) {
+      setSignatureAction('edit');
+      setSignatureDialogOpen(true);
+      return;
+    }
+
+    // 新建模式直接提交
     setRoleDialogLoading(true);
     try {
-      if (editingRole) {
-        const updateData: RoleUpdate = {
-          name: roleFormData.name,
-          description: roleFormData.description,
-          permission_ids: roleFormData.permission_ids
-        };
-        await RolesService.updateRole(editingRole.id, updateData);
-      } else {
-        const createData: RoleCreate = {
-          name: roleFormData.name,
-          description: roleFormData.description,
-          permission_ids: roleFormData.permission_ids
-        };
-        await RolesService.createRole(createData);
-      }
+      const createData: RoleCreate = {
+        name: roleFormData.name,
+        description: roleFormData.description,
+        permission_ids: roleFormData.permission_ids
+      };
+      await RolesService.createRole(createData);
       
       setRoleDialogOpen(false);
       await fetchRolesData();
+      toast.success('角色创建成功');
     } catch (err: any) {
       const errorMsg = extractDetailMessage(err.response?.data) || err.message || '操作失败';
       setRoleDialogError(errorMsg);
     } finally {
       setRoleDialogLoading(false);
+    }
+  };
+
+  // 处理电子签名确认（编辑角色）
+  const handleSignatureConfirm = async (password: string, reason: string) => {
+    if (signatureAction === 'edit' && editingRole) {
+      setRoleDialogLoading(true);
+      try {
+        const updateData: RoleUpdate = {
+          name: roleFormData.name,
+          description: roleFormData.description,
+          permission_ids: roleFormData.permission_ids,
+          audit_reason: reason,
+          username: currentUser?.username || '',
+          password: password
+        };
+        await RolesService.updateRole(editingRole.id, updateData);
+        
+        setRoleDialogOpen(false);
+        await fetchRolesData();
+        toast.success('角色更新成功');
+      } catch (err: any) {
+        const errorMsg = extractDetailMessage(err.response?.data) || err.message || '操作失败';
+        throw new Error(errorMsg);
+      } finally {
+        setRoleDialogLoading(false);
+      }
+    } else if (signatureAction === 'delete' && pendingDeleteRole) {
+      try {
+        const deleteData: RoleDeleteRequest = {
+          audit_reason: reason,
+          username: currentUser?.username || '',
+          password: password
+        };
+        await RolesService.deleteRole(pendingDeleteRole.id, deleteData);
+        await fetchRolesData();
+        toast.success('角色删除成功');
+        setPendingDeleteRole(null);
+      } catch (err: any) {
+        const errorMsg = extractDetailMessage(err.response?.data) || err.message || '删除失败';
+        throw new Error(errorMsg);
+      }
     }
   };
 
@@ -414,7 +540,7 @@ export default function SettingsPage() {
               { key: 'roles', label: '角色管理', icon: UserGroupIcon },
             ]}
             activeTab={activeTab}
-            onChange={(key) => setActiveTab(key as any)}
+            onChange={(key) => handleTabChange(key as any)}
             fullWidth
           />
         </div>
@@ -433,26 +559,31 @@ export default function SettingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="max-w-xl">
                     <Text className="font-semibold text-zinc-900">自动登出时间</Text>
-                    <Text className="text-sm text-zinc-500 mt-1">用户无操作超过设定时间后将自动退出登录</Text>
+                    <Text className="text-sm text-zinc-500 mt-1">超出设定时间未操作，账号将自动登出</Text>
                   </div>
                   <div className="w-full sm:w-48 flex-shrink-0">
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={sessionTimeoutDraft}
-                      onChange={(e) => setSessionTimeoutDraft(e.target.value)}
-                      onBlur={commitSessionTimeout}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          commitSessionTimeout();
-                        }
-                      }}
-                      disabled={savingSettings}
-                      className="bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all"
-                      placeholder="分钟"
-                    />
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={sessionTimeoutDraft}
+                        onChange={(e) => setSessionTimeoutDraft(e.target.value)}
+                        onBlur={commitSessionTimeout}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitSessionTimeout();
+                          }
+                        }}
+                        disabled={savingSettings}
+                        className="bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all pr-12"
+                        placeholder="30"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <span className="text-sm text-zinc-500">分钟</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -462,7 +593,7 @@ export default function SettingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="max-w-xl">
                     <Text className="font-semibold text-zinc-900">强密码要求</Text>
-                    <Text className="text-sm text-zinc-500 mt-1">开启后密码必须包含大小写字母、数字和特殊字符，长度至少8位</Text>
+                    <Text className="text-sm text-zinc-500 mt-1">功能开启后，需依照规则设定密码</Text>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <Text className="text-sm text-zinc-600 whitespace-nowrap">
@@ -591,6 +722,12 @@ export default function SettingsPage() {
                                     <KeyIcon className="h-4 w-4" />
                                     重置密码
                                   </Button>
+                                  {user.id !== currentUser?.id && (
+                                    <Button plain onClick={() => handleDeleteUserClick(user)} className="text-zinc-600 hover:text-red-600 hover:bg-red-50">
+                                      <TrashIcon className="h-4 w-4" />
+                                      删除
+                                    </Button>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -710,6 +847,78 @@ export default function SettingsPage() {
         user={editingUser}
       />
 
+      {/* 删除用户对话框 */}
+      <Dialog open={deleteUserDialogOpen} onClose={() => setDeleteUserDialogOpen(false)} size="lg">
+        <DialogTitle>
+          <div className="flex items-center gap-2 text-red-600">
+            <TrashIcon className="h-5 w-5" />
+            删除用户
+          </div>
+        </DialogTitle>
+        <DialogDescription>
+          删除用户需要验证您的身份并说明删除理由（将记入审计日志）
+        </DialogDescription>
+
+        <DialogBody className="space-y-4">
+          {deleteUserError && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3">
+              <Text className="text-sm text-red-800">{deleteUserError}</Text>
+            </div>
+          )}
+
+          {deletingUser && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+              <Text className="text-sm text-red-900">
+                您确定要删除用户 <span className="font-semibold">{deletingUser.full_name}</span>（@{deletingUser.username}）吗？
+              </Text>
+              <Text className="text-sm text-red-700 mt-2">
+                此操作不可撤销，用户的所有数据将被永久删除。
+              </Text>
+            </div>
+          )}
+
+          <Field>
+            <Label>删除理由 *</Label>
+            <Textarea
+              value={deleteUserFormData.audit_reason}
+              onChange={(e) => setDeleteUserFormData(prev => ({ ...prev, audit_reason: e.target.value }))}
+              placeholder="请说明删除此用户的原因"
+              rows={2}
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <Label>您的用户名 *</Label>
+              <Input
+                value={deleteUserFormData.audit_username}
+                onChange={(e) => setDeleteUserFormData(prev => ({ ...prev, audit_username: e.target.value }))}
+                placeholder="请输入您的用户名"
+              />
+            </Field>
+
+            <Field>
+              <Label>您的密码 *</Label>
+              <Input
+                type="password"
+                value={deleteUserFormData.audit_password}
+                onChange={(e) => setDeleteUserFormData(prev => ({ ...prev, audit_password: e.target.value }))}
+                placeholder="请输入您的密码"
+              />
+            </Field>
+          </div>
+        </DialogBody>
+
+        <DialogActions>
+          <Button plain onClick={() => setDeleteUserDialogOpen(false)} disabled={deleteUserLoading}>
+            取消
+          </Button>
+          <Button color="red" onClick={handleDeleteUserConfirm} disabled={deleteUserLoading}>
+            {deleteUserLoading ? '删除中...' : '确认删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* 角色对话框 */}
       <Dialog open={roleDialogOpen} onClose={() => setRoleDialogOpen(false)} size="4xl">
         <DialogTitle>{editingRole ? '编辑角色' : '新建角色'}</DialogTitle>
@@ -808,6 +1017,26 @@ export default function SettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* 电子签名对话框 */}
+      <ESignatureDialog
+        open={signatureDialogOpen}
+        onClose={() => {
+          setSignatureDialogOpen(false);
+          setPendingDeleteRole(null);
+        }}
+        onConfirm={handleSignatureConfirm}
+        title={signatureAction === 'edit' ? '编辑角色 - 电子签名确认' : '删除角色 - 电子签名确认'}
+        description={
+          signatureAction === 'edit' 
+            ? `您正在编辑角色"${editingRole?.name}"。此操作需要您的电子签名确认。`
+            : `您正在删除角色"${pendingDeleteRole?.name}"。此操作不可撤销，需要您的电子签名确认。`
+        }
+        requireReason={true}
+        reasonLabel="操作原因"
+        reasonPlaceholder={signatureAction === 'edit' ? '请说明修改角色的原因' : '请说明删除角色的原因'}
+        actionType={signatureAction === 'delete' ? 'delete' : 'default'}
+      />
     </AppLayout>
   );
 }

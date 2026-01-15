@@ -136,8 +136,9 @@ export const SidebarItem = forwardRef(function SidebarItem(
     current,
     className,
     children,
+    scroll = false,
     ...props
-  }: { current?: boolean; className?: string; children: React.ReactNode } & (
+  }: { current?: boolean; className?: string; children: React.ReactNode; scroll?: boolean } & (
     | Omit<Headless.ButtonProps, 'as' | 'className'>
     | Omit<Headless.ButtonProps<typeof Link>, 'as' | 'className'>
   ),
@@ -174,6 +175,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
       {'href' in props ? (
         <Headless.CloseButton
           as={Link}
+          scroll={scroll}
           {...props}
           className={classes}
           data-current={current ? 'true' : undefined}

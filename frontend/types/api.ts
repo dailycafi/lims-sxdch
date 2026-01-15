@@ -31,6 +31,8 @@ export interface User {
   roles?: RoleSimple[];  // 新增：用户的角色列表
   is_active: boolean;
   is_superuser?: boolean;
+  must_change_password?: boolean;  // 是否需要修改密码
+  password_changed_at?: string;  // 密码最后修改时间
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +49,8 @@ export interface LoginResponse {
   expires_in?: number;
   refresh_expires_in?: number;
   user?: User;
+  must_change_password?: boolean;  // 是否需要修改密码
+  password_expired?: boolean;  // 密码是否过期
 }
 
 // 角色和权限相关类型
@@ -85,14 +89,28 @@ export interface RoleUpdate {
   description?: string;
   is_active?: boolean;
   permission_ids?: number[];
+  // 电子签名验证字段
+  audit_reason: string;
+  username: string;
+  password: string;
+}
+
+export interface RoleDeleteRequest {
+  audit_reason: string;
+  username: string;
+  password: string;
 }
 
 export interface UserCreate {
   username: string;
   full_name: string;
   email: string;
-  password: string;
+  password?: string;  // 可选，系统会自动生成
   role_ids: number[];
+}
+
+export interface UserCreateResponse extends User {
+  initial_password?: string;  // 系统生成的初始密码，仅创建时返回
 }
 
 export interface UserUpdate {
@@ -100,6 +118,16 @@ export interface UserUpdate {
   email?: string;
   role_ids?: number[];
   is_active?: boolean;
+  // 审计验证字段
+  audit_reason?: string;
+  audit_username?: string;
+  audit_password?: string;
+}
+
+export interface UserDelete {
+  audit_reason: string;
+  audit_username: string;
+  audit_password: string;
 }
 
 

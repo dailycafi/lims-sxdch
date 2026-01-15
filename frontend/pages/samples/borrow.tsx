@@ -17,6 +17,7 @@ import { Select } from '@/components/select';
 import { Input } from '@/components/input';
 import { Dialog, DialogTitle, DialogBody, DialogActions, DialogDescription } from '@/components/dialog';
 import { toast } from 'react-hot-toast';
+import { Tooltip } from '@/components/tooltip';
 import { 
   MagnifyingGlassIcon, 
   ArrowPathIcon, 
@@ -765,9 +766,11 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             {selectedFreezer && (
-              <Button plain onClick={handleBackToFreezers}>
-                <ChevronLeftIcon className="w-5 h-5" />
-              </Button>
+              <Tooltip content="返回冰箱列表">
+                <Button plain onClick={handleBackToFreezers}>
+                  <ChevronLeftIcon className="w-5 h-5" />
+                </Button>
+              </Tooltip>
             )}
             <div>
               <Text className="font-medium text-lg">
@@ -791,9 +794,11 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
                 添加样本盒
               </Button>
             )}
-            <Button plain onClick={() => { fetchFreezers(); fetchBoxes(selectedFreezer?.id); }}>
-              <ArrowPathIcon className="w-4 h-4" />
-            </Button>
+            <Tooltip content="刷新">
+              <Button plain onClick={() => { fetchFreezers(); fetchBoxes(selectedFreezer?.id); }}>
+                <ArrowPathIcon className="w-4 h-4" />
+              </Button>
+            </Tooltip>
           </div>
         </div>
 
@@ -894,15 +899,21 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
                         <TableCell>{formatDate(box.created_at)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button plain onClick={() => handleBoxSelect(box)}>
-                              <EyeIcon className="w-4 h-4" />
-                            </Button>
-                            <Button plain onClick={() => openEditDialog(box)}>
-                              <PencilIcon className="w-4 h-4" />
-                            </Button>
-                            <Button plain onClick={() => openDeleteDialog(box)} className="text-red-600 hover:text-red-700">
-                              <TrashIcon className="w-4 h-4" />
-                            </Button>
+                            <Tooltip content="查看详情">
+                              <Button plain onClick={() => handleBoxSelect(box)}>
+                                <EyeIcon className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content="编辑">
+                              <Button plain onClick={() => openEditDialog(box)}>
+                                <PencilIcon className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content="删除">
+                              <Button plain onClick={() => openDeleteDialog(box)} className="text-red-600 hover:text-red-700">
+                                <TrashIcon className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>

@@ -103,26 +103,29 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
 
   const fetchGlobalParams = async () => {
     try {
-      // 从项目配置中获取选项
-      const response = await api.get(`/projects/${projectId}`);
-      const project = response.data;
-      if (project.sample_code_rule?.dictionaries) {
-        const dict = project.sample_code_rule.dictionaries;
-        setGlobalParams({
-          cycles: dict.cycles || [],
-          test_types: dict.test_types || [],
-          sample_types: [], // 可以从全局参数获取
-        });
-      }
+      // 先尝试从全局配置获取选项
+      const clinicalOptionsRes = await api.get('/global-params/clinical-sample-options').catch(() => ({ data: {} }));
+      const globalOptions = clinicalOptionsRes.data || {};
       
-      // 获取全局样本类型
-      const sampleTypesRes = await api.get('/global-params/sample-types?category=clinical');
-      if (sampleTypesRes.data) {
-        const types = sampleTypesRes.data.map((st: any) => st.test_type).filter(Boolean);
-        setGlobalParams(prev => ({
-          ...prev,
-          sample_types: Array.from(new Set(types)) as string[],
-        }));
+      // 如果全局配置有数据，优先使用
+      if (globalOptions.cycles?.length > 0 || globalOptions.test_types?.length > 0) {
+        setGlobalParams({
+          cycles: globalOptions.cycles || [],
+          test_types: globalOptions.test_types || [],
+          sample_types: globalOptions.sample_types || [],
+        });
+      } else {
+        // 否则从项目配置中获取选项（向后兼容）
+        const response = await api.get(`/projects/${projectId}`);
+        const project = response.data;
+        if (project.sample_code_rule?.dictionaries) {
+          const dict = project.sample_code_rule.dictionaries;
+          setGlobalParams({
+            cycles: dict.cycles || [],
+            test_types: dict.test_types || [],
+            sample_types: globalOptions.sample_types || [],
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to fetch global params:', error);

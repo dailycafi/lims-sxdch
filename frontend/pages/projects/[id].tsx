@@ -37,6 +37,7 @@ import {
 } from '@heroicons/react/20/solid';
 import { TagInput } from '@/components/tag-input';
 import { TestGroupManager } from '@/components/test-group-manager';
+import { Tooltip } from '@/components/tooltip';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
@@ -904,22 +905,30 @@ export default function ProjectDetailPage() {
                           <TableCell>{st.primary_count} / {st.backup_count}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button plain onClick={() => {
-                                setEditingSampleType(st);
-                                setSampleTypeForm({ 
-                                    category: st.category,
-                                    cycle_group: st.cycle_group || '',
-                                    test_type: st.test_type || '',
-                                    primary_count: st.primary_count,
-                                    backup_count: st.backup_count,
-                                    purpose: st.purpose || '',
-                                    transport_method: st.transport_method || '',
-                                    status: st.status || '',
-                                    special_notes: st.special_notes || '',
-                                });
-                                setIsSampleTypeDialogOpen(true);
-                              }}><PencilSquareIcon className="w-4 h-4"/></Button>
-                              <Button plain onClick={() => deleteSampleType(st.id)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
+                              <Tooltip content="编辑">
+                                <Button plain onClick={() => {
+                                  setEditingSampleType(st);
+                                  setSampleTypeForm({ 
+                                      category: st.category,
+                                      cycle_group: st.cycle_group || '',
+                                      test_type: st.test_type || '',
+                                      primary_count: st.primary_count,
+                                      backup_count: st.backup_count,
+                                      purpose: st.purpose || '',
+                                      transport_method: st.transport_method || '',
+                                      status: st.status || '',
+                                      special_notes: st.special_notes || '',
+                                  });
+                                  setIsSampleTypeDialogOpen(true);
+                                }}>
+                                  <PencilSquareIcon className="w-4 h-4"/>
+                                </Button>
+                              </Tooltip>
+                              <Tooltip content="删除">
+                                <Button plain onClick={() => deleteSampleType(st.id)}>
+                                  <TrashIcon className="w-4 h-4 text-red-500"/>
+                                </Button>
+                              </Tooltip>
                             </div>
                           </TableCell>
                         </TableRow>

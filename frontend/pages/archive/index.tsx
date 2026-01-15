@@ -26,6 +26,7 @@ import {
   ChevronDownIcon,
   CloudArrowUpIcon
 } from '@heroicons/react/20/solid';
+import { Tooltip } from '@/components/tooltip';
 
 interface ArchiveRequest {
   id: number;

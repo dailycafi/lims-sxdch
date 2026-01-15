@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
@@ -10,11 +10,78 @@ import { Input } from '@/components/input';
 import { Heading } from '@/components/heading';
 import { Text } from '@/components/text';
 import { backendStatusAPI } from '@/lib/api';
+import { ForcePasswordChangeDialog } from '@/components/force-password-change-dialog';
 
 interface LoginForm {
   username: string;
   password: string;
 }
+
+// 提升静态 JSX 元素到组件外部，避免每次渲染重新创建
+// 参考: React Best Practices - 6.3 Hoist Static JSX Elements
+const BackgroundDecoration = (
+  <div className="absolute inset-0 overflow-hidden">
+    <motion.div 
+      className="absolute top-20 left-20 w-32 h-32 opacity-5"
+      animate={{ 
+        rotate: 360,
+        scale: [1, 1.1, 1]
+      }}
+      transition={{ 
+        rotate: { duration: 20, repeat: Infinity, ease: "linear" },
+        scale: { duration: 4, repeat: Infinity }
+      }}
+    >
+      {/* 包装 SVG 在 div 中以获得更好的动画性能 */}
+      {/* 参考: React Best Practices - 6.1 Animate SVG Wrapper Instead of SVG Element */}
+      <svg viewBox="0 0 100 100" className="w-full h-full text-blue-500">
+        <circle cx="30" cy="30" r="4" fill="currentColor" />
+        <circle cx="70" cy="30" r="4" fill="currentColor" />
+        <circle cx="50" cy="70" r="4" fill="currentColor" />
+        <line x1="30" y1="30" x2="70" y2="30" stroke="currentColor" strokeWidth="2" />
+        <line x1="30" y1="30" x2="50" y2="70" stroke="currentColor" strokeWidth="2" />
+        <line x1="70" y1="30" x2="50" y2="70" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </motion.div>
+    
+    <motion.div 
+      className="absolute bottom-20 right-20 w-24 h-24 opacity-5 text-blue-500"
+      animate={{ 
+        y: [0, -10, 0]
+      }}
+      transition={{ 
+        duration: 3, 
+        repeat: Infinity,
+        ease: "easeInOut"
+      }}
+    >
+      <svg viewBox="0 0 100 100" className="w-full h-full">
+        <rect x="40" y="20" width="20" height="60" fill="currentColor" />
+        <rect x="20" y="40" width="60" height="20" fill="currentColor" />
+      </svg>
+    </motion.div>
+  </div>
+);
+
+// 静态的底部信息组件
+const FooterInfo = (
+  <motion.div 
+    className="mt-6 text-center"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ delay: 0.7, duration: 0.6 }}
+  >
+    <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+      <span>安全登录</span>
+    </div>
+    <div className="mt-2 text-xs text-gray-400">
+      <span>© 2025 徐汇区中心医院</span>
+    </div>
+  </motion.div>
+);
 
 // 错误类型枚举
 enum ErrorType {
@@ -39,6 +106,10 @@ export default function LoginPage() {
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [serverStatus, setServerStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const login = useAuthStore((state) => state.login);
+  
+  // 强制修改密码对话框状态
+  const [forcePasswordChangeOpen, setForcePasswordChangeOpen] = useState(false);
+  const [passwordExpired, setPasswordExpired] = useState(false);
   
   const {
     register,
@@ -163,6 +234,14 @@ export default function LoginPage() {
         setServerStatus('online');
         // 确保清除认证过期 toast（使用 remove 强制移除）
         toast.remove('auth-expired');
+        
+        // 检查是否需要强制修改密码
+        if (result.mustChangePassword) {
+          setPasswordExpired(result.passwordExpired || false);
+          setForcePasswordChangeOpen(true);
+          return;
+        }
+        
         // 等待一小段时间确保 token 完全同步到 axios 后再跳转
         await new Promise(resolve => setTimeout(resolve, 100));
         router.push('/');
@@ -243,46 +322,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      {/* 背景装饰 */}
-      <div className="absolute inset-0 overflow-hidden">
-        <motion.div 
-          className="absolute top-20 left-20 w-32 h-32 opacity-5"
-          animate={{ 
-            rotate: 360,
-            scale: [1, 1.1, 1]
-          }}
-          transition={{ 
-            rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-            scale: { duration: 4, repeat: Infinity }
-          }}
-        >
-          <svg viewBox="0 0 100 100" className="w-full h-full text-blue-500">
-            <circle cx="30" cy="30" r="4" fill="currentColor" />
-            <circle cx="70" cy="30" r="4" fill="currentColor" />
-            <circle cx="50" cy="70" r="4" fill="currentColor" />
-            <line x1="30" y1="30" x2="70" y2="30" stroke="currentColor" strokeWidth="2" />
-            <line x1="30" y1="30" x2="50" y2="70" stroke="currentColor" strokeWidth="2" />
-            <line x1="70" y1="30" x2="50" y2="70" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        </motion.div>
-        
-        <motion.div 
-          className="absolute bottom-20 right-20 w-24 h-24 opacity-5 text-blue-500"
-          animate={{ 
-            y: [0, -10, 0]
-          }}
-          transition={{ 
-            duration: 3, 
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <rect x="40" y="20" width="20" height="60" fill="currentColor" />
-            <rect x="20" y="40" width="60" height="20" fill="currentColor" />
-          </svg>
-        </motion.div>
-      </div>
+      {/* 背景装饰 - 使用提升的静态 JSX */}
+      {BackgroundDecoration}
 
       {/* 右上角错误提示 */}
       <AnimatePresence>
@@ -602,24 +643,23 @@ export default function LoginPage() {
           </motion.div>
         </motion.div>
 
-        {/* 底部信息 */}
-        <motion.div 
-          className="mt-6 text-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.7, duration: 0.6 }}
-        >
-          <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <span>安全登录</span>
-          </div>
-          <div className="mt-2 text-xs text-gray-400">
-            <span>© 2025 徐汇区中心医院</span>
-          </div>
-        </motion.div>
+        {/* 底部信息 - 使用提升的静态 JSX */}
+        {FooterInfo}
       </motion.div>
+
+      {/* 强制修改密码对话框 */}
+      <ForcePasswordChangeDialog
+        open={forcePasswordChangeOpen}
+        onClose={() => setForcePasswordChangeOpen(false)}
+        onSuccess={async () => {
+          setForcePasswordChangeOpen(false);
+          toast.success('密码修改成功');
+          // 等待一小段时间确保状态更新
+          await new Promise(resolve => setTimeout(resolve, 100));
+          router.push('/');
+        }}
+        passwordExpired={passwordExpired}
+      />
     </div>
   );
 }

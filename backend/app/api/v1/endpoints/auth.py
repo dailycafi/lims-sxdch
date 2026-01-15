@@ -136,12 +136,48 @@ async def _issue_token_pair(
     return access_token, refresh_token_plain, expires_in
 
 
-@router.post("/login", response_model=Token)
+PASSWORD_EXPIRE_DAYS = 90  # 密码过期天数
+
+
+def check_password_expired(user: User) -> bool:
+    """检查密码是否过期（超过90天）"""
+    if user.password_changed_at is None:
+        # 如果没有密码修改记录，检查创建时间
+        # 但如果 must_change_password 为 True，则不算过期（等待首次登录修改）
+        if user.must_change_password:
+            return False
+        # 使用创建时间判断
+        created_at = user.created_at
+        if created_at and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if created_at and (datetime.now(timezone.utc) - created_at).days >= PASSWORD_EXPIRE_DAYS:
+            return True
+        return False
+    
+    password_changed_at = user.password_changed_at
+    if password_changed_at.tzinfo is None:
+        password_changed_at = password_changed_at.replace(tzinfo=timezone.utc)
+    
+    return (datetime.now(timezone.utc) - password_changed_at).days >= PASSWORD_EXPIRE_DAYS
+
+
+class LoginToken(Token):
+    """登录响应，包含密码状态信息"""
+    must_change_password: bool = False  # 是否需要修改密码（首次登录或密码过期）
+    password_expired: bool = False  # 密码是否过期
+
+
+@router.post("/login", response_model=LoginToken)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db)
 ):
-    """用户登录"""
+    """用户登录
+    
+    返回中包含 must_change_password 字段：
+    - 如果为 True，前端需要强制用户修改密码
+    - password_expired 表示密码是否因为超过90天而过期
+    """
     # ... existing user lookup code ...
     result = await db.execute(select(User).where(User.username == form_data.username))
     user = result.scalar_one_or_none()
@@ -158,6 +194,10 @@ async def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户已被禁用"
         )
+    
+    # 检查密码是否过期
+    password_expired = check_password_expired(user)
+    must_change_password = user.must_change_password or password_expired
     
     # 废弃当前用户已有的 refresh token，避免旧会话继续使用
     existing_tokens_result = await db.execute(
@@ -177,6 +217,8 @@ async def login(
         "token_type": "bearer",
         "expires_in": expires_in,
         "refresh_expires_in": REFRESH_TOKEN_EXPIRE_SECONDS,
+        "must_change_password": must_change_password,
+        "password_expired": password_expired,
     }
 
 

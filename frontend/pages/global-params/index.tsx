@@ -14,9 +14,11 @@ import { Tabs } from '@/components/tabs';
 import { SearchInput } from '@/components/search-input';
 import { api } from '@/lib/api';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon, TagIcon } from '@heroicons/react/20/solid';
+import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { Tooltip } from '@/components/tooltip';
 
 interface OrganizationType {
   id: number;
@@ -59,19 +61,7 @@ interface SampleType {
   updated_at: string;
 }
 
-type TabType = 'organizations' | 'clinical-samples' | 'collection-points' | 'qc-stability-samples';
-
-// 采血点配置接口
-interface CollectionPoint {
-  id: number;
-  code: string;  // 采血点编号，如 01, 02
-  name: string;  // 采血点名称，如 给药前, 给药后0.5h
-  time_description?: string;  // 时间描述，如 D1 给药前 30min
-  display_order: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at?: string;
-}
+type TabType = 'organizations' | 'clinical-samples' | 'qc-stability-samples';
 
 export default function GlobalParamsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('organizations');
@@ -80,21 +70,22 @@ export default function GlobalParamsPage() {
   const [orgTypes, setOrgTypes] = useState<OrganizationType[]>([]);
   const [clinicalSamples, setClinicalSamples] = useState<SampleType[]>([]);
   const [qcSamples, setQcSamples] = useState<SampleType[]>([]);
-  const [collectionPoints, setCollectionPoints] = useState<CollectionPoint[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
   const [isOrgTypeDialogOpen, setIsOrgTypeDialogOpen] = useState(false);
-  const [isClinicalDialogOpen, setIsClinicalDialogOpen] = useState(false);
-  const [isQCDialogOpen, setIsQCDialogOpen] = useState(false);
-  const [isCollectionPointDialogOpen, setIsCollectionPointDialogOpen] = useState(false);
   
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [editingOrgType, setEditingOrgType] = useState<OrganizationType | null>(null);
-  const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
-  const [editingCollectionPoint, setEditingCollectionPoint] = useState<CollectionPoint | null>(null);
   const [selectedOrgType, setSelectedOrgType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // 电子签名相关状态
+  const [isESignatureOpen, setIsESignatureOpen] = useState(false);
+  const [eSignatureAction, setESignatureAction] = useState<{
+    type: 'edit_org' | 'delete_org' | 'edit_org_type' | 'delete_org_type';
+    data?: any;
+  } | null>(null);
   
   // 统一的输入框包装样式，强制高度 40px 并对齐
   const inputWrapperClass = "[&_span]:after:hidden [&_span]:before:hidden [&_span]:block [&_span]:h-10 [&_span]:!min-h-0 [&_input]:!h-10 [&_input]:!min-h-0";
@@ -119,19 +110,15 @@ export default function GlobalParamsPage() {
 
   // 临床样本表单数据 - 修改为数组形式
   const [clinicalForm, setClinicalForm] = useState({
-    cycle_groups: [''], // 周期/剂量组数组
+    cycles: [''], // 周期数组
     test_types: [''], // 检测类型数组
     primary_codes: [''], // 正份代码数组
     backup_codes: [''], // 备份代码数组
-    collection_points: [{ code: '', name: '', time_description: '' }], // 采血点数组
-  });
-
-  // 采血点表单数据
-  const [collectionPointForm, setCollectionPointForm] = useState({
-    code: '',
-    name: '',
-    time_description: '',
-    display_order: 0,
+    sample_types: [''], // 样本类型数组
+    purposes: [''], // 用途数组
+    transport_methods: [''], // 运输方式数组
+    sample_statuses: [''], // 样本状态数组
+    special_notes: [''], // 特殊事项数组
   });
 
   // 稳定性及质控样本表单数据 - 修改为数组形式
@@ -150,19 +137,40 @@ export default function GlobalParamsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [orgsRes, orgTypesRes, sampleTypesRes, collectionPointsRes] = await Promise.all([
+      const [orgsRes, orgTypesRes, sampleTypesRes, clinicalOptionsRes, qcOptionsRes] = await Promise.all([
         api.get('/global-params/organizations'),
         api.get('/global-params/organization-types'),
         api.get('/global-params/sample-types'),
-        api.get('/global-params/collection-points').catch(() => ({ data: [] })), // 如果接口不存在，返回空数组
+        api.get('/global-params/clinical-sample-options').catch(() => ({ data: {} })),
+        api.get('/global-params/qc-sample-options').catch(() => ({ data: {} })),
       ]);
       setOrganizations(orgsRes.data);
       setOrgTypes(orgTypesRes.data);
-      setCollectionPoints(collectionPointsRes.data || []);
       
       const allSamples = sampleTypesRes.data as SampleType[];
       setClinicalSamples(allSamples.filter(s => s.category === 'clinical' || !s.category));
       setQcSamples(allSamples.filter(s => s.category === 'qc_stability'));
+      
+      // 加载临床样本配置选项
+      const clinicalOptions = clinicalOptionsRes.data || {};
+      setClinicalForm({
+        cycles: clinicalOptions.cycles?.length > 0 ? clinicalOptions.cycles : [''],
+        test_types: clinicalOptions.test_types?.length > 0 ? clinicalOptions.test_types : [''],
+        primary_codes: clinicalOptions.primary_codes?.length > 0 ? clinicalOptions.primary_codes : [''],
+        backup_codes: clinicalOptions.backup_codes?.length > 0 ? clinicalOptions.backup_codes : [''],
+        sample_types: clinicalOptions.sample_types?.length > 0 ? clinicalOptions.sample_types : [''],
+        purposes: clinicalOptions.purposes?.length > 0 ? clinicalOptions.purposes : [''],
+        transport_methods: clinicalOptions.transport_methods?.length > 0 ? clinicalOptions.transport_methods : [''],
+        sample_statuses: clinicalOptions.sample_statuses?.length > 0 ? clinicalOptions.sample_statuses : [''],
+        special_notes: clinicalOptions.special_notes?.length > 0 ? clinicalOptions.special_notes : [''],
+      });
+      
+      // 加载稳定性及质控样本配置选项
+      const qcOptions = qcOptionsRes.data || {};
+      setQCForm({
+        sample_categories: qcOptions.sample_categories?.length > 0 ? qcOptions.sample_categories : [''],
+        codes: qcOptions.codes?.length > 0 ? qcOptions.codes : [''],
+      });
       
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -190,9 +198,11 @@ export default function GlobalParamsPage() {
     }
   };
 
-  const handleUpdateOrg = async () => {
+  const handleUpdateOrg = async (password?: string, reason?: string) => {
     if (!editingOrg) return;
-    if (!auditReason.trim()) {
+    
+    const finalReason = reason || auditReason;
+    if (!finalReason.trim()) {
       toast.error('请输入修改理由');
       return;
     }
@@ -205,25 +215,39 @@ export default function GlobalParamsPage() {
     try {
       await api.put(`/global-params/organizations/${editingOrg.id}`, {
         ...payload,
-        audit_reason: auditReason.trim(),
+        audit_reason: finalReason.trim(),
+        password: password,
       });
       setIsOrgDialogOpen(false);
       resetOrgForm();
       fetchData();
       toast.success('组织更新成功');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update organization:', error);
+      throw new Error(error.response?.data?.detail || '更新失败');
     }
   };
 
-  const handleDeleteOrg = async (id: number) => {
-    if (!confirm('确定要删除此组织吗？')) return;
+  const handleDeleteOrg = async (id: number, password?: string, reason?: string) => {
     try {
-      await api.delete(`/global-params/organizations/${id}`);
+      await api.delete(`/global-params/organizations/${id}`, {
+        data: {
+          password: password,
+          audit_reason: reason,
+        }
+      });
       fetchData();
-    } catch (error) {
+      toast.success('组织删除成功');
+    } catch (error: any) {
       console.error('Failed to delete organization:', error);
+      throw new Error(error.response?.data?.detail || '删除失败');
     }
+  };
+  
+  // 打开删除组织的电子签名对话框
+  const openDeleteOrgESignature = (org: Organization) => {
+    setESignatureAction({ type: 'delete_org', data: org });
+    setIsESignatureOpen(true);
   };
 
   const openOrgDialog = (org?: Organization) => {
@@ -264,12 +288,15 @@ export default function GlobalParamsPage() {
 
   // --- 组织类型管理 ---
   const handleCreateOrgType = async () => {
-    if (!orgTypeForm.value.trim() || !orgTypeForm.label.trim()) {
-      toast.error('请填写类型值和显示名称');
+    if (!orgTypeForm.label.trim()) {
+      toast.error('请填写显示名称');
       return;
     }
     try {
-      await api.post('/global-params/organization-types', orgTypeForm);
+      // 类型值由后端自动生成
+      await api.post('/global-params/organization-types', {
+        label: orgTypeForm.label,
+      });
       setIsOrgTypeDialogOpen(false);
       resetOrgTypeForm();
       fetchData();
@@ -279,7 +306,7 @@ export default function GlobalParamsPage() {
     }
   };
 
-  const handleUpdateOrgType = async () => {
+  const handleUpdateOrgType = async (password?: string, reason?: string) => {
     if (!editingOrgType) return;
     if (!orgTypeForm.label.trim()) {
       toast.error('请填写显示名称');
@@ -289,25 +316,39 @@ export default function GlobalParamsPage() {
       await api.put(`/global-params/organization-types/${editingOrgType.id}`, {
         label: orgTypeForm.label,
         display_order: orgTypeForm.display_order,
+        password: password,
+        audit_reason: reason,
       });
       setIsOrgTypeDialogOpen(false);
       resetOrgTypeForm();
       fetchData();
       toast.success('组织类型更新成功');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update organization type:', error);
+      throw new Error(error.response?.data?.detail || '更新失败');
     }
   };
 
-  const handleDeleteOrgType = async (id: number) => {
-    if (!confirm('确定要删除此组织类型吗？')) return;
+  const handleDeleteOrgType = async (id: number, password?: string, reason?: string) => {
     try {
-      await api.delete(`/global-params/organization-types/${id}`);
+      await api.delete(`/global-params/organization-types/${id}`, {
+        data: {
+          password: password,
+          audit_reason: reason,
+        }
+      });
       fetchData();
       toast.success('组织类型删除成功');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete organization type:', error);
+      throw new Error(error.response?.data?.detail || '删除失败');
     }
+  };
+  
+  // 打开删除组织类型的电子签名对话框
+  const openDeleteOrgTypeESignature = (orgType: OrganizationType) => {
+    setESignatureAction({ type: 'delete_org_type', data: orgType });
+    setIsESignatureOpen(true);
   };
 
   const openOrgTypeDialog = (orgType?: OrganizationType) => {
@@ -337,226 +378,98 @@ export default function GlobalParamsPage() {
       label: '',
       display_order: 0,
     });
+    setAuditReason('');
   };
-
-  // --- 临床样本管理 ---
-  const handleCreateClinical = async () => {
-    // 验证必填项
-    const validCycleGroups = clinicalForm.cycle_groups.filter(g => g.trim());
-    const validTestTypes = clinicalForm.test_types.filter(t => t.trim());
-    const validPrimaryCodes = clinicalForm.primary_codes.filter(c => c.trim());
-    const validBackupCodes = clinicalForm.backup_codes.filter(c => c.trim());
+  
+  // 电子签名确认处理
+  const handleESignatureConfirm = async (password: string, reason: string) => {
+    if (!eSignatureAction) return;
     
-    if (validCycleGroups.length === 0) {
-      toast.error('请至少添加一个周期/剂量组');
-      return;
-    }
-    if (validTestTypes.length === 0) {
-      toast.error('请至少添加一个检测类型');
-      return;
-    }
-    if (validPrimaryCodes.length === 0) {
-      toast.error('请至少添加一个正份代码');
-      return;
-    }
-
     try {
-      // 提交时将数组转换为逗号分隔的字符串
-      await api.post('/global-params/sample-types', {
-        category: 'clinical',
-        cycle_group: validCycleGroups.join(','),
-        test_type: validTestTypes.join(','),
-        primary_count: validPrimaryCodes.length, // 正份数量为代码个数
-        primary_codes: validPrimaryCodes.join(','), // 新增字段保存正份代码
-        backup_count: validBackupCodes.length, // 备份数量为代码个数
-        backup_codes: validBackupCodes.join(','), // 备份代码
-      });
-      resetClinicalForm();
-      fetchData();
-      toast.success('临床样本类型创建成功');
-    } catch (error) {
-      console.error('Failed to create clinical sample type:', error);
+      switch (eSignatureAction.type) {
+        case 'edit_org':
+          await handleUpdateOrg(password, reason);
+          break;
+        case 'delete_org':
+          await handleDeleteOrg(eSignatureAction.data.id, password, reason);
+          break;
+        case 'edit_org_type':
+          await handleUpdateOrgType(password, reason);
+          break;
+        case 'delete_org_type':
+          await handleDeleteOrgType(eSignatureAction.data.id, password, reason);
+          break;
+      }
+      setESignatureAction(null);
+    } catch (error: any) {
+      throw error;
     }
   };
+  
+  // 打开编辑组织的电子签名对话框
+  const openEditOrgESignature = () => {
+    setESignatureAction({ type: 'edit_org' });
+    setIsESignatureOpen(true);
+  };
+  
+  // 打开编辑组织类型的电子签名对话框
+  const openEditOrgTypeESignature = () => {
+    setESignatureAction({ type: 'edit_org_type' });
+    setIsESignatureOpen(true);
+  };
 
-  const handleUpdateClinical = async () => {
-    if (!editingSampleType) return;
-    if (!auditReason.trim()) {
-      toast.error('请输入修改理由');
-      return;
-    }
-
-    // 验证必填项
-    const validCycleGroups = clinicalForm.cycle_groups.filter(g => g.trim());
-    const validTestTypes = clinicalForm.test_types.filter(t => t.trim());
-    const validPrimaryCodes = clinicalForm.primary_codes.filter(c => c.trim());
-    const validBackupCodes = clinicalForm.backup_codes.filter(c => c.trim());
-    
-    if (validCycleGroups.length === 0) {
-      toast.error('请至少添加一个周期/剂量组');
-      return;
-    }
-    if (validTestTypes.length === 0) {
-      toast.error('请至少添加一个检测类型');
-      return;
-    }
-    if (validPrimaryCodes.length === 0) {
-      toast.error('请至少添加一个正份代码');
-      return;
-    }
-
+  // --- 临床样本配置选项管理 ---
+  const handleSaveClinicalOptions = async () => {
     try {
-      await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
-        category: 'clinical',
-        cycle_group: validCycleGroups.join(','),
-        test_type: validTestTypes.join(','),
-        primary_count: validPrimaryCodes.length,
-        primary_codes: validPrimaryCodes.join(','),
-        backup_count: validBackupCodes.length,
-        backup_codes: validBackupCodes.join(','),
-        audit_reason: auditReason.trim(),
+      // 使用新的 API 保存配置选项
+      await api.put('/global-params/clinical-sample-options', {
+        cycles: clinicalForm.cycles.filter(v => v.trim()),
+        test_types: clinicalForm.test_types.filter(v => v.trim()),
+        primary_codes: clinicalForm.primary_codes.filter(v => v.trim()),
+        backup_codes: clinicalForm.backup_codes.filter(v => v.trim()),
+        sample_types: clinicalForm.sample_types.filter(v => v.trim()),
+        purposes: clinicalForm.purposes.filter(v => v.trim()),
+        transport_methods: clinicalForm.transport_methods.filter(v => v.trim()),
+        sample_statuses: clinicalForm.sample_statuses.filter(v => v.trim()),
+        special_notes: clinicalForm.special_notes.filter(v => v.trim()),
       });
-      closeClinicalDialog();
+      toast.success('临床样本配置保存成功');
+      // 重新加载数据以确保显示最新状态
       fetchData();
-      toast.success('临床样本类型更新成功');
     } catch (error) {
-      console.error('Failed to update clinical sample type:', error);
+      console.error('Failed to save clinical sample options:', error);
+      toast.error('保存失败，请重试');
     }
-  };
-
-  const openClinicalDialog = (sampleType?: SampleType) => {
-    if (sampleType) {
-      setEditingSampleType(sampleType);
-      // 从逗号分隔的字符串转换为数组
-      const cycleGroups = sampleType.cycle_group ? sampleType.cycle_group.split(',').map(s => s.trim()) : [''];
-      const testTypes = sampleType.test_type ? sampleType.test_type.split(',').map(s => s.trim()) : [''];
-      const primaryCodes = (sampleType as any).primary_codes 
-        ? (sampleType as any).primary_codes.split(',').map((s: string) => s.trim()) 
-        : [''];
-      const backupCodes = (sampleType as any).backup_codes 
-        ? (sampleType as any).backup_codes.split(',').map((s: string) => s.trim()) 
-        : [''];
-      
-      setClinicalForm({
-        cycle_groups: cycleGroups,
-        test_types: testTypes,
-        primary_codes: primaryCodes,
-        backup_codes: backupCodes,
-        collection_points: [{ code: '', name: '', time_description: '' }],
-      });
-    } else {
-      setEditingSampleType(null);
-      resetClinicalForm();
-    }
-    setIsClinicalDialogOpen(true);
-  };
-
-  const closeClinicalDialog = () => {
-    setIsClinicalDialogOpen(false);
-    resetClinicalForm();
-    setEditingSampleType(null);
   };
 
   const resetClinicalForm = () => {
     setClinicalForm({
-      cycle_groups: [''],
+      cycles: [''],
       test_types: [''],
       primary_codes: [''],
       backup_codes: [''],
-      collection_points: [{ code: '', name: '', time_description: '' }],
+      sample_types: [''],
+      purposes: [''],
+      transport_methods: [''],
+      sample_statuses: [''],
+      special_notes: [''],
     });
     setAuditReason('');
   };
 
-  // --- 稳定性及质控样本管理 ---
-  const handleCreateQC = async () => {
-    // 验证必填项
-    const validCategories = qcForm.sample_categories.filter(c => c.trim());
-    const validCodes = qcForm.codes.filter(c => c.trim());
-    
-    if (validCategories.length === 0) {
-      toast.error('请至少添加一个样本类别');
-      return;
-    }
-    if (validCodes.length === 0) {
-      toast.error('请至少添加一个代码');
-      return;
-    }
-
+  // --- 稳定性及质控样本配置选项管理 ---
+  const handleSaveQCOptions = async () => {
     try {
-      // 提交时将数组转换为逗号分隔的字符串
-      await api.post('/global-params/sample-types', {
-        category: 'qc_stability',
-        test_type: validCategories.join(','), // 使用 test_type 字段存储样本类别
-        code: validCodes.join(','),
-        primary_count: 0, // 不适用
-        backup_count: 0,  // 不适用
+      await api.put('/global-params/qc-sample-options', {
+        sample_categories: qcForm.sample_categories.filter(v => v.trim()),
+        codes: qcForm.codes.filter(v => v.trim()),
       });
-      closeQCDialog();
+      toast.success('稳定性及质控样本配置保存成功');
       fetchData();
-      toast.success('样本类型创建成功');
     } catch (error) {
-      console.error('Failed to create QC sample type:', error);
+      console.error('Failed to save QC sample options:', error);
+      toast.error('保存失败，请重试');
     }
-  };
-
-  const handleUpdateQC = async () => {
-    if (!editingSampleType) return;
-    if (!auditReason.trim()) {
-      toast.error('请输入修改理由');
-      return;
-    }
-
-    // 验证必填项
-    const validCategories = qcForm.sample_categories.filter(c => c.trim());
-    const validCodes = qcForm.codes.filter(c => c.trim());
-    
-    if (validCategories.length === 0) {
-      toast.error('请至少添加一个样本类别');
-      return;
-    }
-    if (validCodes.length === 0) {
-      toast.error('请至少添加一个代码');
-      return;
-    }
-
-    try {
-      await api.put(`/global-params/sample-types/${editingSampleType.id}`, {
-        category: 'qc_stability',
-        test_type: validCategories.join(','),
-        code: validCodes.join(','),
-        audit_reason: auditReason.trim(),
-      });
-      closeQCDialog();
-      fetchData();
-      toast.success('样本类型更新成功');
-    } catch (error) {
-      console.error('Failed to update QC sample type:', error);
-    }
-  };
-
-  const openQCDialog = (sampleType?: SampleType) => {
-    if (sampleType) {
-      setEditingSampleType(sampleType);
-      // 从逗号分隔的字符串转换为数组
-      const categories = sampleType.test_type ? sampleType.test_type.split(',').map(s => s.trim()) : [''];
-      const codes = sampleType.code ? sampleType.code.split(',').map(s => s.trim()) : [''];
-      
-      setQCForm({
-        sample_categories: categories,
-        codes: codes,
-      });
-    } else {
-      setEditingSampleType(null);
-      resetQCForm();
-    }
-    setIsQCDialogOpen(true);
-  };
-
-  const closeQCDialog = () => {
-    setIsQCDialogOpen(false);
-    resetQCForm();
-    setEditingSampleType(null);
   };
 
   const resetQCForm = () => {
@@ -565,120 +478,6 @@ export default function GlobalParamsPage() {
       codes: [''],
     });
     setAuditReason('');
-  };
-
-  const handleDeleteSampleType = async (id: number) => {
-    if (!confirm('确定要删除此样本类型配置吗？')) return;
-    try {
-      await api.delete(`/global-params/sample-types/${id}`);
-      fetchData();
-    } catch (error) {
-      console.error('Failed to delete sample type:', error);
-    }
-  };
-
-  // --- 采血点管理 ---
-  const handleCreateCollectionPoint = async () => {
-    if (!collectionPointForm.code.trim() || !collectionPointForm.name.trim()) {
-      toast.error('请填写采血点编号和名称');
-      return;
-    }
-    try {
-      await api.post('/global-params/collection-points', collectionPointForm);
-      setIsCollectionPointDialogOpen(false);
-      resetCollectionPointForm();
-      fetchData();
-      toast.success('采血点创建成功');
-    } catch (error) {
-      console.error('Failed to create collection point:', error);
-      toast.error('创建失败');
-    }
-  };
-
-  const handleUpdateCollectionPoint = async () => {
-    if (!editingCollectionPoint) return;
-    if (!collectionPointForm.code.trim() || !collectionPointForm.name.trim()) {
-      toast.error('请填写采血点编号和名称');
-      return;
-    }
-    if (!auditReason.trim()) {
-      toast.error('请输入修改理由');
-      return;
-    }
-    try {
-      await api.put(`/global-params/collection-points/${editingCollectionPoint.id}`, {
-        ...collectionPointForm,
-        audit_reason: auditReason.trim(),
-      });
-      setIsCollectionPointDialogOpen(false);
-      resetCollectionPointForm();
-      fetchData();
-      toast.success('采血点更新成功');
-    } catch (error) {
-      console.error('Failed to update collection point:', error);
-      toast.error('更新失败');
-    }
-  };
-
-  const handleDeleteCollectionPoint = async (id: number) => {
-    if (!confirm('确定要删除此采血点吗？')) return;
-    try {
-      await api.delete(`/global-params/collection-points/${id}`);
-      fetchData();
-      toast.success('采血点删除成功');
-    } catch (error) {
-      console.error('Failed to delete collection point:', error);
-      toast.error('删除失败');
-    }
-  };
-
-  const handleBatchAddCollectionPoints = async () => {
-    const textarea = document.getElementById('batch-collection-points') as HTMLTextAreaElement;
-    if (!textarea || !textarea.value.trim()) {
-      toast.error('请输入采血点数据');
-      return;
-    }
-
-    const lines = textarea.value.trim().split('\n').filter(line => line.trim());
-    const points: { code: string; name: string; time_description?: string; display_order: number }[] = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-      const parts = lines[i].split(',').map(s => s.trim());
-      if (parts.length < 2) {
-        toast.error(`第 ${i + 1} 行格式错误，至少需要编号和名称`);
-        return;
-      }
-      points.push({
-        code: parts[0],
-        name: parts[1],
-        time_description: parts[2] || '',
-        display_order: collectionPoints.length + i,
-      });
-    }
-
-    try {
-      // 逐个添加
-      for (const point of points) {
-        await api.post('/global-params/collection-points', point);
-      }
-      textarea.value = '';
-      fetchData();
-      toast.success(`成功添加 ${points.length} 个采血点`);
-    } catch (error) {
-      console.error('Failed to batch add collection points:', error);
-      toast.error('批量添加失败');
-    }
-  };
-
-  const resetCollectionPointForm = () => {
-    setCollectionPointForm({
-      code: '',
-      name: '',
-      time_description: '',
-      display_order: 0,
-    });
-    setAuditReason('');
-    setEditingCollectionPoint(null);
   };
 
   const getOrgTypeLabel = (type: string) => {
@@ -707,17 +506,12 @@ export default function GlobalParamsPage() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <Text className="text-zinc-600">管理系统中的组织信息和样本类型配置</Text>
-        </div>
-
         {/* 标签页切换 */}
         <div className="mb-6">
           <Tabs
             tabs={[
               { key: 'organizations', label: '组织管理' },
               { key: 'clinical-samples', label: '临床样本配置' },
-              { key: 'collection-points', label: '采血点配置' },
               { key: 'qc-stability-samples', label: '稳定性及质控样本配置' }
             ]}
             activeTab={activeTab}
@@ -795,12 +589,16 @@ export default function GlobalParamsPage() {
                             <TableCell className="text-zinc-600">{org.contact_email || '-'}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">
-                                <Button plain onClick={() => openOrgDialog(org)}>
-                                  <PencilIcon />
-                                </Button>
-                                <Button plain onClick={() => handleDeleteOrg(org.id)}>
-                                  <TrashIcon />
-                                </Button>
+                                <Tooltip content="编辑">
+                                  <Button plain onClick={() => openOrgDialog(org)}>
+                                    <PencilIcon />
+                                  </Button>
+                                </Tooltip>
+                                <Tooltip content="删除">
+                                  <Button plain onClick={() => openDeleteOrgESignature(org)}>
+                                    <TrashIcon />
+                                  </Button>
+                                </Tooltip>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -831,25 +629,20 @@ export default function GlobalParamsPage() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableHeader>类型值</TableHeader>
                         <TableHeader>显示名称</TableHeader>
-                        <TableHeader>排序</TableHeader>
                         <TableHeader>系统预置</TableHeader>
-                        <TableHeader>创建时间</TableHeader>
                         <TableHeader>操作</TableHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {loading ? (
-                        <AnimatedLoadingState colSpan={6} variant="skeleton" />
+                        <AnimatedLoadingState colSpan={3} variant="skeleton" />
                       ) : orgTypes.length === 0 ? (
-                        <AnimatedEmptyState colSpan={6} text="暂无数据" />
+                        <AnimatedEmptyState colSpan={3} text="暂无数据" />
                       ) : (
                         orgTypes.map((orgType) => (
                           <TableRow key={orgType.id}>
-                            <TableCell className="font-mono font-medium">{orgType.value}</TableCell>
-                            <TableCell>{orgType.label}</TableCell>
-                            <TableCell>{orgType.display_order}</TableCell>
+                            <TableCell className="font-medium">{orgType.label}</TableCell>
                             <TableCell>
                               {orgType.is_system ? (
                                 <Badge color="blue">系统</Badge>
@@ -857,18 +650,19 @@ export default function GlobalParamsPage() {
                                 <Badge color="zinc">自定义</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-zinc-500">
-                              {formatDate(orgType.created_at)}
-                            </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
-                                <Button plain onClick={() => openOrgTypeDialog(orgType)}>
-                                  <PencilIcon />
-                                </Button>
-                                {!orgType.is_system && (
-                                  <Button plain onClick={() => handleDeleteOrgType(orgType.id)}>
-                                    <TrashIcon />
+                                <Tooltip content="编辑">
+                                  <Button plain onClick={() => openOrgTypeDialog(orgType)}>
+                                    <PencilIcon />
                                   </Button>
+                                </Tooltip>
+                                {!orgType.is_system && (
+                                  <Tooltip content="删除">
+                                    <Button plain onClick={() => openDeleteOrgTypeESignature(orgType)}>
+                                      <TrashIcon />
+                                    </Button>
+                                  </Tooltip>
                                 )}
                               </div>
                             </TableCell>
@@ -886,50 +680,51 @@ export default function GlobalParamsPage() {
         {/* 临床样本配置内容 */}
         {activeTab === 'clinical-samples' && (
           <>
+            <Text className="text-zinc-600 mb-4">配置临床样本相关的下拉选项，这些选项将在新建项目时使用</Text>
             <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
               <div className="p-6 space-y-6">
-                {/* 第一行：周期/剂量组 */}
+                {/* 周期 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     <label className="text-sm font-semibold text-zinc-900">
-                      周期 / 剂量组
+                      周期
                     </label>
-                    <Badge color="blue" className="text-xs">必填</Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {clinicalForm.cycle_groups.map((group, index) => (
+                    {clinicalForm.cycles.map((cycle, index) => (
                       <div key={index} className="flex items-center gap-1 h-10">
                         <div className={inputWrapperClass}>
                           <Input
-                            value={group}
-                            autoFocus={index > 0 && index === clinicalForm.cycle_groups.length - 1}
+                            value={cycle}
+                            autoFocus={index > 0 && index === clinicalForm.cycles.length - 1}
                             onChange={(e) => {
-                              const newGroups = [...clinicalForm.cycle_groups];
-                              newGroups[index] = e.target.value;
-                              setClinicalForm({ ...clinicalForm, cycle_groups: newGroups });
+                              const newCycles = [...clinicalForm.cycles];
+                              newCycles[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, cycles: newCycles });
                             }}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' && group.trim()) {
+                              if (e.key === 'Enter' && cycle.trim()) {
                                 e.preventDefault();
                                 setClinicalForm({ 
                                   ...clinicalForm, 
-                                  cycle_groups: [...clinicalForm.cycle_groups, ''] 
+                                  cycles: [...clinicalForm.cycles, ''] 
                                 });
                               }
                             }}
-                            placeholder="如：A、B、1、2"
+                            placeholder="如：A、B、C"
                             className={inputClass}
                           />
                         </div>
-                        {clinicalForm.cycle_groups.length > 1 && (
+                        {clinicalForm.cycles.length > 1 && (
                           <Button
                             plain
                             className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
                             onClick={() => {
-                              const newGroups = clinicalForm.cycle_groups.filter((_, i) => i !== index);
-                              setClinicalForm({ ...clinicalForm, cycle_groups: newGroups });
+                              const newCycles = clinicalForm.cycles.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, cycles: newCycles });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -941,7 +736,7 @@ export default function GlobalParamsPage() {
                       onClick={() => {
                         setClinicalForm({ 
                           ...clinicalForm, 
-                          cycle_groups: [...clinicalForm.cycle_groups, ''] 
+                          cycles: [...clinicalForm.cycles, ''] 
                         });
                       }}
                       className={buttonClass}
@@ -950,16 +745,15 @@ export default function GlobalParamsPage() {
                       添加
                     </Button>
                   </div>
-            </div>
+                </div>
 
-                {/* 第二行：检测类型 */}
+                {/* 检测类型 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
                     <label className="text-sm font-semibold text-zinc-900">
                       检测类型
                     </label>
-                    <Badge color="green" className="text-xs">必填</Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {clinicalForm.test_types.map((type, index) => (
@@ -994,6 +788,7 @@ export default function GlobalParamsPage() {
                               const newTypes = clinicalForm.test_types.filter((_, i) => i !== index);
                               setClinicalForm({ ...clinicalForm, test_types: newTypes });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -1016,14 +811,13 @@ export default function GlobalParamsPage() {
                   </div>
                 </div>
 
-                {/* 第三行：正份 */}
+                {/* 正份代码 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
                     <label className="text-sm font-semibold text-zinc-900">
                       正份代码
                     </label>
-                    <Badge color="purple" className="text-xs">必填</Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {clinicalForm.primary_codes.map((code, index) => (
@@ -1058,6 +852,7 @@ export default function GlobalParamsPage() {
                               const newCodes = clinicalForm.primary_codes.filter((_, i) => i !== index);
                               setClinicalForm({ ...clinicalForm, primary_codes: newCodes });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -1080,7 +875,7 @@ export default function GlobalParamsPage() {
                   </div>
                 </div>
 
-                {/* 第四行：备份 */}
+                {/* 备份代码 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-amber-500"></div>
@@ -1121,6 +916,7 @@ export default function GlobalParamsPage() {
                               const newCodes = clinicalForm.backup_codes.filter((_, i) => i !== index);
                               setClinicalForm({ ...clinicalForm, backup_codes: newCodes });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -1142,170 +938,334 @@ export default function GlobalParamsPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* 样本类型 */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-pink-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      样本类型
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalForm.sample_types.map((type, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={type}
+                            autoFocus={index > 0 && index === clinicalForm.sample_types.length - 1}
+                            onChange={(e) => {
+                              const newTypes = [...clinicalForm.sample_types];
+                              newTypes[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, sample_types: newTypes });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && type.trim()) {
+                                e.preventDefault();
+                                setClinicalForm({ 
+                                  ...clinicalForm, 
+                                  sample_types: [...clinicalForm.sample_types, ''] 
+                                });
+                              }
+                            }}
+                            placeholder="如：血浆、血清、全血"
+                            className={`${inputClass} w-32`}
+                          />
+                        </div>
+                        {clinicalForm.sample_types.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newTypes = clinicalForm.sample_types.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, sample_types: newTypes });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setClinicalForm({ 
+                          ...clinicalForm, 
+                          sample_types: [...clinicalForm.sample_types, ''] 
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 用途 */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-cyan-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      用途
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalForm.purposes.map((purpose, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={purpose}
+                            autoFocus={index > 0 && index === clinicalForm.purposes.length - 1}
+                            onChange={(e) => {
+                              const newPurposes = [...clinicalForm.purposes];
+                              newPurposes[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, purposes: newPurposes });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && purpose.trim()) {
+                                e.preventDefault();
+                                setClinicalForm({ 
+                                  ...clinicalForm, 
+                                  purposes: [...clinicalForm.purposes, ''] 
+                                });
+                              }
+                            }}
+                            placeholder="如：检测、留样、备份"
+                            className={`${inputClass} w-32`}
+                          />
+                        </div>
+                        {clinicalForm.purposes.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newPurposes = clinicalForm.purposes.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, purposes: newPurposes });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setClinicalForm({ 
+                          ...clinicalForm, 
+                          purposes: [...clinicalForm.purposes, ''] 
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 运输方式 */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      运输方式
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalForm.transport_methods.map((method, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={method}
+                            autoFocus={index > 0 && index === clinicalForm.transport_methods.length - 1}
+                            onChange={(e) => {
+                              const newMethods = [...clinicalForm.transport_methods];
+                              newMethods[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, transport_methods: newMethods });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && method.trim()) {
+                                e.preventDefault();
+                                setClinicalForm({ 
+                                  ...clinicalForm, 
+                                  transport_methods: [...clinicalForm.transport_methods, ''] 
+                                });
+                              }
+                            }}
+                            placeholder="如：冷藏、冷冻、常温"
+                            className={`${inputClass} w-32`}
+                          />
+                        </div>
+                        {clinicalForm.transport_methods.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newMethods = clinicalForm.transport_methods.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, transport_methods: newMethods });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setClinicalForm({ 
+                          ...clinicalForm, 
+                          transport_methods: [...clinicalForm.transport_methods, ''] 
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 样本状态 */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      样本状态
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalForm.sample_statuses.map((status, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={status}
+                            autoFocus={index > 0 && index === clinicalForm.sample_statuses.length - 1}
+                            onChange={(e) => {
+                              const newStatuses = [...clinicalForm.sample_statuses];
+                              newStatuses[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, sample_statuses: newStatuses });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && status.trim()) {
+                                e.preventDefault();
+                                setClinicalForm({ 
+                                  ...clinicalForm, 
+                                  sample_statuses: [...clinicalForm.sample_statuses, ''] 
+                                });
+                              }
+                            }}
+                            placeholder="如：正常、异常、溶血"
+                            className={`${inputClass} w-32`}
+                          />
+                        </div>
+                        {clinicalForm.sample_statuses.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newStatuses = clinicalForm.sample_statuses.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, sample_statuses: newStatuses });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setClinicalForm({ 
+                          ...clinicalForm, 
+                          sample_statuses: [...clinicalForm.sample_statuses, ''] 
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 特殊事项 */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      特殊事项
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalForm.special_notes.map((note, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={note}
+                            autoFocus={index > 0 && index === clinicalForm.special_notes.length - 1}
+                            onChange={(e) => {
+                              const newNotes = [...clinicalForm.special_notes];
+                              newNotes[index] = e.target.value;
+                              setClinicalForm({ ...clinicalForm, special_notes: newNotes });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && note.trim()) {
+                                e.preventDefault();
+                                setClinicalForm({ 
+                                  ...clinicalForm, 
+                                  special_notes: [...clinicalForm.special_notes, ''] 
+                                });
+                              }
+                            }}
+                            placeholder="如：避光、低温保存"
+                            className={`${inputClass} w-36`}
+                          />
+                        </div>
+                        {clinicalForm.special_notes.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newNotes = clinicalForm.special_notes.filter((_, i) => i !== index);
+                              setClinicalForm({ ...clinicalForm, special_notes: newNotes });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setClinicalForm({ 
+                          ...clinicalForm, 
+                          special_notes: [...clinicalForm.special_notes, ''] 
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-zinc-50 px-6 py-4 border-t border-zinc-200 flex justify-end gap-3">
                 <Button plain onClick={resetClinicalForm}>
                   重置
                 </Button>
-                <Button onClick={handleCreateClinical}>
-                  <PlusIcon className="w-4 h-4" />
+                <Button onClick={handleSaveClinicalOptions}>
                   保存配置
-                </Button>
-              </div>
-            </div>
-
-            {/* 已保存的配置列表 */}
-            {clinicalSamples.length > 0 && (
-              <div className="mt-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <Heading level={2}>已保存的配置</Heading>
-                  <Badge color="zinc">{clinicalSamples.length} 条</Badge>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                        <TableHeader>周期/剂量组</TableHeader>
-                    <TableHeader>检测类型</TableHeader>
-                        <TableHeader>正份代码</TableHeader>
-                        <TableHeader>备份代码</TableHeader>
-                    <TableHeader>操作</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                      {clinicalSamples.map((sample) => (
-                        <TableRow key={sample.id}>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {(sample.cycle_group || '').split(',').map((g, i) => g.trim() && (
-                                <Badge key={i} color="blue">{g.trim()}</Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {(sample.test_type || '').split(',').map((t, i) => t.trim() && (
-                                <Badge key={i} color="green">{t.trim()}</Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {((sample as any).primary_codes || '').split(',').map((c: string, i: number) => c.trim() && (
-                                <Badge key={i} color="purple">{c.trim()}</Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {((sample as any).backup_codes || '').split(',').map((c: string, i: number) => c.trim() && (
-                                <Badge key={i} color="amber">{c.trim()}</Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                              <Button plain onClick={() => openClinicalDialog(sample)}>
-                                <PencilIcon className="w-4 h-4" />
-                            </Button>
-                              <Button plain onClick={() => handleDeleteSampleType(sample.id)}>
-                                <TrashIcon className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      ))}
-                </TableBody>
-              </Table>
-            </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* 采血点配置内容 */}
-        {activeTab === 'collection-points' && (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <Text className="text-zinc-600">配置采血点编号和对应的时间描述，用于标签生成和样本管理</Text>
-              <Button onClick={() => {
-                setEditingCollectionPoint(null);
-                setCollectionPointForm({ code: '', name: '', time_description: '', display_order: collectionPoints.length });
-                setIsCollectionPointDialogOpen(true);
-              }}>
-                <PlusIcon className="w-4 h-4" />
-                新增采血点
-              </Button>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>编号</TableHeader>
-                    <TableHeader>名称</TableHeader>
-                    <TableHeader>时间描述</TableHeader>
-                    <TableHeader>排序</TableHeader>
-                    <TableHeader>操作</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <AnimatedLoadingState colSpan={5} variant="skeleton" />
-                  ) : collectionPoints.length === 0 ? (
-                    <AnimatedEmptyState colSpan={5} text="暂无采血点配置，请点击上方按钮添加" />
-                  ) : (
-                    collectionPoints.map((point) => (
-                      <TableRow key={point.id}>
-                        <TableCell>
-                          <Badge color="blue">{point.code}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{point.name}</TableCell>
-                        <TableCell className="text-zinc-600">{point.time_description || '-'}</TableCell>
-                        <TableCell className="text-zinc-500">{point.display_order}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button plain onClick={() => {
-                              setEditingCollectionPoint(point);
-                              setCollectionPointForm({
-                                code: point.code,
-                                name: point.name,
-                                time_description: point.time_description || '',
-                                display_order: point.display_order,
-                              });
-                              setIsCollectionPointDialogOpen(true);
-                            }}>
-                              <PencilIcon className="w-4 h-4" />
-                            </Button>
-                            <Button plain onClick={() => handleDeleteCollectionPoint(point.id)}>
-                              <TrashIcon className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* 快速批量添加 */}
-            <div className="mt-6 bg-zinc-50 rounded-lg p-6 border border-zinc-200">
-              <Text className="font-semibold text-zinc-900 mb-4">快速批量添加</Text>
-              <Text className="text-sm text-zinc-600 mb-4">
-                输入多个采血点，每行一个，格式：编号,名称,时间描述（时间描述可选）
-              </Text>
-              <Textarea
-                placeholder={`例如：\n01,给药前,D1 给药前 30min\n02,给药后0.5h,D1 给药后 0.5h\n03,给药后1h,D1 给药后 1h`}
-                rows={6}
-                className="font-mono text-sm"
-                id="batch-collection-points"
-              />
-              <div className="mt-4 flex justify-end">
-                <Button onClick={handleBatchAddCollectionPoints}>
-                  <PlusIcon className="w-4 h-4" />
-                  批量添加
                 </Button>
               </div>
             </div>
@@ -1315,16 +1275,18 @@ export default function GlobalParamsPage() {
         {/* 稳定性及质控样本配置内容 */}
         {activeTab === 'qc-stability-samples' && (
           <>
+            <div className="mb-4">
+              <Text className="text-zinc-600">配置稳定性及质控样本的选项列表，这些选项将在新建项目时作为下拉菜单供选择</Text>
+            </div>
             <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
               <div className="p-6 space-y-6">
-                {/* 第一行：样本类别 */}
+                {/* 样本类别 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     <label className="text-sm font-semibold text-zinc-900">
                       样本类别
                     </label>
-                    <Badge color="blue" className="text-xs">必填</Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {qcForm.sample_categories.map((category, index) => (
@@ -1359,6 +1321,7 @@ export default function GlobalParamsPage() {
                               const newCategories = qcForm.sample_categories.filter((_, i) => i !== index);
                               setQCForm({ ...qcForm, sample_categories: newCategories });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -1379,16 +1342,15 @@ export default function GlobalParamsPage() {
                       添加
                     </Button>
                   </div>
-            </div>
+                </div>
 
-                {/* 第二行：代码 */}
+                {/* 代码 */}
                 <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
                     <label className="text-sm font-semibold text-zinc-900">
                       代码
                     </label>
-                    <Badge color="purple" className="text-xs">必填</Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {qcForm.codes.map((code, index) => (
@@ -1423,6 +1385,7 @@ export default function GlobalParamsPage() {
                               const newCodes = qcForm.codes.filter((_, i) => i !== index);
                               setQCForm({ ...qcForm, codes: newCodes });
                             }}
+                            title="删除"
                           >
                             <TrashIcon className="w-4 h-4 text-red-500" />
                           </Button>
@@ -1450,67 +1413,11 @@ export default function GlobalParamsPage() {
                 <Button plain onClick={resetQCForm}>
                   重置
                 </Button>
-                <Button onClick={handleCreateQC}>
-                  <PlusIcon className="w-4 h-4" />
+                <Button onClick={handleSaveQCOptions}>
                   保存配置
                 </Button>
               </div>
             </div>
-
-            {/* 已保存的配置列表 */}
-            {qcSamples.length > 0 && (
-              <div className="mt-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <Heading level={2}>已保存的配置</Heading>
-                  <Badge color="zinc">{qcSamples.length} 条</Badge>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                        <TableHeader>样本类别</TableHeader>
-                    <TableHeader>代码</TableHeader>
-                    <TableHeader>创建时间</TableHeader>
-                    <TableHeader>操作</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                      {qcSamples.map((sample) => (
-                        <TableRow key={sample.id}>
-                        <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {(sample.test_type || '').split(',').map((c, i) => c.trim() && (
-                                <Badge key={i} color="blue">{c.trim()}</Badge>
-                              ))}
-                            </div>
-                        </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {(sample.code || '').split(',').map((c, i) => c.trim() && (
-                                <Badge key={i} color="purple">{c.trim()}</Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-zinc-500 text-sm">
-                            {formatDate(sample.created_at)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                              <Button plain onClick={() => openQCDialog(sample)}>
-                                <PencilIcon className="w-4 h-4" />
-                            </Button>
-                              <Button plain onClick={() => handleDeleteSampleType(sample.id)}>
-                                <TrashIcon className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      ))}
-                </TableBody>
-              </Table>
-            </div>
-              </div>
-            )}
           </>
         )}
       </div>
@@ -1590,30 +1497,13 @@ export default function GlobalParamsPage() {
                 placeholder="输入邮箱地址"
               />
             </div>
-            {editingOrg && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  修改理由 <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  value={auditReason}
-                  onChange={(e) => setAuditReason(e.target.value)}
-                  placeholder="请输入修改理由"
-                  rows={2}
-                  required
-                />
-                <Text className="text-sm text-amber-600 mt-1">
-                  注意：修改信息将被记录在审计日志中
-                </Text>
-              </div>
-            )}
           </div>
         </DialogBody>
         <DialogActions>
           <Button plain onClick={closeOrgDialog}>
             取消
           </Button>
-          <Button onClick={editingOrg ? handleUpdateOrg : handleCreateOrg}>
+          <Button onClick={editingOrg ? openEditOrgESignature : handleCreateOrg}>
             {editingOrg ? '保存修改' : '创建'}
           </Button>
         </DialogActions>
@@ -1629,23 +1519,6 @@ export default function GlobalParamsPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">
-                类型值 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={orgTypeForm.value}
-                onChange={(e) => setOrgTypeForm({ ...orgTypeForm, value: e.target.value })}
-                placeholder="输入类型值（英文，如：manufacturer）"
-                required
-                disabled={!!editingOrgType}
-              />
-              {!editingOrgType && (
-                <Text className="text-sm text-zinc-500 mt-1">
-                  类型值用于系统内部标识，创建后不可修改
-                </Text>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
                 显示名称 <span className="text-red-500">*</span>
               </label>
               <Input
@@ -1655,396 +1528,46 @@ export default function GlobalParamsPage() {
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                显示排序
-              </label>
-              <Input
-                type="number"
-                value={orgTypeForm.display_order}
-                onChange={(e) => setOrgTypeForm({ ...orgTypeForm, display_order: parseInt(e.target.value) || 0 })}
-                placeholder="数字越小越靠前"
-                min="0"
-              />
-            </div>
           </div>
         </DialogBody>
         <DialogActions>
           <Button plain onClick={closeOrgTypeDialog}>
             取消
           </Button>
-          <Button onClick={editingOrgType ? handleUpdateOrgType : handleCreateOrgType}>
+          <Button onClick={editingOrgType ? openEditOrgTypeESignature : handleCreateOrgType}>
             {editingOrgType ? '保存修改' : '创建'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* 临床样本对话框 */}
-      <Dialog open={isClinicalDialogOpen} onClose={closeClinicalDialog}>
-        <DialogTitle>{editingSampleType ? '编辑临床样本类型' : '新增临床样本类型'}</DialogTitle>
-        <DialogDescription>
-          {editingSampleType ? '修改临床样本类型配置' : '添加新的临床样本类型配置'}
-        </DialogDescription>
-        <DialogBody>
-          <div className="space-y-5">
-            {/* 周期/剂量组 */}
-              <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">
-                周期 / 剂量组 <span className="text-red-500">*</span>
-                </label>
-              <div className="space-y-2">
-                {clinicalForm.cycle_groups.map((group, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                <Input
-                      value={group}
-                      onChange={(e) => {
-                        const newGroups = [...clinicalForm.cycle_groups];
-                        newGroups[index] = e.target.value;
-                        setClinicalForm({ ...clinicalForm, cycle_groups: newGroups });
-                      }}
-                      placeholder="如：A、B、1、2"
-                      className="flex-1"
-                    />
-                    {clinicalForm.cycle_groups.length > 1 && (
-                      <Button
-                        plain
-                        onClick={() => {
-                          const newGroups = clinicalForm.cycle_groups.filter((_, i) => i !== index);
-                          setClinicalForm({ ...clinicalForm, cycle_groups: newGroups });
-                        }}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {index === clinicalForm.cycle_groups.length - 1 && (
-                      <Button
-                        onClick={() => {
-                          setClinicalForm({ 
-                            ...clinicalForm, 
-                            cycle_groups: [...clinicalForm.cycle_groups, ''] 
-                          });
-                        }}
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-              </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* 检测类型 */}
-              <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">
-                检测类型 <span className="text-red-500">*</span>
-                </label>
-              <div className="space-y-2">
-                {clinicalForm.test_types.map((type, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                <Input
-                      value={type}
-                      onChange={(e) => {
-                        const newTypes = [...clinicalForm.test_types];
-                        newTypes[index] = e.target.value;
-                        setClinicalForm({ ...clinicalForm, test_types: newTypes });
-                      }}
-                      placeholder="如：PK、ADA、Nab"
-                      className="flex-1"
-                    />
-                    {clinicalForm.test_types.length > 1 && (
-                      <Button
-                        plain
-                        onClick={() => {
-                          const newTypes = clinicalForm.test_types.filter((_, i) => i !== index);
-                          setClinicalForm({ ...clinicalForm, test_types: newTypes });
-                        }}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {index === clinicalForm.test_types.length - 1 && (
-                      <Button
-                        onClick={() => {
-                          setClinicalForm({ 
-                            ...clinicalForm, 
-                            test_types: [...clinicalForm.test_types, ''] 
-                          });
-                        }}
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-              </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 正份 */}
-              <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">
-                正份 <span className="text-red-500">*</span>
-                </label>
-              <div className="space-y-2">
-                {clinicalForm.primary_codes.map((code, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                <Input
-                      value={code}
-                      onChange={(e) => {
-                        const newCodes = [...clinicalForm.primary_codes];
-                        newCodes[index] = e.target.value;
-                        setClinicalForm({ ...clinicalForm, primary_codes: newCodes });
-                      }}
-                      placeholder="如：a1、a2、a3、a4"
-                      className="flex-1"
-                    />
-                    {clinicalForm.primary_codes.length > 1 && (
-                      <Button
-                        plain
-                        onClick={() => {
-                          const newCodes = clinicalForm.primary_codes.filter((_, i) => i !== index);
-                          setClinicalForm({ ...clinicalForm, primary_codes: newCodes });
-                        }}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {index === clinicalForm.primary_codes.length - 1 && (
-                      <Button
-                        onClick={() => {
-                          setClinicalForm({ 
-                            ...clinicalForm, 
-                            primary_codes: [...clinicalForm.primary_codes, ''] 
-                          });
-                        }}
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-              </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 备份 */}
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">
-                备份
-              </label>
-              <div className="space-y-2">
-                {clinicalForm.backup_codes.map((code, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      value={code}
-                      onChange={(e) => {
-                        const newCodes = [...clinicalForm.backup_codes];
-                        newCodes[index] = e.target.value;
-                        setClinicalForm({ ...clinicalForm, backup_codes: newCodes });
-                      }}
-                      placeholder="如：b1、b2"
-                      className="flex-1"
-                    />
-                    {clinicalForm.backup_codes.length > 1 && (
-                      <Button
-                        plain
-                        onClick={() => {
-                          const newCodes = clinicalForm.backup_codes.filter((_, i) => i !== index);
-                          setClinicalForm({ ...clinicalForm, backup_codes: newCodes });
-                        }}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {index === clinicalForm.backup_codes.length - 1 && (
-                      <Button
-                        onClick={() => {
-                          setClinicalForm({ 
-                            ...clinicalForm, 
-                            backup_codes: [...clinicalForm.backup_codes, ''] 
-                          });
-                        }}
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {editingSampleType && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  修改理由 <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  value={auditReason}
-                  onChange={(e) => setAuditReason(e.target.value)}
-                  placeholder="请输入修改理由"
-                  rows={2}
-                  required
-                />
-                <Text className="text-sm text-amber-600 mt-1">
-                  注意：修改信息将被记录在审计日志中
-                </Text>
-              </div>
-            )}
-          </div>
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={closeClinicalDialog}>
-            取消
-          </Button>
-          <Button onClick={editingSampleType ? handleUpdateClinical : handleCreateClinical}>
-            {editingSampleType ? '保存修改' : '创建'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 稳定性及质控样本对话框 */}
-      <Dialog open={isQCDialogOpen} onClose={closeQCDialog}>
-        <DialogTitle>{editingSampleType ? '编辑稳定性/质控样本' : '新增稳定性/质控样本'}</DialogTitle>
-        <DialogDescription>
-          {editingSampleType ? '修改样本类型配置' : '添加新的样本类型配置'}
-        </DialogDescription>
-        <DialogBody>
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  检测类型 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={qcForm.sample_categories.join(', ')}
-                  onChange={(e) => setQCForm({ ...qcForm, sample_categories: e.target.value.split(',').map(s => s.trim()) })}
-                  placeholder="如：STB, QC"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  代码
-                </label>
-                <Input
-                  value={qcForm.codes.join(', ')}
-                  onChange={(e) => setQCForm({ ...qcForm, codes: e.target.value.split(',').map(s => s.trim()) })}
-                  placeholder="如：L, M, H"
-                />
-              </div>
-            </div>
-            
-            {editingSampleType && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  修改理由 <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  value={auditReason}
-                  onChange={(e) => setAuditReason(e.target.value)}
-                  placeholder="请输入修改理由"
-                  rows={2}
-                  required
-                />
-                <Text className="text-sm text-amber-600 mt-1">
-                  注意：修改信息将被记录在审计日志中
-                </Text>
-              </div>
-            )}
-          </div>
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={closeQCDialog}>
-            取消
-          </Button>
-          <Button onClick={editingSampleType ? handleUpdateQC : handleCreateQC}>
-            {editingSampleType ? '保存修改' : '创建'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 采血点对话框 */}
-      <Dialog open={isCollectionPointDialogOpen} onClose={() => { setIsCollectionPointDialogOpen(false); resetCollectionPointForm(); }}>
-        <DialogTitle>{editingCollectionPoint ? '编辑采血点' : '新增采血点'}</DialogTitle>
-        <DialogDescription>
-          {editingCollectionPoint ? '修改采血点配置' : '添加新的采血点配置'}
-        </DialogDescription>
-        <DialogBody>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  采血点编号 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={collectionPointForm.code}
-                  onChange={(e) => setCollectionPointForm({ ...collectionPointForm, code: e.target.value })}
-                  placeholder="如：01、02、03"
-                  required
-                />
-                <Text className="text-xs text-zinc-500 mt-1">用于标签和编号生成</Text>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  采血点名称 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={collectionPointForm.name}
-                  onChange={(e) => setCollectionPointForm({ ...collectionPointForm, name: e.target.value })}
-                  placeholder="如：给药前、给药后0.5h"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                时间描述
-              </label>
-              <Input
-                value={collectionPointForm.time_description}
-                onChange={(e) => setCollectionPointForm({ ...collectionPointForm, time_description: e.target.value })}
-                placeholder="如：D1 给药前 30min"
-              />
-              <Text className="text-xs text-zinc-500 mt-1">详细的时间描述，会显示在标签上</Text>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                显示排序
-              </label>
-              <Input
-                type="number"
-                value={collectionPointForm.display_order}
-                onChange={(e) => setCollectionPointForm({ ...collectionPointForm, display_order: parseInt(e.target.value) || 0 })}
-                placeholder="数字越小越靠前"
-                min="0"
-              />
-            </div>
-            {editingCollectionPoint && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  修改理由 <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  value={auditReason}
-                  onChange={(e) => setAuditReason(e.target.value)}
-                  placeholder="请输入修改理由"
-                  rows={2}
-                  required
-                />
-                <Text className="text-sm text-amber-600 mt-1">
-                  注意：修改信息将被记录在审计日志中
-                </Text>
-              </div>
-            )}
-          </div>
-        </DialogBody>
-        <DialogActions>
-          <Button plain onClick={() => { setIsCollectionPointDialogOpen(false); resetCollectionPointForm(); }}>
-            取消
-          </Button>
-          <Button onClick={editingCollectionPoint ? handleUpdateCollectionPoint : handleCreateCollectionPoint}>
-            {editingCollectionPoint ? '保存修改' : '创建'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      
+      {/* 电子签名对话框 */}
+      <ESignatureDialog
+        open={isESignatureOpen}
+        onClose={() => {
+          setIsESignatureOpen(false);
+          setESignatureAction(null);
+        }}
+        onConfirm={handleESignatureConfirm}
+        title={
+          eSignatureAction?.type === 'delete_org' ? '删除组织确认' :
+          eSignatureAction?.type === 'edit_org' ? '编辑组织确认' :
+          eSignatureAction?.type === 'delete_org_type' ? '删除组织类型确认' :
+          eSignatureAction?.type === 'edit_org_type' ? '编辑组织类型确认' :
+          '操作确认'
+        }
+        description={
+          eSignatureAction?.type === 'delete_org' ? `确定要删除组织 "${eSignatureAction.data?.name}" 吗？此操作需要您的电子签名确认。` :
+          eSignatureAction?.type === 'edit_org' ? '此修改操作需要您的电子签名确认。' :
+          eSignatureAction?.type === 'delete_org_type' ? `确定要删除组织类型 "${eSignatureAction.data?.label}" 吗？此操作需要您的电子签名确认。` :
+          eSignatureAction?.type === 'edit_org_type' ? '此修改操作需要您的电子签名确认。' :
+          '此操作需要您的电子签名确认。'
+        }
+        actionType={eSignatureAction?.type?.includes('delete') ? 'delete' : 'default'}
+        requireReason={true}
+        reasonLabel="操作理由"
+        reasonPlaceholder="请说明执行此操作的原因"
+      />
     </AppLayout>
   );
 }

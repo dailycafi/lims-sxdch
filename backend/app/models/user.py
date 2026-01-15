@@ -29,6 +29,8 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=True)  # 保留用于向后兼容，可为空
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+    must_change_password = Column(Boolean, default=False)  # 首次登录需修改密码
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)  # 密码最后修改时间
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

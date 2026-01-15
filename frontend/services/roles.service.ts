@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import { Role, RoleCreate, RoleUpdate, Permission } from '@/types/api';
+import { Role, RoleCreate, RoleUpdate, RoleDeleteRequest, Permission } from '@/types/api';
 
 export class RolesService {
   /**
@@ -37,10 +37,10 @@ export class RolesService {
   }
 
   /**
-   * 删除角色
+   * 删除角色（需要电子签名验证）
    */
-  static async deleteRole(id: number): Promise<void> {
-    await api.delete(`/roles/roles/${id}`);
+  static async deleteRole(id: number, data: RoleDeleteRequest): Promise<void> {
+    await api.delete(`/roles/roles/${id}`, { data });
   }
 
   /**
