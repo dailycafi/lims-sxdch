@@ -891,7 +891,7 @@ export default function ProjectDetailPage() {
                             </div>
                             <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '请选择一个编号要素'}</div>
                           </div>
-                          <button onClick={() => handleRemoveSlot(index)} className="ml-4 p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors border-0 outline-none"><XMarkIcon className="w-5 h-5" /></button>
+                          <button data-slot="control" onClick={() => handleRemoveSlot(index)} className="ml-4 p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
                         {/* 分隔符选择 - 只在非最后一个元素时显示，放在下一行 */}
                         {!isLast && slot.elementId && (

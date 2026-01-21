@@ -295,6 +295,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   // 获取未处理任务数量
+  // 优化：只获取少量数据用于统计，避免一次性获取 1000 条
   const fetchPendingTaskCount = async () => {
     // 确保 token 存在再发起请求，避免不必要的 401 错误
     if (!tokenManager.getToken()) {
@@ -303,9 +304,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
     
     try {
+      // 只获取少量任务用于判断是否有待处理任务
+      // 后端理想情况下应该提供一个专门的计数 API
       const overview = await TasksService.getTaskOverview({
         project_id: selectedProjectId ?? undefined,
-        limit: 1000, // 获取所有任务来统计数量
+        limit: 50, // 减少获取数量，只需要知道是否有待处理任务
       });
       
       // 统计需要处理的任务数量（action_required为true的任务）

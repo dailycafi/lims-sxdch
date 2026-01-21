@@ -36,17 +36,24 @@ export function AnimatedTable({
   );
 }
 
+// 动画延迟上限，避免大数据量时最后几行延迟过长
+const MAX_ANIMATION_DELAY = 0.5; // 最大延迟 0.5 秒
+const ANIMATION_DELAY_PER_ROW = 0.03; // 每行延迟 30ms
+
 export function AnimatedTableRow({ 
   children, 
   index = 0,
   className,
   ...props 
 }: { children: React.ReactNode; index?: number; className?: string }) {
+  // 计算延迟，设置上限避免大数据量时延迟过长
+  const delay = Math.min(index * ANIMATION_DELAY_PER_ROW, MAX_ANIMATION_DELAY);
+  
   return (
     <motion.tr
-      initial={{ opacity: 0, x: -20 }}
+      initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
+      transition={{ duration: 0.2, delay }}
       className={`hover:bg-zinc-50/50 transition-colors ${className || ''}`}
     >
       {children}
@@ -82,6 +89,9 @@ export function AnimatedEmptyState({
 
 // 骨架屏加载效果
 export function AnimatedSkeletonRows({ colSpan, rowCount = 5 }: { colSpan: number; rowCount?: number }) {
+  // 限制骨架屏列数，避免过多列导致性能问题
+  const displayColSpan = Math.min(colSpan, 6);
+  
   return (
     <>
       {Array.from({ length: rowCount }).map((_, index) => (
@@ -90,17 +100,13 @@ export function AnimatedSkeletonRows({ colSpan, rowCount = 5 }: { colSpan: numbe
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
+              transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.15) }}
               className="p-4"
             >
               <div className="flex gap-4">
-                {Array.from({ length: colSpan }).map((_, colIndex) => (
+                {Array.from({ length: displayColSpan }).map((_, colIndex) => (
                   <div key={colIndex} className="flex-1">
-                    <motion.div
-                      animate={{ opacity: [0.5, 0.8, 0.5] }}
-                      transition={{ duration: 1.5, repeat: Infinity, delay: colIndex * 0.1 }}
-                      className="h-4 bg-gray-200 rounded"
-                    />
+                    <div className="h-4 bg-gray-200 rounded animate-pulse" />
                   </div>
                 ))}
               </div>

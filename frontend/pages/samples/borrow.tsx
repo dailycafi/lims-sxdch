@@ -618,13 +618,8 @@ function StorageTab({ projectId, onCheckout }: { projectId: number | null, onChe
       setFreezers(res.data || []);
     } catch (e) {
       console.error('Failed to fetch freezers', e);
-      // 模拟数据
-      setFreezers([
-        { id: 'F001', name: '超低温冰箱-1', location: '样本库A区', temperature: -80, shelves: 5, total_boxes: 50, used_boxes: 35 },
-        { id: 'F002', name: '超低温冰箱-2', location: '样本库A区', temperature: -80, shelves: 5, total_boxes: 50, used_boxes: 42 },
-        { id: 'F003', name: '低温冰箱-1', location: '样本库B区', temperature: -20, shelves: 4, total_boxes: 40, used_boxes: 28 },
-        { id: 'F004', name: '冷藏冰箱-1', location: '样本库C区', temperature: 4, shelves: 3, total_boxes: 30, used_boxes: 15 },
-      ]);
+      // API 失败时设置空数组，不使用模拟数据
+      setFreezers([]);
     } finally {
       setLoading(false);
     }

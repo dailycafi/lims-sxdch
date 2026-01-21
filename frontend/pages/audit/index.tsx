@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -52,13 +52,12 @@ export default function AuditPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
+  
+  // 用于追踪用户列表是否已加载
+  const usersLoadedRef = useRef(false);
 
-  useEffect(() => {
-    fetchLogs();
-    fetchUsers();
-  }, [filters, currentPage]);
-
-  const fetchLogs = async () => {
+  // 使用 useCallback 稳定化 fetchLogs 函数
+  const fetchLogs = useCallback(async () => {
     try {
       // 过滤掉空值参数
       const cleanedFilters = Object.entries(filters).reduce((acc, [key, value]) => {
@@ -82,16 +81,28 @@ export default function AuditPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, currentPage]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    if (usersLoadedRef.current) return; // 避免重复加载
     try {
       const response = await api.get('/users');
       setUsers(response.data);
+      usersLoadedRef.current = true;
     } catch (error) {
       console.error('Failed to fetch users:', error);
     }
-  };
+  }, []);
+
+  // 分离 filters 的各个字段作为依赖，避免对象引用变化导致的无限循环
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  // 用户列表只需加载一次
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const handleExport = async () => {
     try {

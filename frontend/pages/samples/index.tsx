@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
@@ -15,10 +15,15 @@ import {
   BeakerIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   XMarkIcon 
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { SamplesService, ProjectsService } from '@/services';
+
+// 分页配置
+const PAGE_SIZE = 50;
 
 
 const statusColors: Record<string, any> = {
@@ -85,6 +90,9 @@ export default function SamplesPage() {
   const [samples, setSamples] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  
   // 新增筛选状态
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
   const [filters, setFilters] = useState({
@@ -134,36 +142,41 @@ export default function SamplesPage() {
     };
   }, [samples]);
 
-  useEffect(() => {
-    fetchProjects();
-    fetchSamples();
-  }, [filters.project, filters.status]); // 使用 filters 而不是单独的状态
-
-  const fetchProjects = async () => {
+  // 使用 useCallback 稳定化 fetch 函数
+  const fetchProjects = useCallback(async () => {
     try {
       const projects = await ProjectsService.getProjects();
       setProjects(projects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     }
-  };
+  }, []);
 
-  const fetchSamples = async () => {
+  const fetchSamples = useCallback(async () => {
     setIsLoading(true);
     try {
       const params = {
         project_id: filters.project !== 'all' ? parseInt(filters.project) : undefined,
         status: filters.status !== 'all' ? filters.status : undefined,
-        limit: 500,
+        limit: PAGE_SIZE * 10, // 获取更多数据用于前端分页，但不要太多
       };
       const samples = await SamplesService.getSamples(params);
       setSamples(samples);
+      setCurrentPage(1); // 重置到第一页
     } catch (error) {
       console.error('Failed to fetch samples:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters.project, filters.status]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  useEffect(() => {
+    fetchSamples();
+  }, [fetchSamples]);
 
   // 应用视图模式过滤 - 使用 useMemo 缓存结果
   const filteredByViewMode = useMemo(() => {
@@ -270,6 +283,19 @@ export default function SamplesPage() {
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
     return value !== '' && value !== 'all';
   }).length;
+
+  // 分页计算
+  const totalPages = Math.ceil(filteredSamples.length / PAGE_SIZE);
+  const paginatedSamples = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return filteredSamples.slice(start, end);
+  }, [filteredSamples, currentPage]);
+
+  // 当筛选条件变化时重置页码
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, viewMode]);
 
   // 重置筛选
   const resetFilters = () => {
@@ -558,13 +584,38 @@ export default function SamplesPage() {
             />
           </div>
 
-          {/* 结果统计 */}
-          <div className="px-6 py-3 bg-gray-50/50">
+          {/* 结果统计和分页 */}
+          <div className="px-6 py-3 bg-gray-50/50 flex items-center justify-between">
             <Text className="text-sm text-zinc-600">
-              当前显示 {filteredSamples.length} 条记录
-              {samples.length !== filteredSamples.length && ` / 总计 ${samples.length} 条`}
-              {activeFilterCount > 0 && `（已应用 ${activeFilterCount} 个筛选条件）`}
+              共 {filteredSamples.length} 条记录
+              {samples.length !== filteredSamples.length && `（筛选自 ${samples.length} 条）`}
+              {activeFilterCount > 0 && `，已应用 ${activeFilterCount} 个筛选条件`}
             </Text>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Text className="text-sm text-zinc-500">
+                  第 {currentPage} / {totalPages} 页
+                </Text>
+                <div className="flex gap-1">
+                  <Button
+                    plain
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1"
+                  >
+                    <ChevronLeftIcon className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    plain
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1"
+                  >
+                    <ChevronRightIcon className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* 表格内容 */}
@@ -605,7 +656,7 @@ export default function SamplesPage() {
                     />
                   ) : (
                     <>
-                      {filteredSamples.map((sample, index) => (
+                      {paginatedSamples.map((sample, index) => (
                         <AnimatedTableRow key={sample.id} index={index}>
                           <TableCell className="font-medium pl-6">{sample.sample_code}</TableCell>
                           <TableCell>{sample.project?.lab_project_code || '-'}</TableCell>
@@ -647,6 +698,48 @@ export default function SamplesPage() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* 底部分页 */}
+          {totalPages > 1 && (
+            <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
+              <Text className="text-sm text-zinc-500">
+                显示 {(currentPage - 1) * PAGE_SIZE + 1} - {Math.min(currentPage * PAGE_SIZE, filteredSamples.length)} 条
+              </Text>
+              <div className="flex items-center gap-2">
+                <Button
+                  plain
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  首页
+                </Button>
+                <Button
+                  plain
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  上一页
+                </Button>
+                <span className="px-3 py-1 text-sm text-zinc-600">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  plain
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  下一页
+                </Button>
+                <Button
+                  plain
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  末页
+                </Button>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </AppLayout>

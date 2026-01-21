@@ -177,6 +177,23 @@ export default function HomePage() {
     return user?.role ? getRoleBasedDashboardConfig(user.role) : null;
   }, [user?.role]);
 
+  // 缓存格式化后的日期字符串，避免每次渲染都创建新的 Date 对象
+  const formattedDate = useMemo(() => {
+    const now = new Date();
+    return {
+      fullDate: now.toLocaleDateString('zh-CN', { 
+        year: 'numeric',
+        month: 'long', 
+        day: 'numeric',
+        weekday: 'long'
+      }),
+      time: now.toLocaleTimeString('zh-CN', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    };
+  }, []); // 空依赖，只在组件挂载时计算一次
+
   // 获取最近的任务 - 移到hooks顶层
   const recentTasks = useMemo(() => {
     if (!taskOverview) return [];
@@ -313,12 +330,7 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-gray-500 text-sm">
-                    {new Date().toLocaleDateString('zh-CN', { 
-                      year: 'numeric',
-                      month: 'long', 
-                      day: 'numeric',
-                      weekday: 'long'
-                    })}
+                    {formattedDate.fullDate}
                   </span>
                 </div>
                 <Heading level={1} className="text-gray-900 text-3xl font-bold mb-2">
@@ -338,10 +350,7 @@ export default function HomePage() {
               <div className="flex items-center gap-4">
                 <div className="text-right text-gray-500">
                   <div className="text-sm font-mono">
-                    {new Date().toLocaleTimeString('zh-CN', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
+                    {formattedDate.time}
                   </div>
                 </div>
                 <Button 
