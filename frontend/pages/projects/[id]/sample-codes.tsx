@@ -806,14 +806,6 @@ export default function ProjectSampleCodesPage() {
                                                              (batchForm.selectedSubjects.length || 1)} <span className="text-[10px] font-medium text-zinc-400">份</span>
                                                         </p>
                                                     </div>
-                                                    <Button 
-                                                        color="dark" 
-                                                        onClick={handleViewSamples} 
-                                                        disabled={isGeneratingCodes || batchForm.selectedSubjects.length === 0}
-                                                        className="shadow-lg shadow-blue-900/10 !px-6 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                                    >
-                                                        {isGeneratingCodes ? '正在处理...' : '开始生成预览'}
-                                                    </Button>
                                                 </div>
                                             </div>
 
@@ -856,6 +848,53 @@ export default function ProjectSampleCodesPage() {
                                                     />
                                                 </div>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Bottom Action Buttons */}
+                                <div className="mt-8 bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-zinc-700">配置完成后，点击右侧按钮进行编号生成或查看</p>
+                                            {batchForm.selectedSubjects.length === 0 && (
+                                                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                    请先添加并选择受试者
+                                                </p>
+                                            )}
+                                            {batchForm.selectedSubjects.length > 0 && batchForm.selectedCycles.length === 0 && batchForm.selectedTestTypes.length === 0 && batchForm.selectedPrimary.length === 0 && batchForm.selectedBackup.length === 0 && (
+                                                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                    请至少选择一个生成参数（周期/检测类型/正份/备份）
+                                                </p>
+                                            )}
+                                            {batchForm.selectedSubjects.length > 0 && (batchForm.selectedCycles.length > 0 || batchForm.selectedTestTypes.length > 0 || batchForm.selectedPrimary.length > 0 || batchForm.selectedBackup.length > 0) && (
+                                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                                    配置已完成，可以生成编号
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <Button 
+                                                outline
+                                                onClick={() => setActiveGenerationTab('result')}
+                                                disabled={batchForm.selectedSubjects.length === 0 || (batchForm.selectedCycles.length === 0 && batchForm.selectedTestTypes.length === 0 && batchForm.selectedPrimary.length === 0 && batchForm.selectedBackup.length === 0)}
+                                                className="!px-8 !py-3 !text-base shadow-sm"
+                                            >
+                                                <MagnifyingGlassIcon className="w-5 h-5 mr-2" />
+                                                查看编号
+                                            </Button>
+                                            <Button 
+                                                color="dark" 
+                                                onClick={handleViewSamples} 
+                                                disabled={isGeneratingCodes || batchForm.selectedSubjects.length === 0 || (batchForm.selectedCycles.length === 0 && batchForm.selectedTestTypes.length === 0 && batchForm.selectedPrimary.length === 0 && batchForm.selectedBackup.length === 0)}
+                                                className="!px-8 !py-3 !text-base shadow-lg shadow-zinc-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                            >
+                                                <DocumentTextIcon className="w-5 h-5 mr-2" />
+                                                {isGeneratingCodes ? '正在处理...' : '生成编号'}
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>

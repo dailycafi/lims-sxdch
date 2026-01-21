@@ -132,7 +132,7 @@ async def create_project(
             detail="只有样本管理员可以创建项目"
         )
     
-    # 检查项目编号是否已存在
+    # 检查实验室项目编号是否已存在
     result = await db.execute(
         select(Project).where(Project.lab_project_code == project_data.lab_project_code)
     )
@@ -141,6 +141,17 @@ async def create_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="实验室项目编号已存在"
         )
+    
+    # 检查申办方项目编号是否已存在
+    if project_data.sponsor_project_code:
+        result = await db.execute(
+            select(Project).where(Project.sponsor_project_code == project_data.sponsor_project_code)
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="申办方项目编号已存在"
+            )
     
     try:
         # exclude clinical_org_ids as it is not a model field
@@ -167,7 +178,21 @@ async def create_project(
                 db_project.clinical_org_id = project_data.clinical_org_ids[0]
 
         await db.commit()
-        await db.refresh(db_project)
+        
+        # 重新查询并加载关联对象
+        from sqlalchemy.orm import selectinload
+        result = await db.execute(
+            select(Project)
+            .options(
+                selectinload(Project.sponsor),
+                selectinload(Project.clinical_org),
+                selectinload(Project.associated_organizations).selectinload(ProjectOrganization.organization)
+            )
+            .where(Project.id == db_project.id)
+        )
+        db_project = result.scalar_one()
+        db_project.clinical_orgs = [assoc.organization for assoc in db_project.associated_organizations if assoc.organization.org_type == 'clinical']
+        
         return db_project
     except IntegrityError:
         await db.rollback()
@@ -514,12 +539,65 @@ async def update_project(
                 detail="项目已有样本，无法修改编号规则"
             )
     
-    update_data = project_update.model_dump(exclude_unset=True)
+    # 检查实验室项目编号唯一性
+    if project_update.lab_project_code and project_update.lab_project_code != project.lab_project_code:
+        existing = await db.execute(
+            select(Project).where(
+                Project.lab_project_code == project_update.lab_project_code,
+                Project.id != project_id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="实验室项目编号已存在"
+            )
+    
+    # 检查申办方项目编号唯一性
+    if project_update.sponsor_project_code and project_update.sponsor_project_code != project.sponsor_project_code:
+        existing = await db.execute(
+            select(Project).where(
+                Project.sponsor_project_code == project_update.sponsor_project_code,
+                Project.id != project_id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="申办方项目编号已存在"
+            )
+    
+    # 记录原始数据
+    original_data = {
+        "sponsor_project_code": project.sponsor_project_code,
+        "lab_project_code": project.lab_project_code,
+        "sponsor_id": project.sponsor_id,
+    }
+    
+    update_data = project_update.model_dump(exclude_unset=True, exclude={"audit_reason"})
     for field, value in update_data.items():
         setattr(project, field, value)
     
+    project.updated_at = datetime.utcnow()
+    
     await db.commit()
     await db.refresh(project)
+    
+    # 创建审计日志
+    if project_update.audit_reason:
+        await create_audit_log(
+            db=db,
+            user_id=current_user.id,
+            entity_type="project",
+            entity_id=project.id,
+            action="update",
+            details={
+                "original": original_data,
+                "updated": update_data
+            },
+            reason=project_update.audit_reason
+        )
+    
     return project
 
 

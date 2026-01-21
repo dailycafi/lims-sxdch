@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { toast } from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -38,8 +39,22 @@ import {
 import { TagInput } from '@/components/tag-input';
 import { TestGroupManager } from '@/components/test-group-manager';
 import { Tooltip } from '@/components/tooltip';
+import { Fieldset, Field, Label, FieldGroup } from '@/components/fieldset';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
+
+// 分隔符选项
+const SEPARATOR_OPTIONS = [
+  { id: '', label: '无分隔', display: '' },
+  { id: '-', label: '短横 -', display: '-' },
+  { id: '_', label: '下划线 _', display: '_' },
+];
+
+// 编号规则槽位类型
+interface CodeSlot {
+  elementId: string;
+  separator: string; // 该元素后面的分隔符
+}
 
 interface Project {
   id: number;
@@ -110,7 +125,7 @@ export default function ProjectDetailPage() {
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [configTab, setConfigTab] = useState('rules'); 
   
-  const [slots, setSlots] = useState<string[]>([]);
+  const [slots, setSlots] = useState<CodeSlot[]>([]);
   
   const [dictionaries, setDictionaries] = useState({
     cycles: [] as string[],
@@ -124,6 +139,7 @@ export default function ProjectDetailPage() {
   const [globalOptions, setGlobalOptions] = useState({
     cycles: [] as string[],
     test_types: [] as string[],
+    sample_types: [] as string[],
     primary_codes: [] as string[],
     backup_codes: [] as string[],
     collection_points: [] as { code: string; name: string; time_description?: string }[],
@@ -158,13 +174,53 @@ export default function ProjectDetailPage() {
   const [isDeleteSignatureOpen, setIsDeleteSignatureOpen] = useState(false);
   
   const [auditReason, setAuditReason] = useState('');
+  
+  // 编辑项目信息
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    sponsor_project_code: '',
+    lab_project_code: '',
+    sponsor_id: 0,
+  });
+  const [editAuditReason, setEditAuditReason] = useState('');
+  const [isEditSignatureOpen, setIsEditSignatureOpen] = useState(false);
+
+  // 临床机构管理
+  const [isClinicalOrgDialogOpen, setIsClinicalOrgDialogOpen] = useState(false);
+  const [selectedClinicalOrgId, setSelectedClinicalOrgId] = useState<number | ''>('');
+  const [projectOrganizations, setProjectOrganizations] = useState<any[]>([]);
+
+  // 状态切换
+  const [isStatusSignatureOpen, setIsStatusSignatureOpen] = useState(false);
+
+  // 获取组织列表
+  const { data: organizations } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: async () => {
+      const response = await api.get('/global-params/organizations');
+      return response.data;
+    },
+  });
+
+  const sponsors = organizations?.filter((org: any) => org.org_type === 'sponsor') || [];
+  const clinicalOrgs = organizations?.filter((org: any) => org.org_type === 'clinical') || [];
 
   useEffect(() => {
     if (id) {
       fetchProject();
       fetchGlobalOptions();
+      fetchProjectOrganizations();
     }
   }, [id]);
+
+  const fetchProjectOrganizations = async () => {
+    try {
+      const response = await api.get(`/projects/${id}/organizations`);
+      setProjectOrganizations(response.data);
+    } catch (error) {
+      console.error('Failed to fetch project organizations:', error);
+    }
+  };
 
   useEffect(() => {
     if (isConfigDialogOpen && project) {
@@ -175,11 +231,13 @@ export default function ProjectDetailPage() {
   // 获取全局参数中的选项
   const fetchGlobalOptions = async () => {
     try {
-      const [sampleTypesRes, collectionPointsRes] = await Promise.all([
+      const [sampleTypesRes, collectionPointsRes, clinicalOptionsRes] = await Promise.all([
         api.get('/global-params/sample-types'),
         api.get('/global-params/collection-points').catch(() => ({ data: [] })),
+        api.get('/global-params/clinical-sample-options').catch(() => ({ data: {} })),
       ]);
       const configs = sampleTypesRes.data;
+      const clinicalOptions = clinicalOptionsRes.data || {};
       
       const cycles = new Set<string>();
       const testTypes = new Set<string>();
@@ -205,7 +263,8 @@ export default function ProjectDetailPage() {
       
       setGlobalOptions({
         cycles: Array.from(cycles),
-        test_types: Array.from(testTypes),
+        test_types: clinicalOptions.test_types || Array.from(testTypes),
+        sample_types: clinicalOptions.sample_types || [],
         primary_codes: Array.from(primaryCodes),
         backup_codes: Array.from(backupCodes),
         collection_points: collectionPointsRes.data || [],
@@ -218,13 +277,24 @@ export default function ProjectDetailPage() {
   const initSlotsFromRule = (ruleStr: any) => {
     const rule = typeof ruleStr === 'string' ? JSON.parse(ruleStr) : ruleStr;
     if (rule && rule.elements && rule.order) {
-      // 根据 order 对 elements 进行排序，确保顺序正确
-      const newSlots = [...rule.elements].sort((a, b) => {
-        const orderA = rule.order[a] !== undefined ? rule.order[a] : 999;
-        const orderB = rule.order[b] !== undefined ? rule.order[b] : 999;
-        return orderA - orderB;
-      });
-      setSlots(newSlots);
+      // 检查是否是新格式（带分隔符）
+      if (rule.slots && Array.isArray(rule.slots)) {
+        // 新格式：直接使用 slots 数组
+        setSlots(rule.slots);
+      } else {
+        // 旧格式：根据 order 对 elements 进行排序，并添加默认分隔符
+        const sortedElements = [...rule.elements].sort((a: string, b: string) => {
+          const orderA = rule.order[a] !== undefined ? rule.order[a] : 999;
+          const orderB = rule.order[b] !== undefined ? rule.order[b] : 999;
+          return orderA - orderB;
+        });
+        // 转换为新格式，默认使用短横分隔符
+        const newSlots: CodeSlot[] = sortedElements.map((elementId: string, index: number) => ({
+          elementId,
+          separator: index < sortedElements.length - 1 ? '-' : '', // 最后一个元素不需要分隔符
+        }));
+        setSlots(newSlots);
+      }
     } else {
       setSlots([]);
     }
@@ -282,7 +352,7 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveCodeRule = async () => {
-    const hasSlots = slots.some(s => !!s);
+    const hasSlots = slots.some(s => !!s.elementId);
     const hasOptions = Object.values(dictionaries).some(arr => arr && arr.length > 0);
     const hasSelectedCounts = Object.values(selectedCounts).some(c => c > 0);
 
@@ -291,7 +361,8 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const enabledElements = slots.filter(s => !!s);
+    const enabledSlots = slots.filter(s => !!s.elementId);
+    const enabledElements = enabledSlots.map(s => s.elementId);
     const orderMap: Record<string, number> = {};
     enabledElements.forEach((elementId, index) => {
       orderMap[elementId] = index;
@@ -320,6 +391,7 @@ export default function ProjectDetailPage() {
     const rule = {
       elements: enabledElements,
       order: orderMap,
+      slots: enabledSlots, // 保存完整的槽位信息（包含分隔符）
       dictionaries: actualDictionaries,
       selectedCounts: selectedCounts,
       collectionPoints: selectedCounts.collection_points > 0
@@ -356,14 +428,21 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleSlotChange = (index: number, value: string) => {
+  const handleSlotChange = (index: number, elementId: string) => {
     const newSlots = [...slots];
-    newSlots[index] = value;
+    newSlots[index] = { ...newSlots[index], elementId };
+    setSlots(newSlots);
+  };
+
+  const handleSeparatorChange = (index: number, separator: string) => {
+    const newSlots = [...slots];
+    newSlots[index] = { ...newSlots[index], separator };
     setSlots(newSlots);
   };
 
   const handleAddSlot = () => {
-    setSlots([...slots, '']);
+    // 新添加的槽位默认使用短横分隔符
+    setSlots([...slots, { elementId: '', separator: '-' }]);
   };
 
   const handleRemoveSlot = (index: number) => {
@@ -376,24 +455,27 @@ export default function ProjectDetailPage() {
     return (
       <div className="font-mono text-xl tracking-wide">
         {slots.map((slot, index) => {
-          if (!slot) return null;
-          const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s);
+          if (!slot.elementId) return null;
+          const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s.elementId);
           let example = '???';
-          const element = sampleCodeElements.find(e => e.id === slot);
+          const element = sampleCodeElements.find(e => e.id === slot.elementId);
           if (element) {
-              if (slot === 'sponsor_code') example = project?.sponsor_project_code || 'SPONSOR';
-              else if (slot === 'lab_code') example = project?.lab_project_code || 'LAB';
+              if (slot.elementId === 'sponsor_code') example = project?.sponsor_project_code || 'SPONSOR';
+              else if (slot.elementId === 'lab_code') example = project?.lab_project_code || 'LAB';
               else example = element.label;
           }
+
+          // 获取分隔符显示
+          const separator = slot.separator || '';
 
           return (
             <span key={index} className="text-red-600 font-medium">
               {example}
-              {!isLast && <span className="text-zinc-400 mx-1">-</span>}
+              {!isLast && separator && <span className="text-zinc-400 mx-0.5">{separator}</span>}
             </span>
           );
         })}
-        {(slots.length === 0 || slots.every(s => !s)) && (
+        {(slots.length === 0 || slots.every(s => !s.elementId)) && (
           <span className="text-zinc-400 text-base italic">暂未配置规则，请点击下方按钮添加...</span>
         )}
       </div>
@@ -425,6 +507,99 @@ export default function ProjectDetailPage() {
       throw new Error(message);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const openEditDialog = () => {
+    if (project) {
+      setEditForm({
+        sponsor_project_code: project.sponsor_project_code || '',
+        lab_project_code: project.lab_project_code || '',
+        sponsor_id: project.sponsor_id || 0,
+      });
+      setEditAuditReason('');
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleEditProject = async (password: string, reason: string) => {
+    if (!project) return;
+    try {
+      await api.post('/auth/verify-signature', { password, purpose: 'update_project' });
+      
+      await api.patch(`/projects/${id}`, {
+        ...editForm,
+        audit_reason: reason,
+      });
+      
+      toast.success('项目信息已更新');
+      setIsEditSignatureOpen(false);
+      setIsEditDialogOpen(false);
+      fetchProject();
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw new Error('密码验证失败，请重试');
+      }
+      const message = extractDetailMessage(error?.response?.data) || '更新项目失败';
+      throw new Error(message);
+    }
+  };
+
+  // 添加临床机构
+  const handleAddClinicalOrg = async () => {
+    if (!selectedClinicalOrgId) {
+      toast.error('请选择临床机构');
+      return;
+    }
+    try {
+      await api.post(`/projects/${id}/organizations`, {
+        organization_id: selectedClinicalOrgId,
+      });
+      toast.success('临床机构添加成功');
+      setIsClinicalOrgDialogOpen(false);
+      setSelectedClinicalOrgId('');
+      fetchProjectOrganizations();
+      fetchProject();
+    } catch (error: any) {
+      toast.error(extractDetailMessage(error?.response?.data) || '添加失败');
+    }
+  };
+
+  // 移除临床机构
+  const handleRemoveClinicalOrg = async (linkId: number) => {
+    if (!confirm('确定要移除此临床机构吗？')) return;
+    try {
+      await api.delete(`/projects/${id}/organizations/${linkId}`);
+      toast.success('临床机构已移除');
+      fetchProjectOrganizations();
+      fetchProject();
+    } catch (error: any) {
+      toast.error(extractDetailMessage(error?.response?.data) || '移除失败');
+    }
+  };
+
+  // 切换项目状态
+  const handleToggleStatus = async (password: string, reason: string) => {
+    if (!project) return;
+    try {
+      await api.post('/auth/verify-signature', { password, purpose: 'toggle_project_status' });
+      
+      await api.patch(`/projects/${id}`, {
+        is_active: !project.is_active,
+        audit_reason: reason,
+      });
+      
+      toast.success(`项目已${project.is_active ? '停用' : '启用'}`);
+      setIsStatusSignatureOpen(false);
+      setIsStatusDialogOpen(false);
+      fetchProject();
+      await refreshProjects({ force: true });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw new Error('密码验证失败，请重试');
+      }
+      const message = extractDetailMessage(error?.response?.data) || '状态切换失败';
+      throw new Error(message);
     }
   };
 
@@ -491,6 +666,12 @@ export default function ProjectDetailPage() {
               {project.is_archived && <Badge color="zinc">已归档</Badge>}
             </div>
             <div className="flex items-center gap-2">
+              {!project.is_archived && (
+                <Button outline onClick={openEditDialog}>
+                  <PencilSquareIcon className="h-4 w-4" />
+                  编辑项目
+                </Button>
+              )}
               {user?.role === 'system_admin' && !project.is_archived && (
                 <Button color="red" onClick={() => setIsDeleteDialogOpen(true)}>删除项目</Button>
               )}
@@ -498,14 +679,75 @@ export default function ProjectDetailPage() {
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
-            <DescriptionList>
-              <div><DescriptionTerm>申办方项目编号</DescriptionTerm><DescriptionDetails>{project.sponsor_project_code}</DescriptionDetails></div>
-              <div><DescriptionTerm>实验室项目编号</DescriptionTerm><DescriptionDetails>{project.lab_project_code}</DescriptionDetails></div>
-              <div><DescriptionTerm>申办方</DescriptionTerm><DescriptionDetails>{project.sponsor?.name || '-'}</DescriptionDetails></div>
-              <div><DescriptionTerm>临床机构</DescriptionTerm><DescriptionDetails>{project.clinical_org?.name || '-'}</DescriptionDetails></div>
-              <div><DescriptionTerm>创建时间</DescriptionTerm><DescriptionDetails>{formatDate(project.created_at)}</DescriptionDetails></div>
-              <div><DescriptionTerm>状态</DescriptionTerm><DescriptionDetails><Badge color={project.is_active ? 'green' : 'red'}>{project.is_active ? '活跃' : '停用'}</Badge></DescriptionDetails></div>
-            </DescriptionList>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+              <div>
+                <dt className="text-zinc-500">申办方项目编号</dt>
+                <dd className="mt-1 text-zinc-900">{project.sponsor_project_code}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">实验室项目编号</dt>
+                <dd className="mt-1 text-zinc-900">{project.lab_project_code}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">申办方</dt>
+                <dd className="mt-1 text-zinc-900">{project.sponsor?.name || '-'}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">创建时间</dt>
+                <dd className="mt-1 text-zinc-900">{formatDate(project.created_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">状态</dt>
+                <dd className="mt-1 flex items-center gap-3">
+                  <Badge color={project.is_active ? 'green' : 'red'}>{project.is_active ? '活跃' : '停用'}</Badge>
+                  {!project.is_archived && (
+                    <button 
+                      type="button"
+                      onClick={() => setIsStatusSignatureOpen(true)} 
+                      className="text-xs text-zinc-500 hover:text-zinc-700"
+                    >
+                      切换为{project.is_active ? '停用' : '活跃'}
+                    </button>
+                  )}
+                </dd>
+              </div>
+            </div>
+            
+            {/* 临床机构单独一行 */}
+            <div className="mt-4 pt-4 border-t border-zinc-100">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-zinc-500 shrink-0">临床机构</span>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {projectOrganizations.filter(po => po.organization?.org_type === 'clinical').length > 0 ? (
+                    projectOrganizations
+                      .filter(po => po.organization?.org_type === 'clinical')
+                      .map((po) => (
+                        <span key={po.id} className="inline-flex items-center bg-blue-50 text-blue-700 rounded px-2 py-1 text-sm gap-1.5">
+                          {po.organization?.name}
+                          {!project.is_archived && (
+                            <span
+                              role="button"
+                              onClick={(e) => { e.stopPropagation(); handleRemoveClinicalOrg(po.id); }}
+                              className="text-blue-400 hover:text-red-500 cursor-pointer text-base leading-none"
+                            >×</span>
+                          )}
+                        </span>
+                      ))
+                  ) : (
+                    <span className="text-zinc-400 text-sm">暂无</span>
+                  )}
+                  {!project.is_archived && (
+                    <span 
+                      role="button"
+                      onClick={() => setIsClinicalOrgDialogOpen(true)} 
+                      className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      + 添加
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -533,14 +775,19 @@ export default function ProjectDetailPage() {
                   <div className="text-sm text-zinc-500 font-medium mb-2">编号预览：</div>
                   {generateVisualPreview()}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-8 text-sm mt-4">
-                    {slots.map((slotId, index) => {
-                      if (!slotId) return null;
-                      const element = sampleCodeElements.find(e => e.id === slotId);
+                    {slots.map((slot, index) => {
+                      if (!slot.elementId) return null;
+                      const element = sampleCodeElements.find(e => e.id === slot.elementId);
                       if (!element) return null;
+                      const separatorLabel = SEPARATOR_OPTIONS.find(s => s.id === slot.separator)?.label || '';
                       return (
                         <div key={index} className="flex items-baseline gap-2">
                           <span className="font-bold text-red-600 w-4">{SLOT_LABELS[index]}</span>
-                          <span className="text-zinc-700">{element.label}<span className="text-red-600 ml-1">{element.number}</span></span>
+                          <span className="text-zinc-700">
+                            {element.label}
+                            <span className="text-red-600 ml-1">{element.number}</span>
+                            {slot.separator && <span className="text-zinc-400 ml-2 text-xs">({separatorLabel})</span>}
+                          </span>
                         </div>
                       );
                     })}
@@ -618,31 +865,55 @@ export default function ProjectDetailPage() {
                   <button onClick={() => setSlots([])} className="text-xs text-zinc-600 font-medium hover:text-zinc-900">重置所有</button>
                 </div>
                 <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                  {slots.map((currentSlotValue, index) => {
+                  {slots.map((slot, index) => {
                     const label = SLOT_LABELS[index] || String.fromCharCode(65 + index);
-                    const currentElement = sampleCodeElements.find(e => e.id === currentSlotValue);
+                    const currentElement = sampleCodeElements.find(e => e.id === slot.elementId);
+                    const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s.elementId);
                     return (
-                      <div key={index} className="group flex items-center p-4 hover:bg-zinc-50 transition-colors relative">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-mono font-bold text-lg mr-4 group-hover:bg-white group-hover:shadow-sm transition-all">{label}</div>
-                        <div className="flex-grow min-w-0">
-                          <div className="relative">
-                            <select 
-                              value={currentSlotValue || ''} 
-                              onChange={(e) => handleSlotChange(index, e.target.value)} 
-                              className="w-full appearance-none bg-transparent py-2 pl-0 pr-8 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer"
-                            >
-                              <option value="" disabled>请选择编号要素</option>
-                              {sampleCodeElements.map(el => (
-                                <option key={el.id} value={el.id}>{el.number} {el.label}</option>
+                      <div key={index} className="group p-4 hover:bg-zinc-50 transition-colors relative">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-mono font-bold text-lg mr-4 group-hover:bg-white group-hover:shadow-sm transition-all">{label}</div>
+                          <div className="flex-grow min-w-0">
+                            <div className="relative inline-block">
+                              <select 
+                                value={slot.elementId || ''} 
+                                onChange={(e) => handleSlotChange(index, e.target.value)} 
+                                className="appearance-none bg-transparent py-2 pl-0 pr-7 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer"
+                              >
+                                <option value="" disabled>请选择编号要素</option>
+                                {sampleCodeElements.map(el => (
+                                  <option key={el.id} value={el.id}>{el.number} {el.label}</option>
+                                ))}
+                              </select>
+                              <svg className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '请选择一个编号要素'}</div>
+                          </div>
+                          <button onClick={() => handleRemoveSlot(index)} className="ml-4 p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors border-0 outline-none"><XMarkIcon className="w-5 h-5" /></button>
+                        </div>
+                        {/* 分隔符选择 - 只在非最后一个元素时显示，放在下一行 */}
+                        {!isLast && slot.elementId && (
+                          <div className="mt-3 ml-14 flex items-center gap-3">
+                            <span className="text-xs text-zinc-500">后接分隔符</span>
+                            <div className="flex gap-2">
+                              {SEPARATOR_OPTIONS.map(opt => (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => handleSeparatorChange(index, opt.id)}
+                                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                    slot.separator === opt.id
+                                      ? 'bg-zinc-800 text-white'
+                                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
                               ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-400">
-                              <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
                             </div>
                           </div>
-                          <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '请选择一个编号要素'}</div>
-                        </div>
-                        <button onClick={() => handleRemoveSlot(index)} className="ml-4 p-1 text-zinc-300 hover:text-red-500 transition-colors"><XMarkIcon className="w-5 h-5" /></button>
+                        )}
                       </div>
                     );
                   })}
@@ -1120,6 +1391,108 @@ export default function ProjectDetailPage() {
           <Button color="dark" onClick={() => setIsSubjectDialogOpen(false)}>确定</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 编辑项目信息弹窗 */}
+      <Dialog open={isEditDialogOpen} onClose={setIsEditDialogOpen}>
+        <DialogTitle>编辑项目信息</DialogTitle>
+        <DialogDescription>修改项目基本信息需要电子签名确认</DialogDescription>
+        <DialogBody>
+          <Fieldset>
+            <FieldGroup>
+              <Field className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">申办方项目编号</Label>
+                <div className="flex-1">
+                  <Input
+                    value={editForm.sponsor_project_code}
+                    onChange={(e) => setEditForm({ ...editForm, sponsor_project_code: e.target.value })}
+                  />
+                </div>
+              </Field>
+
+              <Field className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">实验室项目编号</Label>
+                <div className="flex-1">
+                  <Input
+                    value={editForm.lab_project_code}
+                    onChange={(e) => setEditForm({ ...editForm, lab_project_code: e.target.value })}
+                  />
+                </div>
+              </Field>
+
+              <Field>
+                <Label>申办方</Label>
+                <Select
+                  value={editForm.sponsor_id}
+                  onChange={(e) => setEditForm({ ...editForm, sponsor_id: Number(e.target.value) })}
+                >
+                  <option value="">请选择</option>
+                  {sponsors.map((org: any) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </FieldGroup>
+          </Fieldset>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsEditDialogOpen(false)}>取消</Button>
+          <Button color="dark" onClick={() => setIsEditSignatureOpen(true)}>保存修改</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ESignatureDialog
+        open={isEditSignatureOpen}
+        onClose={setIsEditSignatureOpen}
+        onConfirm={handleEditProject}
+        title="确认修改项目信息"
+        description="请验证密码以保存项目信息修改。"
+        requireReason={true}
+        reasonLabel="修改理由"
+        reasonPlaceholder="请说明修改项目信息的原因"
+        actionType="approve"
+      />
+
+      {/* 添加临床机构弹窗 */}
+      <Dialog open={isClinicalOrgDialogOpen} onClose={setIsClinicalOrgDialogOpen}>
+        <DialogTitle>添加临床机构</DialogTitle>
+        <DialogDescription>选择要关联到此项目的临床机构</DialogDescription>
+        <DialogBody>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">临床机构</label>
+              <Select
+                value={selectedClinicalOrgId}
+                onChange={(e) => setSelectedClinicalOrgId(e.target.value ? Number(e.target.value) : '')}
+              >
+                <option value="">请选择</option>
+                {clinicalOrgs
+                  .filter((org: any) => !projectOrganizations.some(po => po.organization_id === org.id))
+                  .map((org: any) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+              </Select>
+            </div>
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={() => setIsClinicalOrgDialogOpen(false)}>取消</Button>
+          <Button color="dark" onClick={handleAddClinicalOrg}>添加</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ESignatureDialog
+        open={isStatusSignatureOpen}
+        onClose={setIsStatusSignatureOpen}
+        onConfirm={handleToggleStatus}
+        title={`确认${project?.is_active ? '停用' : '启用'}项目`}
+        description={`您正在${project?.is_active ? '停用' : '启用'}项目「${project?.lab_project_code}」。`}
+        requireReason={true}
+        reasonLabel={project?.is_active ? '停用理由' : '启用理由'}
+        reasonPlaceholder={`请说明${project?.is_active ? '停用' : '启用'}此项目的原因`}
+        actionType="approve"
+      />
     </AppLayout>
   );
 }

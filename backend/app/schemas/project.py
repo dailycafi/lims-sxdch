@@ -18,12 +18,15 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(BaseModel):
+    sponsor_project_code: Optional[str] = None
+    lab_project_code: Optional[str] = None
     sponsor_id: Optional[int] = None
     clinical_org_id: Optional[int] = None
     clinical_org_ids: Optional[List[int]] = None
     sample_code_rule: Optional[Dict[str, Any]] = None
     sample_meta_config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+    audit_reason: Optional[str] = None
 
 
 class ProjectResponse(ProjectBase):

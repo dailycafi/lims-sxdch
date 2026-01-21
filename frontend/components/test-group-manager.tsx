@@ -67,22 +67,34 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     collection_points: [],
   });
 
-  // 检测配置表单
+  // 检测配置表单（每个检测类型包含自己的采集点列表）
   const [detectionConfigs, setDetectionConfigs] = useState<DetectionConfigItem[]>([]);
   const [newDetection, setNewDetection] = useState<DetectionConfigItem>({
     test_type: '',
     sample_type: '',
     primary_sets: 1,
     backup_sets: 0,
+    collection_points: [],
   });
   const [isDetectionDialogOpen, setIsDetectionDialogOpen] = useState(false);
-
-  // 采集点表单
-  const [collectionPoints, setCollectionPoints] = useState<CollectionPointItem[]>([]);
+  
+  // 当前正在编辑采集点的检测配置索引
+  const [editingConfigIndex, setEditingConfigIndex] = useState<number | null>(null);
   const [newPoint, setNewPoint] = useState({ code: '', name: '' });
+  
+  // 表格形式的采集点数据（用于批量输入）
+  const [collectionPointRows, setCollectionPointRows] = useState<Array<{ code: string; name: string }>>([
+    { code: '', name: '' }
+  ]);
+
+  // 保留 collectionPoints 用于向后兼容
+  const [collectionPoints, setCollectionPoints] = useState<CollectionPointItem[]>([]);
 
   // 审计理由
   const [auditReason, setAuditReason] = useState('');
+  
+  // 编号预览展开状态
+  const [subjectPreviewExpanded, setSubjectPreviewExpanded] = useState(false);
 
   useEffect(() => {
     fetchTestGroups();
@@ -227,7 +239,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
 
   const handleCopy = async (group: TestGroup) => {
     try {
-      await testGroupsAPI.copyTestGroup(group.id, `${group.name || '试验组'} (副本)`);
+      await testGroupsAPI.copyTestGroup(group.id);
       toast.success('试验组复制成功', { duration: 4000 });
       fetchTestGroups();
     } catch (error: any) {
@@ -290,12 +302,13 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
       toast.error('请选择检测类型');
       return;
     }
-    setDetectionConfigs([...detectionConfigs, { ...newDetection }]);
+    setDetectionConfigs([...detectionConfigs, { ...newDetection, collection_points: [] }]);
     setNewDetection({
       test_type: '',
       sample_type: '',
       primary_sets: 1,
       backup_sets: 0,
+      collection_points: [],
     });
   };
 
@@ -308,15 +321,88 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     updated[index] = { ...updated[index], [field]: value };
     setDetectionConfigs(updated);
   };
+  
+  // 为指定检测配置批量添加采集点
+  const addCollectionPointsToConfig = (configIndex: number) => {
+    // 过滤出有效的行（代码和名称都不为空）
+    const validRows = collectionPointRows.filter(row => row.code.trim() && row.name.trim());
+    if (validRows.length === 0) {
+      toast.error('请至少输入一个有效的采集点（代码和名称都不能为空）');
+      return;
+    }
+    const updated = [...detectionConfigs];
+    const currentPoints = updated[configIndex].collection_points || [];
+    updated[configIndex] = {
+      ...updated[configIndex],
+      collection_points: [...currentPoints, ...validRows]
+    };
+    setDetectionConfigs(updated);
+    // 重置表格为一行空数据
+    setCollectionPointRows([{ code: '', name: '' }]);
+  };
+  
+  // 更新采集点表格行
+  const updateCollectionPointRow = (index: number, field: 'code' | 'name', value: string) => {
+    const updated = [...collectionPointRows];
+    updated[index] = { ...updated[index], [field]: field === 'code' ? value.toUpperCase() : value };
+    setCollectionPointRows(updated);
+  };
+  
+  // 添加采集点表格行
+  const addCollectionPointRow = (afterIndex?: number) => {
+    const updated = [...collectionPointRows];
+    const insertIndex = afterIndex !== undefined ? afterIndex + 1 : updated.length;
+    updated.splice(insertIndex, 0, { code: '', name: '' });
+    setCollectionPointRows(updated);
+  };
+  
+  // 删除采集点表格行
+  const removeCollectionPointRow = (index: number) => {
+    if (collectionPointRows.length <= 1) {
+      // 如果只剩一行，清空内容而不是删除
+      setCollectionPointRows([{ code: '', name: '' }]);
+      return;
+    }
+    const updated = collectionPointRows.filter((_, i) => i !== index);
+    setCollectionPointRows(updated);
+  };
+  
+  // 为指定检测配置添加单个采集点（保留向后兼容）
+  const addCollectionPointToConfig = (configIndex: number) => {
+    if (!newPoint.code.trim() || !newPoint.name.trim()) {
+      toast.error('请输入采集点代码和名称');
+      return;
+    }
+    const updated = [...detectionConfigs];
+    const currentPoints = updated[configIndex].collection_points || [];
+    updated[configIndex] = {
+      ...updated[configIndex],
+      collection_points: [...currentPoints, { ...newPoint }]
+    };
+    setDetectionConfigs(updated);
+    setNewPoint({ code: '', name: '' });
+  };
+  
+  // 从指定检测配置移除采集点
+  const removeCollectionPointFromConfig = (configIndex: number, pointIndex: number) => {
+    const updated = [...detectionConfigs];
+    const currentPoints = updated[configIndex].collection_points || [];
+    updated[configIndex] = {
+      ...updated[configIndex],
+      collection_points: currentPoints.filter((_, i) => i !== pointIndex)
+    };
+    setDetectionConfigs(updated);
+  };
 
   // 生成受试者编号预览
-  const generateSubjectPreview = () => {
+  const generateSubjectPreview = (showAll = false) => {
     const plannedCount = form.planned_count || 0;
     const backupCount = form.backup_count || 0;
     if (!form.subject_prefix || plannedCount <= 0) return [];
     const subjects = [];
-    const total = Math.min(plannedCount + backupCount, 10);
-    for (let i = 0; i < total; i++) {
+    const totalCount = plannedCount + backupCount;
+    const displayCount = showAll ? totalCount : Math.min(totalCount, 10);
+    for (let i = 0; i < displayCount; i++) {
       const num = (form.subject_start_number || 1) + i;
       subjects.push(`${form.subject_prefix}${num.toString().padStart(3, '0')}`);
     }
@@ -383,7 +469,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   <div>
                     <div className="flex items-center gap-2">
                       <Text className="font-semibold text-zinc-900">
-                        {group.name || `试验组 ${group.id}`}
+                        {group.name || `${group.cycle || '未指定周期'}${group.dosage ? ` - ${group.dosage}` : ''}`}
                       </Text>
                       {group.is_confirmed && (
                         <Badge color="green" className="flex items-center gap-1">
@@ -394,7 +480,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-zinc-500">
                       <span>周期: {group.cycle || '-'}</span>
-                      <span>剂量: {group.dosage || '-'}</span>
+                      <span>剂量组: {group.dosage || '-'}</span>
                       <span>计划例数: {group.planned_count}</span>
                       <span>备份例数: {group.backup_count}</span>
                     </div>
@@ -437,42 +523,43 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                     </div>
                   </div>
 
-                  {/* 检测配置列表 */}
+                  {/* 检测配置列表（包含各自的采集点） */}
                   {group.detection_configs && group.detection_configs.length > 0 && (
                     <div className="mt-4">
                       <Text className="text-xs font-medium text-zinc-500 uppercase mb-2">检测配置</Text>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                          <thead>
-                            <tr className="bg-zinc-50">
-                              <th className="px-3 py-2 text-left font-medium text-zinc-600">检测类型</th>
-                              <th className="px-3 py-2 text-left font-medium text-zinc-600">样本类型</th>
-                              <th className="px-3 py-2 text-left font-medium text-zinc-600">正份套数</th>
-                              <th className="px-3 py-2 text-left font-medium text-zinc-600">备份套数</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.detection_configs.map((config, idx) => (
-                              <tr key={idx} className="border-t border-zinc-100">
-                                <td className="px-3 py-2">{config.test_type}</td>
-                                <td className="px-3 py-2">{config.sample_type || '-'}</td>
-                                <td className="px-3 py-2">{config.primary_sets}</td>
-                                <td className="px-3 py-2">{config.backup_sets}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <div className="space-y-3">
+                        {group.detection_configs.map((config, idx) => (
+                          <div key={idx} className="bg-white rounded-lg border border-zinc-200 p-3">
+                            <div className="flex items-center gap-4 mb-2">
+                              <Badge color="blue">{config.test_type}</Badge>
+                              <span className="text-sm text-zinc-500">样本类型: {config.sample_type || '-'}</span>
+                              <span className="text-sm text-zinc-500">正份: {config.primary_sets} 套</span>
+                              <span className="text-sm text-zinc-500">备份: {config.backup_sets} 套</span>
+                            </div>
+                            {config.collection_points && config.collection_points.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-100">
+                                <span className="text-xs text-zinc-500 mr-2">采集点:</span>
+                                {config.collection_points.map((point, pointIdx) => (
+                                  <span key={pointIdx} className="inline-flex items-center bg-zinc-100 rounded px-2 py-0.5 text-xs">
+                                    <span className="font-mono text-zinc-600">{point.code}</span>
+                                    <span className="text-zinc-400 ml-1">({point.name})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
 
-                  {/* 采集点 */}
-                  {group.collection_points && group.collection_points.length > 0 && (
+                  {/* 旧版采集点（向后兼容） */}
+                  {group.collection_points && group.collection_points.length > 0 && (!group.detection_configs || group.detection_configs.every(c => !c.collection_points || c.collection_points.length === 0)) && (
                     <div className="mt-4">
-                      <Text className="text-xs font-medium text-zinc-500 uppercase mb-2">采集点</Text>
+                      <Text className="text-xs font-medium text-zinc-500 uppercase mb-2">采集点（旧版配置）</Text>
                       <div className="flex flex-wrap gap-2">
                         {group.collection_points.map((point, index) => (
-                          <Badge key={index} color="blue">
+                          <Badge key={index} color="zinc">
                             {point.code}: {point.name}
                           </Badge>
                         ))}
@@ -498,12 +585,12 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  试验组名称
+                  试验组名称 <span className="text-zinc-400 text-xs">（可选）</span>
                 </label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="如：A组、低剂量组"
+                  placeholder="如：A组、对照组"
                 />
               </div>
               <div>
@@ -530,10 +617,10 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  剂量
+                  剂量组
                 </label>
                 <Input
                   value={form.dosage}
@@ -541,29 +628,27 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   placeholder="如：100mg、200mg"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    计划例数
-                  </label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.planned_count}
-                    onChange={(e) => setForm({ ...form, planned_count: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    备份例数
-                  </label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.backup_count}
-                    onChange={(e) => setForm({ ...form, backup_count: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  计划例数
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.planned_count}
+                  onChange={(e) => setForm({ ...form, planned_count: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  备份例数
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.backup_count}
+                  onChange={(e) => setForm({ ...form, backup_count: parseInt(e.target.value) || 0 })}
+                />
               </div>
             </div>
 
@@ -602,13 +687,19 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                 <div className="mt-3 p-3 bg-white rounded border border-zinc-200">
                   <Text className="text-xs font-medium text-zinc-500 mb-2">编号预览：</Text>
                   <div className="flex flex-wrap gap-2">
-                    {generateSubjectPreview().map((s, i) => (
+                    {generateSubjectPreview(subjectPreviewExpanded).map((s, i) => (
                       <Badge key={i} color={i < (form.planned_count || 0) ? 'blue' : 'amber'}>
                         {s}
                       </Badge>
                     ))}
                     {(form.planned_count || 0) + (form.backup_count || 0) > 10 && (
-                      <Badge color="zinc">...</Badge>
+                      <Badge 
+                        color="zinc" 
+                        className="cursor-pointer hover:bg-zinc-200 transition-colors"
+                        onClick={() => setSubjectPreviewExpanded(!subjectPreviewExpanded)}
+                      >
+                        {subjectPreviewExpanded ? '收起' : `...还有 ${(form.planned_count || 0) + (form.backup_count || 0) - 10} 个`}
+                      </Badge>
                     )}
                   </div>
                   <Text className="text-xs text-zinc-500 mt-2">
@@ -618,10 +709,13 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               )}
             </div>
 
-            {/* 检测配置（多检测类型） */}
+            {/* 检测配置（每个检测类型包含自己的采集点） */}
             <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
               <div className="flex items-center justify-between mb-3">
-                <Text className="font-medium text-zinc-900">检测配置（支持多个检测类型）</Text>
+                <div>
+                  <Text className="font-medium text-zinc-900">检测配置（支持多个检测类型）</Text>
+                  <Text className="text-xs text-zinc-500 mt-1">每种检测类型对应自身的采集点，不同检测类型有不同的采集点</Text>
+                </div>
                 <Button outline onClick={() => setIsDetectionDialogOpen(true)}>
                   <PlusIcon className="w-4 h-4" />
                   添加检测类型
@@ -630,85 +724,76 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               {detectionConfigs.length === 0 ? (
                 <Text className="text-sm text-zinc-500">暂无检测配置，点击上方按钮添加</Text>
               ) : (
-                <Table bleed>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeader>检测类型</TableHeader>
-                      <TableHeader>样本类型</TableHeader>
-                      <TableHeader>正份套数</TableHeader>
-                      <TableHeader>备份套数</TableHeader>
-                      <TableHeader className="w-20">操作</TableHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {detectionConfigs.map((config, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{config.test_type}</TableCell>
-                        <TableCell>{config.sample_type || '-'}</TableCell>
-                        <TableCell>
+                <div className="space-y-4">
+                  {detectionConfigs.map((config, configIndex) => (
+                    <div key={configIndex} className="bg-white rounded-lg border border-zinc-200 p-4">
+                      {/* 检测类型头部信息 */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-4">
+                          <Badge color="blue">{config.test_type}</Badge>
+                          {config.sample_type && <Text className="text-sm text-zinc-500">样本类型: {config.sample_type}</Text>}
+                        </div>
+                        <Button plain onClick={() => removeDetectionConfig(configIndex)}>
+                          <TrashIcon className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                      
+                      {/* 套数配置 */}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-500 mb-1">正份套数</label>
                           <Input
                             type="number"
                             min={0}
                             value={config.primary_sets}
-                            onChange={(e) => updateDetectionConfig(index, 'primary_sets', parseInt(e.target.value) || 0)}
-                            className="w-20"
+                            onChange={(e) => updateDetectionConfig(configIndex, 'primary_sets', parseInt(e.target.value) || 0)}
+                            className="w-full"
                           />
-                        </TableCell>
-                        <TableCell>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-500 mb-1">备份套数</label>
                           <Input
                             type="number"
                             min={0}
                             value={config.backup_sets}
-                            onChange={(e) => updateDetectionConfig(index, 'backup_sets', parseInt(e.target.value) || 0)}
-                            className="w-20"
+                            onChange={(e) => updateDetectionConfig(configIndex, 'backup_sets', parseInt(e.target.value) || 0)}
+                            className="w-full"
                           />
-                        </TableCell>
-                        <TableCell>
-                          <Button plain onClick={() => removeDetectionConfig(index)}>
-                            <TrashIcon className="w-4 h-4 text-red-500" />
+                        </div>
+                      </div>
+                      
+                      {/* 该检测类型的采集点列表 */}
+                      <div className="border-t border-zinc-100 pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <Text className="text-sm font-medium text-zinc-700">采集点配置</Text>
+                          <Button plain onClick={() => { setEditingConfigIndex(configIndex); setIsCollectionPointDialogOpen(true); }}>
+                            <PlusIcon className="w-4 h-4" />
+                            添加采集点
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-
-            {/* 采集点配置 */}
-            <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
-              <div className="flex items-center justify-between mb-3">
-                <Text className="font-medium text-zinc-900">采集点配置</Text>
-                <Button outline onClick={() => setIsCollectionPointDialogOpen(true)}>
-                  <PlusIcon className="w-4 h-4" />
-                  添加采集点
-                </Button>
-              </div>
-              {collectionPoints.length === 0 ? (
-                <Text className="text-sm text-zinc-500">暂无采集点，点击上方按钮添加</Text>
-              ) : (
-                <Table bleed>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeader>采集点</TableHeader>
-                      <TableHeader>采集点名称</TableHeader>
-                      <TableHeader className="w-20">操作</TableHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {collectionPoints.map((point, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-mono">{point.code}</TableCell>
-                        <TableCell>{point.name}</TableCell>
-                        <TableCell>
-                          <Button plain onClick={() => removeCollectionPoint(index)}>
-                            <TrashIcon className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                        {(!config.collection_points || config.collection_points.length === 0) ? (
+                          <Text className="text-xs text-zinc-400">暂无采集点，点击上方按钮添加</Text>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {config.collection_points.map((point, pointIndex) => (
+                              <div key={pointIndex} className="inline-flex items-center gap-1 bg-zinc-100 rounded-md px-2 py-1">
+                                <span className="text-xs font-mono text-zinc-600">{point.code}</span>
+                                <span className="text-xs text-zinc-500">({point.name})</span>
+                                <button 
+                                  type="button"
+                                  onClick={() => removeCollectionPointFromConfig(configIndex, pointIndex)}
+                                  className="ml-1 text-zinc-400 hover:text-red-500"
+                                >
+                                  <TrashIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -768,11 +853,23 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               <label className="block text-sm font-medium text-zinc-700 mb-1">
                 样本类型
               </label>
-              <Input
-                value={newDetection.sample_type || ''}
-                onChange={(e) => setNewDetection({ ...newDetection, sample_type: e.target.value })}
-                placeholder="如：血浆、血清"
-              />
+              {globalParams.sample_types.length > 0 ? (
+                <Select
+                  value={newDetection.sample_type || ''}
+                  onChange={(e) => setNewDetection({ ...newDetection, sample_type: e.target.value })}
+                >
+                  <option value="">请选择</option>
+                  {globalParams.sample_types.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  value={newDetection.sample_type || ''}
+                  onChange={(e) => setNewDetection({ ...newDetection, sample_type: e.target.value })}
+                  placeholder="如：血浆、血清"
+                />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -808,38 +905,118 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         </DialogActions>
       </Dialog>
 
-      {/* 添加采集点对话框 */}
-      <Dialog open={isCollectionPointDialogOpen} onClose={() => setIsCollectionPointDialogOpen(false)}>
-        <DialogTitle>添加采集点</DialogTitle>
-        <DialogDescription>输入采集点代码和名称</DialogDescription>
+      {/* 添加采集点对话框 - 表格形式 */}
+      <Dialog 
+        open={isCollectionPointDialogOpen} 
+        onClose={() => { 
+          setIsCollectionPointDialogOpen(false); 
+          setEditingConfigIndex(null); 
+          setCollectionPointRows([{ code: '', name: '' }]);
+        }}
+        size="xl"
+      >
+        <DialogTitle>
+          添加采集点
+          {editingConfigIndex !== null && detectionConfigs[editingConfigIndex] && (
+            <Badge color="blue" className="ml-2">{detectionConfigs[editingConfigIndex].test_type}</Badge>
+          )}
+        </DialogTitle>
+        <DialogDescription>输入采集点代码和名称，支持批量添加多个采集点</DialogDescription>
         <DialogBody>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                采集点代码 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={newPoint.code}
-                onChange={(e) => setNewPoint({ ...newPoint, code: e.target.value.toUpperCase() })}
-                placeholder="如：C1、C2"
-              />
+            {/* 表格形式输入 */}
+            <div className="border border-zinc-200 rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-zinc-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-sm font-medium text-zinc-700 w-12">#</th>
+                    <th className="px-3 py-2 text-left text-sm font-medium text-zinc-700">
+                      采血点代码 <span className="text-red-500">*</span>
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-medium text-zinc-700">
+                      采血点名称 <span className="text-red-500">*</span>
+                    </th>
+                    <th className="px-3 py-2 text-center text-sm font-medium text-zinc-700 w-24">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {collectionPointRows.map((row, index) => (
+                    <tr key={index} className="hover:bg-zinc-50">
+                      <td className="px-3 py-2 text-sm text-zinc-500">{index + 1}</td>
+                      <td className="px-2 py-1">
+                        <Input
+                          value={row.code}
+                          onChange={(e) => updateCollectionPointRow(index, 'code', e.target.value)}
+                          placeholder="如: C1"
+                          className="!py-1.5 text-sm"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Input
+                          value={row.name}
+                          onChange={(e) => updateCollectionPointRow(index, 'name', e.target.value)}
+                          placeholder="如: 0h"
+                          className="!py-1.5 text-sm"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => addCollectionPointRow(index)}
+                            className="p-1 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                            title="在下方插入行"
+                          >
+                            <PlusIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeCollectionPointRow(index)}
+                            className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="删除此行"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                采集点名称 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={newPoint.name}
-                onChange={(e) => setNewPoint({ ...newPoint, name: e.target.value })}
-                placeholder="如：D1-0h、D1-1h"
-              />
+            
+            {/* 添加行按钮 */}
+            <div className="flex justify-between items-center">
+              <Button 
+                plain 
+                onClick={() => addCollectionPointRow()}
+                className="text-sm"
+              >
+                <PlusIcon className="h-4 w-4 mr-1" />
+                添加行
+              </Button>
+              <Text className="text-xs text-zinc-500">
+                共 {collectionPointRows.filter(r => r.code.trim() && r.name.trim()).length} 个有效采集点
+              </Text>
             </div>
           </div>
         </DialogBody>
         <DialogActions>
-          <Button plain onClick={() => setIsCollectionPointDialogOpen(false)}>取消</Button>
-          <Button onClick={() => { addCollectionPoint(); setIsCollectionPointDialogOpen(false); }}>
-            添加
+          <Button plain onClick={() => { 
+            setIsCollectionPointDialogOpen(false); 
+            setEditingConfigIndex(null); 
+            setCollectionPointRows([{ code: '', name: '' }]);
+          }}>
+            取消
+          </Button>
+          <Button onClick={() => { 
+            if (editingConfigIndex !== null) {
+              addCollectionPointsToConfig(editingConfigIndex); 
+              setIsCollectionPointDialogOpen(false);
+              setEditingConfigIndex(null);
+            }
+          }}>
+            确认
           </Button>
         </DialogActions>
       </Dialog>

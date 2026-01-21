@@ -10,12 +10,13 @@ export interface DetectionConfigItem {
   sample_type?: string;
   primary_sets: number;
   backup_sets: number;
+  collection_points?: CollectionPointItem[];  // 该检测类型对应的采集点列表
 }
 
 export interface TestGroup {
   id: number;
   project_id: number;
-  name?: string;
+  name?: string;  // 可选的试验组名称
   cycle?: string;
   dosage?: string;
   planned_count: number;
@@ -38,7 +39,7 @@ export interface TestGroup {
 
 export interface TestGroupCreate {
   project_id: number;
-  name?: string;
+  name?: string;  // 可选的试验组名称
   cycle?: string;
   dosage?: string;
   planned_count?: number;
@@ -52,7 +53,7 @@ export interface TestGroupCreate {
 }
 
 export interface TestGroupUpdate {
-  name?: string;
+  name?: string;  // 可选的试验组名称
   cycle?: string;
   dosage?: string;
   planned_count?: number;
@@ -115,8 +116,8 @@ export const testGroupsAPI = {
   },
 
   // 复制试验组
-  copyTestGroup: async (sourceId: number, newName?: string): Promise<TestGroup> => {
-    const response = await api.post('/test-groups/copy', { source_id: sourceId, new_name: newName });
+  copyTestGroup: async (sourceId: number): Promise<TestGroup> => {
+    const response = await api.post('/test-groups/copy', { source_id: sourceId });
     return response.data;
   },
 

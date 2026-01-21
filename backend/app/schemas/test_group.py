@@ -10,16 +10,17 @@ class CollectionPointItem(BaseModel):
 
 
 class DetectionConfigItem(BaseModel):
-    """检测配置项 - 一个试验组可以有多个检测类型"""
+    """检测配置项 - 一个试验组可以有多个检测类型，每个检测类型有自己的采集点"""
     test_type: str  # 检测类型（如 PK, ADA, Nab）
     sample_type: Optional[str] = None  # 样本类型（如 血浆, 血清）
     primary_sets: int = 1  # 正份套数
     backup_sets: int = 0  # 备份套数
+    collection_points: Optional[List[CollectionPointItem]] = None  # 该检测类型对应的采集点列表
 
 
 class TestGroupBase(BaseModel):
     """试验组基础模型"""
-    name: Optional[str] = None
+    name: Optional[str] = None  # 可选的试验组名称
     cycle: Optional[str] = None
     dosage: Optional[str] = None
     planned_count: int = 0
@@ -39,7 +40,7 @@ class TestGroupCreate(TestGroupBase):
 
 class TestGroupUpdate(BaseModel):
     """更新试验组"""
-    name: Optional[str] = None
+    name: Optional[str] = None  # 可选的试验组名称
     cycle: Optional[str] = None
     dosage: Optional[str] = None
     planned_count: Optional[int] = None
@@ -88,7 +89,6 @@ class TestGroupResponse(TestGroupBase):
 class TestGroupCopy(BaseModel):
     """复制试验组"""
     source_id: int  # 源试验组 ID
-    new_name: Optional[str] = None  # 新名称
 
 
 # 采集点相关

@@ -55,7 +55,14 @@ def generate_sample_codes_logic(
     rule = project.sample_code_rule or {}
     elements_rule = rule.get("elements", [])
     order_map = rule.get("order", {})
+    slots = rule.get("slots", [])  # 新格式：包含分隔符信息的槽位数组
     elements = sorted([e for e in elements_rule], key=lambda x: order_map.get(x, 0))
+    
+    # 构建元素到分隔符的映射
+    separator_map = {}
+    for slot in slots:
+        if isinstance(slot, dict) and slot.get("elementId"):
+            separator_map[slot["elementId"]] = slot.get("separator", "-")
 
     cycles = cycles or [""]
     test_types = test_types or [""]
@@ -91,11 +98,27 @@ def generate_sample_codes_logic(
         clinic_code = cs_pair.get("clinic", "")
         subject = cs_pair.get("subject", "")
         for tt, st, cycle, stype in product(test_types, seq_time_pairs, cycles, sample_types):
-            parts = [_part(el, clinic_code, subject, tt, st, cycle, stype) for el in elements]
-            parts = [p for p in parts if p != ""]
-            if not parts:
+            # 生成各部分的值
+            part_values = []
+            for i, el in enumerate(elements):
+                part_val = _part(el, clinic_code, subject, tt, st, cycle, stype)
+                if part_val:  # 只添加非空部分
+                    # 获取该元素后面的分隔符（如果有配置）
+                    sep = separator_map.get(el, "-") if separator_map else "-"
+                    part_values.append((part_val, sep))
+            
+            if not part_values:
                 continue
-            code = "-".join(parts)
+            
+            # 拼接编号：每个部分后面跟着它的分隔符（最后一个部分除外）
+            code_parts = []
+            for i, (val, sep) in enumerate(part_values):
+                code_parts.append(val)
+                # 不是最后一个部分时，添加分隔符
+                if i < len(part_values) - 1 and sep:
+                    code_parts.append(sep)
+            
+            code = "".join(code_parts)
             generated_codes.append(code)
 
     unique_codes = list(dict.fromkeys(generated_codes))
@@ -107,16 +130,40 @@ def parse_sample_code(
 ) -> Dict[str, Any]:
     """
     根据项目规则解析样本编号中的元数据
+    支持自定义分隔符（短横、下划线、无分隔符）
     """
+    import re
+    
     rule = project.sample_code_rule or {}
     elements_rule = rule.get("elements", [])
     order_map = rule.get("order", {})
+    slots = rule.get("slots", [])
     
     # 获取按顺序排列的元素
     sorted_elements = sorted([e for e in elements_rule], key=lambda x: order_map.get(x, 0))
     
-    # 分割编号
-    parts = sample_code.split('-')
+    # 构建元素到分隔符的映射
+    separator_map = {}
+    for slot in slots:
+        if isinstance(slot, dict) and slot.get("elementId"):
+            separator_map[slot["elementId"]] = slot.get("separator", "-")
+    
+    # 根据分隔符分割编号
+    # 收集所有使用的分隔符
+    separators_used = set()
+    for el in sorted_elements[:-1]:  # 最后一个元素后面没有分隔符
+        sep = separator_map.get(el, "-")
+        if sep:
+            separators_used.add(sep)
+    
+    # 如果有分隔符，使用正则表达式分割
+    if separators_used:
+        # 构建正则表达式模式，匹配任意分隔符
+        pattern = '[' + re.escape(''.join(separators_used)) + ']'
+        parts = re.split(pattern, sample_code)
+    else:
+        # 没有分隔符，整个编号作为一个部分（这种情况解析会很困难）
+        parts = [sample_code]
     
     metadata = {}
     

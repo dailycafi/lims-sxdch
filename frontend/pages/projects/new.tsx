@@ -123,6 +123,10 @@ export default function NewProjectPage() {
       await refreshProjects({ force: true });
       router.push('/projects');
     },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || '创建项目失败';
+      toast.error(message);
+    },
   });
 
   const onSubmit = async (data: ProjectForm) => {

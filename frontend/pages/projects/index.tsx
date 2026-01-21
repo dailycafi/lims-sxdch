@@ -35,7 +35,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   
   const [filters, setFilters] = useState({
     status: 'all',
@@ -296,7 +296,7 @@ export default function ProjectsPage() {
                         <TableCell className="text-right pr-6">
                           <Link href={`/projects/${project.id}`}>
                             <Button plain>
-                              查看详情
+                              配置项目
                             </Button>
                           </Link>
                         </TableCell>

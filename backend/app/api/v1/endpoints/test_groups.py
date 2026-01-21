@@ -301,7 +301,7 @@ async def delete_test_group(
         entity_type="test_group",
         entity_id=test_group.id,
         action="delete",
-        details={"name": test_group.name, "project_id": test_group.project_id},
+        details={"cycle": test_group.cycle, "dosage": test_group.dosage, "project_id": test_group.project_id},
     )
     
     return {"message": "试验组已删除"}
@@ -352,7 +352,8 @@ async def confirm_test_group(
         entity_id=test_group.id,
         action="confirm",
         details={
-            "name": test_group.name,
+            "cycle": test_group.cycle,
+            "dosage": test_group.dosage,
             "project_id": test_group.project_id,
             "confirmed_at": test_group.confirmed_at.isoformat() if test_group.confirmed_at else None,
         },
@@ -396,7 +397,7 @@ async def copy_test_group(
     # 创建新的试验组
     new_test_group = TestGroup(
         project_id=source.project_id,
-        name=data.new_name or f"{source.name or '试验组'} (副本)",
+        name=None,  # 不再使用 name 字段
         cycle=source.cycle,
         dosage=source.dosage,
         planned_count=source.planned_count,
@@ -423,8 +424,8 @@ async def copy_test_group(
         action="copy",
         details={
             "source_id": source.id,
-            "source_name": source.name,
-            "new_name": new_test_group.name,
+            "source_cycle": source.cycle,
+            "source_dosage": source.dosage,
         },
     )
     
