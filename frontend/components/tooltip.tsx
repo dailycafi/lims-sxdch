@@ -15,7 +15,7 @@ export function Tooltip({ content, children, position = 'top', delay = 100 }: To
   const [coords, setCoords] = useState({ x: 0, y: 0 })
   const triggerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<NodeJS.Timeout>(undefined)
 
   const showTooltip = () => {
     timeoutRef.current = setTimeout(() => {

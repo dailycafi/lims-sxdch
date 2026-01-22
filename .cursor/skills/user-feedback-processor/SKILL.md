@@ -78,6 +78,38 @@ cd frontend && npm run dev
 - UI 修改符合 Web Interface Guidelines
 - 使用 `ReadLints` 检查代码是否有语法错误
 
+### 验证前端构建
+
+修改完成后，**必须**运行前端构建确保无错误：
+
+```bash
+cd frontend && npm run build
+```
+
+如果构建失败，根据错误信息修复代码后再次构建，直到通过。
+
+### 检查数据库结构
+
+如果修改涉及**后端模型**（`backend/app/models/`），需要同步更新 `init_db.py`：
+
+1. **检查模型变更**：查看是否有新增字段、新表、或字段类型变更
+2. **更新 init_db.py**：
+   - 新增表：在 `init_db()` 中添加示例数据
+   - 新增字段：更新现有示例数据
+   - 确保测试数据完整性
+
+3. **重建数据库**（测试环境）：
+```bash
+cd backend && conda activate lims && python init_db.py --drop
+```
+
+**注意**：`--drop` 会删除所有现有数据，仅在测试环境使用！
+
+**模型文件位置**：
+- `backend/app/models/` - SQLAlchemy 模型定义
+- `backend/app/schemas/` - Pydantic 数据模式
+- `backend/init_db.py` - 数据库初始化脚本
+
 ## 第四步：验证修改（重要！）
 
 修改代码后，**必须**验证页面是否正常工作：
@@ -215,6 +247,8 @@ python .cursor/skills/user-feedback-processor/scripts/generate_report.py \
 - [ ] 代码无 lint 错误
 - [ ] 页面无运行时错误（无 Network Error、无弹窗报错）
 - [ ] UI 显示正常（无截断、无不当换行、无遮挡）
+- [ ] **前端 build 通过**：`cd frontend && npm run build`
+- [ ] **数据库结构同步**：如有模型更改，更新 `init_db.py`
 - [ ] 每个修改项都有对应的 ROI 截图
 - [ ] **截图已压缩**（避免 "image too large" 错误）
 - [ ] 已生成 PDF 修改报告
@@ -229,3 +263,4 @@ python .cursor/skills/user-feedback-processor/scripts/generate_report.py \
 | 元素被压缩 | 添加 `flex-shrink-0` |
 | 下拉菜单被遮挡 | 检查父容器 `overflow`、`z-index` |
 | **image too large** | 运行 `compress_image.py` 压缩截图 |
+| **数据库不同步** | 运行 `python init_db.py --drop` 重建 |

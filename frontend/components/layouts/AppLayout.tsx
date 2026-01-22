@@ -200,7 +200,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // 使用 useCallback 稳定化 handleActivity 函数
   // 参考: React Best Practices - 8.1 Store Event Handlers in Refs
-  const handleActivityRef = useRef<() => void>();
+  const handleActivityRef = useRef<() => void>(() => {});
   handleActivityRef.current = useCallback(() => {
     const now = Date.now();
     setCachedStorage(STORAGE_KEY, now.toString());

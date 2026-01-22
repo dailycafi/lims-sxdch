@@ -591,7 +591,6 @@ export default function ProjectDetailPage() {
       
       toast.success(`项目已${project.is_active ? '停用' : '启用'}`);
       setIsStatusSignatureOpen(false);
-      setIsStatusDialogOpen(false);
       fetchProject();
       await refreshProjects({ force: true });
     } catch (error: any) {
