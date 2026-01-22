@@ -387,10 +387,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* 中间：项目选择器 - 仅在非主页显示 */}
           {router.pathname !== '/' && (
-            <div className="flex flex-1 min-w-0 justify-end overflow-hidden mr-2">
-              <div className="w-full max-w-[200px] sm:max-w-xs">
-                <ProjectSwitcher />
-              </div>
+            <div className="flex flex-1 min-w-0 justify-end mr-2">
+              <ProjectSwitcher />
             </div>
           )}
         </div>

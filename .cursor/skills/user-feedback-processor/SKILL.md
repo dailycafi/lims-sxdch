@@ -1,228 +1,231 @@
 ---
 name: user-feedback-processor
-description: 处理用户反馈文档（doc/docx）并修改项目代码。当用户拖入反馈文档、提到"用户反馈"、"修改需求"、"docx"、"反馈文档"时触发。解析文档中的文字和截图，根据反馈内容自动判断修改前端或后端代码，确保 UI/UX 符合最佳实践，并使用 agent-browser 进行测试验证。
+description: 处理用户反馈文档（docx）并修改项目代码。当用户提到"用户反馈"、"修改需求"、"反馈文档"、拖入 docx 文件、或指向 feedback-docs 目录时触发。
+metadata:
+  version: "1.4.0"
 ---
 
 # 用户反馈处理器
 
-处理用户反馈文档，根据反馈内容修改 LIMS 项目的前端和/或后端代码。
+解析用户反馈文档，根据需求修改 LIMS 前端/后端代码，生成 PDF 修改报告。
 
-## 快速开始
+## 核心原则
 
-1. 用户将 `.docx` 文件放入 `feedback-docs/` 目录
-2. 告诉 AI："请处理 feedback-docs/xxx.docx 中的反馈"
-3. AI 自动解析文档、分析修改需求、实施修改、测试验证
+1. **先确保服务运行**：截图前必须确认前后端服务正常
+2. **发现错误立即修复**：截图中看到错误时，先解决错误再继续
+3. **仔细检查 UI**：每次修改后都要检查 UI 显示是否正常
+4. **报告要有截图**：每条修改必须附上对应的 ROI 截图
 
 ## 工作流程
 
-### 第一步：解析反馈文档
+1. **解析文档** → 提取文字和图片
+2. **检查服务** → 确保前后端服务正常运行
+3. **分析需求** → 理解每条修改需求
+4. **实施修改** → 按最佳实践修改代码
+5. **验证修改** → 检查页面是否有错误和 UI 问题
+6. **截图** → 为每个修改项截取 ROI 截图
+7. **生成报告** → 输出 PDF 报告到 `feedback-docs/reports/`
 
-使用 Python 脚本解析 docx 文件：
-
-```bash
-python .cursor/skills/user-feedback-processor/scripts/parse_docx.py feedback-docs/<文档名>.docx
-```
-
-脚本会输出：
-- 文档的文字内容（Markdown 格式）
-- 提取的图片保存到 `feedback-docs/images/` 目录
-
-**重要**：仔细查看提取的图片，用户通常会在截图上标注问题区域。
-
-### 第二步：分析反馈内容
-
-根据反馈内容判断修改范围：
-
-| 反馈关键词 | 修改范围 | 涉及目录 |
-|-----------|---------|---------|
-| 界面、样式、按钮、表格、表单、布局、显示 | 前端 | `frontend/` |
-| 接口、数据、字段、权限、逻辑、报错 | 后端 | `backend/` |
-| 流程、功能、业务 | 可能两者都需要 | 两者 |
-
-### 第三步：定位相关代码
-
-#### 前端代码结构
-
-| 类型 | 路径 |
-|-----|------|
-| 页面 | `frontend/pages/**/*.tsx` |
-| 组件 | `frontend/components/*.tsx` |
-| 布局 | `frontend/components/layouts/` |
-| 服务 | `frontend/services/*.service.ts` |
-| 状态 | `frontend/store/*.ts` |
-| 样式 | `frontend/styles/globals.css` |
-| 类型 | `frontend/types/*.ts` |
-
-#### 后端代码结构
-
-| 类型 | 路径 |
-|-----|------|
-| API 端点 | `backend/app/api/v1/endpoints/*.py` |
-| 数据模型 | `backend/app/models/*.py` |
-| 请求/响应 | `backend/app/schemas/*.py` |
-| 业务服务 | `backend/app/services/*.py` |
-| 认证权限 | `backend/app/api/v1/deps.py` |
-
-### 第四步：实施修改
-
-#### 前端修改检查清单
-
-**UI/UX 最佳实践**：
-- [ ] 与现有 UI 风格一致（Tailwind CSS + Headless UI）
-- [ ] 响应式布局正确
-- [ ] 可访问性：label、aria-label、颜色对比度
-- [ ] 反馈及时：loading 状态、toast 提示、表单验证
-- [ ] 动画流畅：使用 framer-motion
-
-**代码质量**：
-- [ ] TypeScript 类型正确
-- [ ] 使用现有组件，不重复造轮子
-- [ ] 状态管理用 zustand 或 react-query
-- [ ] API 调用通过 services
-
-#### 后端修改检查清单
-
-**API 设计最佳实践**：
-- [ ] RESTful 规范：正确的 HTTP 方法和状态码
-- [ ] Pydantic schema 验证请求
-- [ ] 统一响应格式
-- [ ] 敏感操作需认证
-
-**代码质量**：
-- [ ] 类型注解完整
-- [ ] 异常处理得当
-- [ ] 使用 async/await
-- [ ] 遵循现有代码规范
-
-### 第五步：测试验证
-
-使用 `agent-browser` 进行前端测试：
+## 第一步：解析文档
 
 ```bash
-# 1. 启动开发服务器（如未运行）
-cd frontend && npm run dev &
-cd backend && uvicorn app.main:app --reload --port 8000 &
-
-# 2. 打开相关页面
-agent-browser open http://localhost:3002/<页面路径>
-
-# 3. 获取页面快照
-agent-browser snapshot -i
-
-# 4. 模拟用户操作
-agent-browser click @e1
-agent-browser fill @e2 "测试文本"
-
-# 5. 截图对比
-agent-browser screenshot feedback-test.png
-
-# 6. 检查控制台错误
-agent-browser console
+python .cursor/skills/user-feedback-processor/scripts/parse_docx.py feedback-docs/<文档>.docx
 ```
 
-### 第六步：总结修改
+图片保存在 `feedback-docs/images/`，使用 Read 工具查看用户标注。
 
-```markdown
-## 修改摘要
+## 第二步：检查服务状态（重要！）
 
-### 反馈需求
-- [需求1简述]
-- [需求2简述]
+在截图前，**必须**检查前后端服务是否正常运行：
 
-### 前端修改
-- `frontend/pages/xxx.tsx`: 修改描述
-- `frontend/components/xxx.tsx`: 修改描述
+### 检查方法
 
-### 后端修改
-- `backend/app/api/v1/endpoints/xxx.py`: 修改描述
-- `backend/app/schemas/xxx.py`: 修改描述
+1. **查看终端状态**：读取 `terminals/` 目录下的文件，查看是否有运行中的服务
+2. **检查端口**：
+   - 前端：`http://localhost:3002`
+   - 后端：`http://localhost:8002`
 
-### UI/UX 改进
-- 改进点1
-- 改进点2
+### 启动服务（如果未运行）
 
-### 测试结果
-- ✅ 页面正常显示
-- ✅ 功能正常工作
-- ✅ 无控制台错误
+**重要**：后端服务需要在 `lims` conda 环境中运行！
 
-### 注意事项（如有）
-- 需要执行的数据库迁移
-- 需要更新的环境变量
+```bash
+# 后端（需要先启动，必须激活 lims 环境）
+cd backend && conda activate lims && uvicorn app.main:app --reload --port 8002
+
+# 前端
+cd frontend && npm run dev
 ```
 
----
+### 环境要求
 
-## 项目技术栈
+- **后端**：必须在 `lims` conda 环境中运行
+  - 激活命令：`conda activate lims`
+  - 或使用：`source activate lims`
+- **前端**：Node.js 环境，使用项目的 package.json
 
-### 前端
-- Next.js 16 + React 19
-- Tailwind CSS 3 + Headless UI 2
-- Zustand 4 + React Query 5
-- React Hook Form 7
-- Framer Motion 11
+### 等待服务就绪
 
-### 后端
-- FastAPI 0.128
-- SQLAlchemy 2.0 (async) + PostgreSQL
-- Pydantic 2.12
-- JWT 认证
+启动后等待 5-10 秒，确认终端输出显示服务已就绪：
+- 前端：`✓ Ready in Xs`
+- 后端：`Uvicorn running on http://0.0.0.0:8002`
 
----
+## 第三步：修改代码
 
-## 常见修改模式
+根据需求修改代码，确保：
+- 前端使用现有组件（`frontend/components/`）
+- 后端遵循现有 API 规范
+- UI 修改符合 Web Interface Guidelines
+- 使用 `ReadLints` 检查代码是否有语法错误
 
-### 前端：添加表单字段
+## 第四步：验证修改（重要！）
 
-```tsx
-<Field>
-  <Label>新字段</Label>
-  <Input {...register('newField')} />
-</Field>
+修改代码后，**必须**验证页面是否正常工作：
+
+1. 刷新页面：`browser_navigate` 重新访问
+2. 获取页面快照：`browser_snapshot`
+3. **检查是否有运行时错误**：
+   - 查找 snapshot 中的 `alert`、`dialog` 元素
+   - 查找包含 "Error"、"错误"、"失败" 的文本
+   - 查看浏览器控制台：`browser_console_messages`
+
+### 常见错误及处理
+
+| 错误类型 | 可能原因 | 解决方法 |
+|---------|---------|---------|
+| Network Error | 后端未启动 | 启动后端服务 |
+| 404 Not Found | API 路径错误 | 检查 API 端点 |
+| TypeScript Error | 类型错误 | 修复代码类型 |
+| Runtime Error | 代码逻辑错误 | 检查堆栈跟踪 |
+
+### UI 显示问题检查
+
+**重要**：修改代码后，必须仔细检查页面的 UI 显示是否正常。常见问题包括：
+
+- 文字被截断或裁切
+- 下拉菜单、弹窗被遮挡
+- 控件显示不完整或变形
+- 布局错位、元素重叠
+- 空状态/错误状态显示异常
+- **文字不当换行**：标签、按钮、表头等短文本不应换行
+
+发现问题时，检查相关组件的 CSS 样式（特别是 `overflow`、`width`、`z-index`、`whitespace`、`flex-shrink` 等属性）。
+
+**常用修复方案**：
+- 文字换行：添加 `whitespace-nowrap`
+- 元素被压缩：添加 `flex-shrink-0`
+- 内容溢出：调整 `min-width` 或父容器布局
+
+### 如果发现错误
+
+**重要**：发现错误时必须先修复，不能带着错误继续生成报告！
+
+1. 截图记录错误状态
+2. 分析错误原因（查看堆栈跟踪）
+3. 修复代码
+4. 重新验证，直到无错误
+
+## 第五步：截图
+
+确认页面无错误后，为每个修改项截取 ROI 截图：
+
+```
+browser_navigate → browser_snapshot → 检查错误 → browser_take_screenshot → 压缩图片
 ```
 
-### 前端：添加表格列
+**截图要求**：
+- 每个修改项需要对应的截图，清晰展示修改后的效果
+- 如果一张截图能覆盖多个修改项，可以复用
+- 保存到 `feedback-docs/reports/` 目录
 
-```tsx
-<TableHeader>新列</TableHeader>
-// ...
-<TableCell>{item.newField}</TableCell>
+### 压缩截图（重要！）
+
+**高分辨率截图必须压缩**，否则可能导致 "image too large" 错误。
+
+截图后立即运行压缩脚本：
+
+```bash
+# 压缩单张图片（自动转换为 JPEG，最大 1200x800）
+python .cursor/skills/user-feedback-processor/scripts/compress_image.py feedback-docs/reports/screenshot.png
+
+# 自定义参数
+python .cursor/skills/user-feedback-processor/scripts/compress_image.py screenshot.png --max-width 1000 --quality 70
+
+# 压缩目录下所有图片
+python .cursor/skills/user-feedback-processor/scripts/compress_image.py feedback-docs/reports/ --all
 ```
 
-### 前端：添加确认弹窗
+**压缩参数说明**：
+| 参数 | 默认值 | 说明 |
+|-----|-------|------|
+| `--max-width` | 1200 | 最大宽度（像素） |
+| `--max-height` | 800 | 最大高度（像素） |
+| `--quality` | 75 | JPEG 质量 (1-95, 越低越小) |
+| `--keep-png` | false | 保持 PNG 格式不转换为 JPEG |
 
-```tsx
-<Dialog open={isOpen} onClose={setIsOpen}>
-  <DialogTitle>确认</DialogTitle>
-  <DialogBody>确认执行此操作？</DialogBody>
-  <DialogActions>
-    <Button onClick={() => setIsOpen(false)}>取消</Button>
-    <Button color="red" onClick={handleConfirm}>确认</Button>
-  </DialogActions>
-</Dialog>
+**典型压缩效果**：
+- 2880x1800 Retina 截图 → 1200x750，约减少 80-90% 文件大小
+- PNG → JPEG 转换可额外减少 50-70%
+
+## 第六步：生成修改报告（PDF）
+
+生成综合 PDF 报告，每条修改后直接附上对应截图。
+
+### 报告生成步骤
+
+1. **为每个修改项截取 ROI 截图**
+   - 使用 `browser_take_screenshot` 截取相关区域
+   - 保存到 `feedback-docs/reports/` 目录
+
+2. **生成 PDF 报告**
+   使用 `scripts/generate_report.py` 生成 PDF：
+
+```bash
+python .cursor/skills/user-feedback-processor/scripts/generate_report.py \
+  --title "修改报告 - 标签管理" \
+  --date "2026-01-22" \
+  --doc "修改内容清单-20260116.docx" \
+  --output "feedback-docs/reports/report.pdf" \
+  --items '[
+    {"id": 1, "desc": "修改描述", "status": "completed", "image": "screenshot.png"},
+    {"id": 2, "desc": "修改描述", "status": "completed", "image": "screenshot2.png"}
+  ]'
 ```
 
-### 后端：添加 API 端点
+### 报告格式要求
 
-```python
-@router.post("/", response_model=schemas.ItemResponse)
-async def create_item(
-    item: schemas.ItemCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    db_item = models.Item(**item.model_dump())
-    db.add(db_item)
-    await db.commit()
-    return db_item
-```
+- **标题**: 修改报告 - [功能名称]
+- **元信息**: 日期、反馈文档、状态
+- **每条修改**: 序号 + 修改描述 + 状态标记 + **截图**（直接嵌入 PDF）
+- **修改文件列表**: 列出所有被修改的文件
 
-### 后端：添加字段
+## 项目结构速查
 
-```python
-# 1. models/xxx.py
-new_field = Column(String, nullable=True)
+**前端**: `frontend/pages/` `frontend/components/` `frontend/services/`
 
-# 2. schemas/xxx.py
-new_field: str | None = None
-```
+**后端**: `backend/app/api/v1/endpoints/` `backend/app/models/` `backend/app/schemas/`
+
+**报告输出**: `feedback-docs/reports/`
+
+## 检查清单
+
+在完成任务前，确认以下事项：
+
+- [ ] 前后端服务正常运行（后端用 lims conda 环境）
+- [ ] 代码无 lint 错误
+- [ ] 页面无运行时错误（无 Network Error、无弹窗报错）
+- [ ] UI 显示正常（无截断、无不当换行、无遮挡）
+- [ ] 每个修改项都有对应的 ROI 截图
+- [ ] **截图已压缩**（避免 "image too large" 错误）
+- [ ] 已生成 PDF 修改报告
+
+## 常见问题速查
+
+| 问题 | 解决方案 |
+|-----|---------|
+| Network Error | 启动后端：`conda activate lims && uvicorn ...` |
+| 文字截断 | 检查 `overflow`、`max-width`、父容器宽度 |
+| 文字换行 | 添加 `whitespace-nowrap` |
+| 元素被压缩 | 添加 `flex-shrink-0` |
+| 下拉菜单被遮挡 | 检查父容器 `overflow`、`z-index` |
+| **image too large** | 运行 `compress_image.py` 压缩截图 |

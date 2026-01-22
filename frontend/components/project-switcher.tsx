@@ -39,7 +39,7 @@ export function ProjectSwitcher() {
   return (
     <div className="flex items-center gap-2">
       <span className="hidden text-xs font-medium text-zinc-500 lg:block whitespace-nowrap">当前项目</span>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-0.5">
         <Select
           value={selectedProjectId ? String(selectedProjectId) : ''}
           onChange={(event) => {
@@ -47,7 +47,7 @@ export function ProjectSwitcher() {
             setSelectedProject(value ? Number(value) : null);
           }}
           disabled={isLoading || projects.length === 0}
-          className="w-full min-w-[140px] sm:min-w-[180px] text-xs h-9"
+          className="w-auto min-w-[200px] text-xs h-9"
         >
           <option value="">{projects.length ? '请选择项目' : '暂无可用项目'}</option>
           {projectOptions.map((option) => (
@@ -60,8 +60,8 @@ export function ProjectSwitcher() {
           ))}
         </Select>
         {!isLoading && projects.length === 0 && (
-          <span className="text-[11px] text-zinc-500 whitespace-nowrap">
-            无可用项目，请联系管理员为你授权项目
+          <span className="text-[10px] text-zinc-400 leading-tight">
+            请联系管理员授权
           </span>
         )}
       </div>

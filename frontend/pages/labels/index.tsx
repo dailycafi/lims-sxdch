@@ -35,7 +35,7 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/20/solid';
 
-type TabType = 'generate' | 'settings' | 'view';
+type TabType = 'generate' | 'settings';
 
 interface Project {
   id: number;
@@ -215,6 +215,7 @@ const LabelSettingsTab = ({
     primaryCodes: string[];
     backupCodes: string[];
     collectionPoints: { code: string; name: string; time_description?: string }[];
+    subjectNos?: string[];
   };
 }) => {
   const [settingType, setSettingType] = useState<'sampling_tube' | 'cryo_tube'>('sampling_tube');
@@ -226,6 +227,13 @@ const LabelSettingsTab = ({
     note: '采血(HS)',
     code: 'a',
     time: 'D1 给药前 30min'
+  });
+  
+  // 打印尺寸设置
+  const [labelSize, setLabelSize] = useState({
+    width: 50,  // 毫米
+    height: 35, // 毫米
+    fontSize: 8 // pt
   });
 
   // 切换标签类型时更新模板
@@ -438,20 +446,52 @@ const LabelSettingsTab = ({
                       </Select>
                     )}
                     {row.type === 'combined' && (
-                      <div className="flex items-center gap-2 h-9 px-3 bg-white border border-zinc-200 rounded-lg">
-                        <span className="text-xs text-zinc-500 whitespace-nowrap">检测类型</span>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={row.combinedFields?.field1 || ''}
+                          onChange={(e) => updateRow(row.id, { 
+                            combinedFields: { 
+                              field1: e.target.value,
+                              field2: row.combinedFields?.field2 || 'code',
+                              separator: row.combinedFields?.separator || '-'
+                            }
+                          })}
+                          className="text-sm bg-white flex-1"
+                        >
+                          <option value="">选择字段...</option>
+                          <option value="testType">检测类型</option>
+                          <option value="cycle">周期</option>
+                          <option value="subject">筛选号</option>
+                        </Select>
                         <Input
                           value={row.combinedFields?.separator || '-'}
                           onChange={(e) => updateRow(row.id, { 
                             combinedFields: { 
-                              ...row.combinedFields!, 
+                              field1: row.combinedFields?.field1 || 'testType',
+                              field2: row.combinedFields?.field2 || 'code',
                               separator: e.target.value 
                             }
                           })}
-                          className="w-10 text-center !px-0 !h-6 text-sm"
+                          className="w-10 text-center !px-0 text-sm"
                           maxLength={2}
+                          placeholder="-"
                         />
-                        <span className="text-xs text-zinc-500 whitespace-nowrap">代码</span>
+                        <Select
+                          value={row.combinedFields?.field2 || ''}
+                          onChange={(e) => updateRow(row.id, { 
+                            combinedFields: { 
+                              field1: row.combinedFields?.field1 || 'testType',
+                              field2: e.target.value,
+                              separator: row.combinedFields?.separator || '-'
+                            }
+                          })}
+                          className="text-sm bg-white flex-1"
+                        >
+                          <option value="">选择字段...</option>
+                          <option value="code">正份代码</option>
+                          <option value="backupCode">备份代码</option>
+                          <option value="note">备注</option>
+                        </Select>
                       </div>
                     )}
                   </div>
@@ -480,8 +520,8 @@ const LabelSettingsTab = ({
                 </div>
               </div>
               {template.showBarcode && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500">条码数据源：</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-zinc-500 whitespace-nowrap">条码数据源：</span>
                   <Select
                     value={template.barcodeField}
                     onChange={(e) => setTemplate({ ...template, barcodeField: e.target.value })}
@@ -509,7 +549,7 @@ const LabelSettingsTab = ({
             </div>
           </div>
           
-          <div className="flex-1 space-y-8 flex flex-col">
+          <div className="flex-1 space-y-6 flex flex-col">
             {/* 标签预览容器 */}
             <div className="flex justify-center py-10 bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200">
               <LabelPreview 
@@ -519,6 +559,66 @@ const LabelSettingsTab = ({
                 hoveredRowId={hoveredRowId}
                 onHoverRow={setHoveredRowId}
               />
+            </div>
+
+            {/* 打印尺寸设置 */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+              <Text className="text-xs font-bold text-zinc-400 uppercase tracking-wider">打印尺寸设置</Text>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">宽度 (mm)</label>
+                  <Input
+                    type="number"
+                    value={labelSize.width}
+                    onChange={(e) => setLabelSize({ ...labelSize, width: parseInt(e.target.value) || 50 })}
+                    className="text-sm"
+                    min={20}
+                    max={100}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">高度 (mm)</label>
+                  <Input
+                    type="number"
+                    value={labelSize.height}
+                    onChange={(e) => setLabelSize({ ...labelSize, height: parseInt(e.target.value) || 35 })}
+                    className="text-sm"
+                    min={15}
+                    max={80}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">字体大小 (pt)</label>
+                  <Input
+                    type="number"
+                    value={labelSize.fontSize}
+                    onChange={(e) => setLabelSize({ ...labelSize, fontSize: parseInt(e.target.value) || 8 })}
+                    className="text-sm"
+                    min={6}
+                    max={14}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 text-xs text-zinc-500">
+                <button
+                  onClick={() => setLabelSize({ width: 50, height: 35, fontSize: 8 })}
+                  className="px-2 py-1 bg-zinc-100 rounded hover:bg-zinc-200 transition-colors"
+                >
+                  采血管 (50×35mm)
+                </button>
+                <button
+                  onClick={() => setLabelSize({ width: 25, height: 25, fontSize: 6 })}
+                  className="px-2 py-1 bg-zinc-100 rounded hover:bg-zinc-200 transition-colors"
+                >
+                  冻存管 (25×25mm)
+                </button>
+                <button
+                  onClick={() => setLabelSize({ width: 60, height: 40, fontSize: 9 })}
+                  className="px-2 py-1 bg-zinc-100 rounded hover:bg-zinc-200 transition-colors"
+                >
+                  大尺寸 (60×40mm)
+                </button>
+              </div>
             </div>
 
             {/* 预览数据输入 */}
@@ -589,8 +689,79 @@ const LabelSettingsTab = ({
               </div>
             </div>
 
-            {/* 保存按钮 */}
-            <div className="flex justify-end pt-4">
+            {/* 按钮区域 */}
+            <div className="flex justify-between pt-4">
+              <Button 
+                outline
+                onClick={() => {
+                  // 打印测试页
+                  const printWindow = window.open('', '', 'width=800,height=600');
+                  if (!printWindow) {
+                    toast.error('浏览器阻止了打印窗口');
+                    return;
+                  }
+                  
+                  const projectCode = currentProject?.sponsor_project_code || currentProject?.lab_project_code || 'TEST';
+                  
+                  printWindow.document.write(`<!DOCTYPE html>
+                    <html lang="zh-CN">
+                      <head>
+                        <meta charset="utf-8" />
+                        <title>打印测试页</title>
+                        <style>
+                          body { font-family: 'SF Pro SC', 'PingFang SC', sans-serif; padding: 10mm; margin: 0; }
+                          .test-info { text-align: center; margin-bottom: 10mm; font-size: 12pt; }
+                          .labels { display: flex; flex-wrap: wrap; gap: 5mm; }
+                          .label { 
+                            width: ${labelSize.width}mm; 
+                            height: ${labelSize.height}mm; 
+                            border: 1px solid #ccc; 
+                            padding: 2mm 3mm;
+                            box-sizing: border-box;
+                            page-break-inside: avoid;
+                            font-size: ${labelSize.fontSize}pt;
+                          }
+                          .label-row { display: flex; margin-bottom: 1mm; }
+                          .label-key { color: #666; width: 18mm; flex-shrink: 0; }
+                          .label-value { font-weight: 500; }
+                          @media print { 
+                            body { padding: 0; } 
+                            .test-info { display: none; }
+                            .label { border: none; }
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="test-info">
+                          <h2>打印测试页</h2>
+                          <p>标签尺寸: ${labelSize.width}mm × ${labelSize.height}mm | 字体: ${labelSize.fontSize}pt</p>
+                        </div>
+                        <div class="labels">
+                          <div class="label">
+                            <div class="label-row"><span class="label-key">方案编号：</span><span class="label-value">${projectCode}</span></div>
+                            <div class="label-row"><span class="label-key">筛选号：</span><span class="label-value">${previewData.subject}</span></div>
+                            <div class="label-row"><span class="label-key">用途：</span><span class="label-value">${previewData.testType}-${previewData.code}</span></div>
+                            <div class="label-row"><span class="label-key">采样时间：</span><span class="label-value">${previewData.time}</span></div>
+                          </div>
+                          <div class="label">
+                            <div class="label-row"><span class="label-key">方案编号：</span><span class="label-value">${projectCode}</span></div>
+                            <div class="label-row"><span class="label-key">筛选号：</span><span class="label-value">${previewData.subject}</span></div>
+                            <div class="label-row"><span class="label-key">用途：</span><span class="label-value">${previewData.testType}-${previewData.code}</span></div>
+                            <div class="label-row"><span class="label-key">采样时间：</span><span class="label-value">${previewData.time}</span></div>
+                          </div>
+                        </div>
+                      </body>
+                    </html>`);
+                  
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => printWindow.print(), 500);
+                }}
+                className="px-6 h-11 rounded-xl"
+              >
+                <PrinterIcon className="w-4 h-4 mr-2" />
+                打印测试页
+              </Button>
               <Button 
                 color="dark" 
                 onClick={handleSaveTemplate}
@@ -1439,12 +1610,14 @@ export default function LabelsPage() {
     primaryCodes: string[];
     backupCodes: string[];
     collectionPoints: { code: string; name: string; time_description?: string }[];
+    subjectNos: string[];
   }>({
     cycles: [],
     testTypes: [],
     primaryCodes: [],
     backupCodes: [],
-    collectionPoints: []
+    collectionPoints: [],
+    subjectNos: []
   });
   
   // 选中的选项
@@ -1454,13 +1627,18 @@ export default function LabelsPage() {
     primaryCodes: string[];
     backupCodes: string[];
     collectionPoints: string[];
+    subjectNos: string[];
   }>({
     cycles: [],
     testTypes: [],
     primaryCodes: [],
     backupCodes: [],
-    collectionPoints: []
+    collectionPoints: [],
+    subjectNos: []
   });
+  
+  // 编号预览搜索
+  const [previewSearchKeyword, setPreviewSearchKeyword] = useState('');
   
   // 分隔符设置
   const [separator, setSeparator] = useState<string>('-');
@@ -1472,22 +1650,75 @@ export default function LabelsPage() {
   // 批次列表
   const [batches, setBatches] = useState<LabelBatch[]>([]);
   
-  // 预览编号
-  const previewCode = useMemo(() => {
-    const parts: string[] = [];
-    if (selectedOptions.cycles.length > 0) parts.push(selectedOptions.cycles[0]);
-    if (selectedOptions.collectionPoints.length > 0) parts.push(selectedOptions.collectionPoints[0]);
-    if (selectedOptions.testTypes.length > 0) parts.push(selectedOptions.testTypes[0]);
-    if (labelType === 'sampling_tube') {
-      if (selectedOptions.primaryCodes.length > 0) parts.push(selectedOptions.primaryCodes[0]);
-    } else {
-      if (selectedOptions.backupCodes.length > 0) parts.push(selectedOptions.backupCodes[0]);
+  // 生成所有预览编号（带结构化数据）
+  const previewLabels = useMemo(() => {
+    const results: Array<{
+      sampleNo: string;
+      subjectNo: string;
+      sampleType: string;
+      testType: string;
+      collectionPoint: string;
+      collectionPointName: string;
+      cycle: string;
+      isPrimary: string;
+    }> = [];
+    
+    // 获取各维度选项，如果为空则使用占位符
+    const subjectNos = selectedOptions.subjectNos.length > 0 ? selectedOptions.subjectNos : [''];
+    const cycles = selectedOptions.cycles.length > 0 ? selectedOptions.cycles : [''];
+    const collectionPoints = selectedOptions.collectionPoints.length > 0 ? selectedOptions.collectionPoints : [''];
+    const testTypes = selectedOptions.testTypes.length > 0 ? selectedOptions.testTypes : [''];
+    const codes = labelType === 'sampling_tube' 
+      ? (selectedOptions.primaryCodes.length > 0 ? selectedOptions.primaryCodes : [''])
+      : (selectedOptions.backupCodes.length > 0 ? selectedOptions.backupCodes : ['']);
+    
+    // 笛卡尔积生成所有组合
+    for (const subjectNo of subjectNos) {
+      for (const cycle of cycles) {
+        for (const collectionPoint of collectionPoints) {
+          for (const testType of testTypes) {
+            for (const code of codes) {
+              // 构建编号
+              const parts = [subjectNo, cycle, collectionPoint.split(':')[0], testType, code].filter(Boolean);
+              const sampleNo = parts.length > 0 ? parts.join(separator || '-') : '';
+              
+              // 解析采集点名称
+              const cpParts = collectionPoint.split(':');
+              const cpCode = cpParts[0] || '';
+              const cpName = cpParts[1] || cpParts[0] || '';
+              
+              results.push({
+                sampleNo,
+                subjectNo: subjectNo || '____',
+                sampleType: labelType === 'sampling_tube' ? '采样管' : '冻存管',
+                testType: testType || '____',
+                collectionPoint: cpCode || '____',
+                collectionPointName: cpName || '____',
+                cycle: cycle || '____',
+                isPrimary: labelType === 'sampling_tube' ? '正份' : '备份',
+              });
+            }
+          }
+        }
+      }
     }
-    return parts.length > 0 ? parts.join(separator === '' ? '' : separator) : '请选择选项...';
+    
+    return results;
   }, [selectedOptions, separator, labelType]);
+  
+  // 筛选后的预览编号
+  const filteredPreviewLabels = useMemo(() => {
+    if (!previewSearchKeyword) return previewLabels;
+    const keyword = previewSearchKeyword.toLowerCase();
+    return previewLabels.filter(label => 
+      label.sampleNo.toLowerCase().includes(keyword) ||
+      label.subjectNo.toLowerCase().includes(keyword)
+    );
+  }, [previewLabels, previewSearchKeyword]);
   
   // 预计生成数量
   const estimatedCount = useMemo(() => {
+    const subjectNoCount = selectedOptions.subjectNos.length || 1;
     const cycleCount = selectedOptions.cycles.length || 1;
     const collectionPointCount = selectedOptions.collectionPoints.length || 1;
     const testTypeCount = selectedOptions.testTypes.length || 1;
@@ -1497,7 +1728,7 @@ export default function LabelsPage() {
     } else {
       codeCount = selectedOptions.backupCodes.length || 1;
     }
-    return cycleCount * collectionPointCount * testTypeCount * codeCount;
+    return subjectNoCount * cycleCount * collectionPointCount * testTypeCount * codeCount;
   }, [selectedOptions, labelType]);
 
   // 获取项目信息
@@ -1507,12 +1738,6 @@ export default function LabelsPage() {
     }
   }, [selectedProjectId]);
 
-  // 获取批次列表
-  useEffect(() => {
-    if (activeTab === 'view' && selectedProjectId) {
-      fetchBatches();
-    }
-  }, [activeTab, selectedProjectId]);
 
   const fetchProjectData = async () => {
     if (!selectedProjectId) return;
@@ -1554,12 +1779,22 @@ export default function LabelsPage() {
         }
       });
       
+      // 从项目配置中获取受试者编号列表
+      let subjectNos: string[] = [];
+      if (projectRes.data.sample_code_rule?.subject_prefix) {
+        // 如果有配置的受试者前缀，生成一系列编号
+        const prefix = projectRes.data.sample_code_rule.subject_prefix;
+        const count = projectRes.data.sample_code_rule.subject_count || 10;
+        subjectNos = Array.from({ length: count }, (_, i) => `${prefix}${String(i + 1).padStart(3, '0')}`);
+      }
+      
       setAvailableOptions({
         cycles: Array.from(cycles),
         testTypes: Array.from(testTypes),
         primaryCodes: Array.from(primaryCodes),
         backupCodes: Array.from(backupCodes),
-        collectionPoints: collectionPointsRes.data || []
+        collectionPoints: collectionPointsRes.data || [],
+        subjectNos
       });
       
     } catch (error) {
@@ -1638,10 +1873,6 @@ export default function LabelsPage() {
       setLastBatchId(result.batch_id);
       toast.success(`成功生成 ${result.total_count} 个编号`);
       
-      // 切换到查看标签页
-      setActiveTab('view');
-      fetchBatches();
-      
     } catch (error: any) {
       console.error('生成失败:', error);
       toast.error(error.response?.data?.detail || '生成失败');
@@ -1673,9 +1904,99 @@ export default function LabelsPage() {
       testTypes: [],
       primaryCodes: [],
       backupCodes: [],
-      collectionPoints: []
+      collectionPoints: [],
+      subjectNos: []
     });
     setGeneratedCodes([]);
+    setPreviewSearchKeyword('');
+  };
+  
+  // 打印标签
+  const handlePrintLabels = (labelTypeFilter?: 'sampling_tube' | 'cryo_tube') => {
+    const labelsToPrint = filteredPreviewLabels.filter(l => 
+      !labelTypeFilter || (labelTypeFilter === 'sampling_tube' ? l.sampleType === '采样管' : l.sampleType === '冻存管')
+    );
+    
+    if (labelsToPrint.length === 0) {
+      toast.error('没有可打印的标签');
+      return;
+    }
+    
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (!printWindow) {
+      toast.error('浏览器阻止了打印窗口');
+      return;
+    }
+    
+    // 生成条形码
+    const generateBarcode = (text: string) => {
+      if (!text || text.includes('____')) return '';
+      try {
+        const canvas = document.createElement('canvas');
+        JsBarcode(canvas, text, {
+          format: "CODE128",
+          width: 1.5,
+          height: 50,
+          displayValue: true,
+          fontSize: 10,
+          margin: 2
+        });
+        return canvas.toDataURL("image/png");
+      } catch {
+        return '';
+      }
+    };
+    
+    const labelsHtml = labelsToPrint.map(l => {
+      const barcodeUrl = generateBarcode(l.sampleNo);
+      return `
+        <div class="label">
+          <div class="label-row"><span class="label-key">方案编号：</span><span class="label-value">${currentProject?.sponsor_project_code || currentProject?.lab_project_code || '-'}</span></div>
+          <div class="label-row"><span class="label-key">筛选号：</span><span class="label-value underline">${l.subjectNo}</span></div>
+          <div class="label-row"><span class="label-key">用途：</span><span class="label-value">${l.testType}</span></div>
+          <div class="label-row"><span class="label-key">采集点：</span><span class="label-value underline">${l.collectionPoint}</span></div>
+          ${barcodeUrl ? `<div class="barcode"><img src="${barcodeUrl}" alt="${l.sampleNo}" /></div>` : ''}
+        </div>
+      `;
+    }).join('');
+    
+    printWindow.document.write(`<!DOCTYPE html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <title>标签打印</title>
+          <style>
+            body { font-family: 'SF Pro SC', 'PingFang SC', sans-serif; padding: 10mm; margin: 0; }
+            .labels { display: flex; flex-wrap: wrap; gap: 5mm; }
+            .label { 
+              width: 50mm; 
+              height: 35mm; 
+              border: 1px solid #ccc; 
+              padding: 2mm 3mm;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+              font-size: 8pt;
+            }
+            .label-row { display: flex; margin-bottom: 1mm; }
+            .label-key { color: #666; width: 18mm; flex-shrink: 0; }
+            .label-value { font-weight: 500; }
+            .label-value.underline { text-decoration: underline; text-underline-offset: 2px; }
+            .barcode { margin-top: 2mm; text-align: center; }
+            .barcode img { max-width: 100%; height: 12mm; }
+            @media print { 
+              body { padding: 0; } 
+              .label { border: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="labels">${labelsHtml}</div>
+        </body>
+      </html>`);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
   };
 
   if (!selectedProjectId) {
@@ -1704,16 +2025,15 @@ export default function LabelsPage() {
         <div className="mb-6">
           <Tabs
             tabs={[
-              { key: 'generate', label: '生成编号', icon: PlusIcon },
+              { key: 'generate', label: '选择编号', icon: PlusIcon },
               { key: 'settings', label: '标签设置', icon: Cog6ToothIcon },
-              { key: 'view', label: '查看与打印', icon: EyeIcon }
             ]}
             activeTab={activeTab}
             onChange={(key) => setActiveTab(key as TabType)}
           />
         </div>
 
-        {/* 生成编号 */}
+        {/* 选择编号 */}
         {activeTab === 'generate' && (
           <div className="space-y-6">
             {/* 标签类型选择 - 紧凑设计 */}
@@ -1767,112 +2087,169 @@ export default function LabelsPage() {
               </div>
             </div>
 
-            {/* 预览和选项区域 */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-              {/* 左侧：编号预览 */}
-              <div className="lg:col-span-1 space-y-6">
-                <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-6">
-                    <Text className="text-base font-bold text-zinc-900">编号预览</Text>
-                    <Badge color="blue" className="!px-2 !py-0.5">预计 {estimatedCount} 个</Badge>
-                  </div>
-                  
-                  <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200 text-center mb-6">
-                    <span className={clsx(
-                      "font-mono font-bold break-all leading-tight",
-                      previewCode === '请选择选项...' ? "text-xl text-zinc-400 italic" : "text-2xl text-zinc-900"
-                    )}>
-                      {previewCode}
-                    </span>
-                  </div>
-
-                  <div className="space-y-4 pt-4 border-t border-zinc-100">
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">间隔符设置</label>
-                      <Select
-                        value={separator}
-                        onChange={(e) => setSeparator(e.target.value)}
-                        className="w-full text-sm"
-                      >
-                        <option value="-">中横杠 (-)</option>
-                        <option value="_">下划线 (_)</option>
-                        <option value="">无分隔符</option>
-                      </Select>
-                    </div>
-                    <Button
-                      color="dark"
-                      onClick={handleGenerate}
-                      disabled={loading || estimatedCount === 0}
-                      className="w-full h-11 text-base font-bold rounded-xl"
-                    >
-                      {loading ? '正在生成...' : `生成 ${estimatedCount} 个标签`}
-                    </Button>
-                  </div>
+            {/* 选项矩阵 - 放在上方 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <Text className="text-base font-bold text-zinc-900">选择生成维度</Text>
+                  <Text className="text-sm text-zinc-500 mt-0.5">系统将自动按照您勾选的选项进行组合生成</Text>
                 </div>
+                <Button 
+                  plain 
+                  onClick={resetSelection}
+                  className="text-zinc-500 hover:text-red-600 transition-colors"
+                >
+                  <XMarkIcon className="w-4 h-4 mr-1.5" />
+                  <span className="text-sm font-medium">重置全部</span>
+                </Button>
               </div>
-
-              {/* 右侧：选项矩阵 */}
-              <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <Text className="text-base font-bold text-zinc-900">选择生成维度</Text>
-                    <Text className="text-sm text-zinc-500 mt-0.5">系统将自动按照您勾选的选项进行组合生成</Text>
-                  </div>
-                  <Button 
-                    plain 
-                    onClick={resetSelection}
-                    className="text-zinc-500 hover:text-red-600 transition-colors"
-                  >
-                    <XMarkIcon className="w-4 h-4 mr-1.5" />
-                    <span className="text-sm font-medium">重置全部</span>
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                <OptionColumn
+                  title="组别"
+                  options={availableOptions.cycles}
+                  selected={selectedOptions.cycles}
+                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, cycles: vals })}
+                  emptyText="请在全局参数中配置"
+                  configLink="/global-params"
+                />
+                <OptionColumn
+                  title="检测类型"
+                  options={availableOptions.testTypes}
+                  selected={selectedOptions.testTypes}
+                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, testTypes: vals })}
+                  emptyText="请在全局参数中配置"
+                  configLink="/global-params"
+                />
+                <OptionColumn
+                  title="受试者编号"
+                  options={availableOptions.subjectNos}
+                  selected={selectedOptions.subjectNos}
+                  onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, subjectNos: vals })}
+                  emptyText="请在项目管理中配置"
+                  configLink={`/projects/${selectedProjectId}`}
+                />
+                {labelType === 'sampling_tube' ? (
                   <OptionColumn
-                    title="周期/剂量组"
-                    options={availableOptions.cycles}
-                    selected={selectedOptions.cycles}
-                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, cycles: vals })}
+                    title="正份"
+                    options={availableOptions.primaryCodes}
+                    selected={selectedOptions.primaryCodes}
+                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, primaryCodes: vals })}
                     emptyText="请在全局参数中配置"
                     configLink="/global-params"
                   />
-                  <OptionColumn
-                    title="采血点/时间点"
-                    options={availableOptions.collectionPoints.map(p => `${p.code}:${p.name}`)}
-                    selected={selectedOptions.collectionPoints}
-                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, collectionPoints: vals })}
-                    emptyText="请在全局参数中配置"
-                    configLink="/global-params"
-                  />
-                  <OptionColumn
-                    title="检测类型"
-                    options={availableOptions.testTypes}
-                    selected={selectedOptions.testTypes}
-                    onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, testTypes: vals })}
-                    emptyText="请在全局参数中配置"
-                    configLink="/global-params"
-                  />
-                  {labelType === 'sampling_tube' ? (
+                ) : (
+                  <>
                     <OptionColumn
-                      title="正份代码"
+                      title="正份"
                       options={availableOptions.primaryCodes}
                       selected={selectedOptions.primaryCodes}
                       onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, primaryCodes: vals })}
                       emptyText="请在全局参数中配置"
                       configLink="/global-params"
                     />
-                  ) : (
                     <OptionColumn
-                      title="备份代码"
+                      title="备份"
                       options={availableOptions.backupCodes}
                       selected={selectedOptions.backupCodes}
                       onSelectionChange={(vals) => setSelectedOptions({ ...selectedOptions, backupCodes: vals })}
                       emptyText="请在全局参数中配置"
                       configLink="/global-params"
                     />
-                  )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 编号预览表格 - 放在下方 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Text className="text-base font-bold text-zinc-900">编号预览</Text>
+                  <Badge color="blue" className="!px-2 !py-0.5">共 {filteredPreviewLabels.length} 个</Badge>
                 </div>
+                <div className="flex items-center gap-3">
+                  {/* 搜索框 */}
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <Input
+                      value={previewSearchKeyword}
+                      onChange={(e) => setPreviewSearchKeyword(e.target.value)}
+                      placeholder="搜索编号..."
+                      className="pl-9 w-48 text-sm"
+                    />
+                  </div>
+                  {/* 打印按钮 */}
+                  <Button 
+                    outline 
+                    onClick={() => handlePrintLabels('sampling_tube')}
+                    disabled={filteredPreviewLabels.length === 0}
+                  >
+                    <PrinterIcon className="w-4 h-4 mr-1.5" />
+                    打印采血管标签
+                  </Button>
+                  <Button 
+                    outline 
+                    onClick={() => handlePrintLabels('cryo_tube')}
+                    disabled={filteredPreviewLabels.length === 0}
+                  >
+                    <PrinterIcon className="w-4 h-4 mr-1.5" />
+                    打印冻存管标签
+                  </Button>
+                </div>
+              </div>
+              
+              {/* 预览表格 */}
+              <div className="border border-zinc-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>样本编号</TableHeader>
+                      <TableHeader>受试者编号</TableHeader>
+                      <TableHeader>样本类型</TableHeader>
+                      <TableHeader>检测类型</TableHeader>
+                      <TableHeader>采集点</TableHeader>
+                      <TableHeader>采集点名称</TableHeader>
+                      <TableHeader>组别</TableHeader>
+                      <TableHeader>正/备份</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredPreviewLabels.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12 text-zinc-500">
+                          请选择生成维度以预览编号
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredPreviewLabels.slice(0, 100).map((label, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-mono font-medium">{label.sampleNo || '____'}</TableCell>
+                          <TableCell>{label.subjectNo}</TableCell>
+                          <TableCell>
+                            <Badge color={label.sampleType === '采样管' ? 'blue' : 'purple'}>
+                              {label.sampleType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{label.testType}</TableCell>
+                          <TableCell>{label.collectionPoint}</TableCell>
+                          <TableCell>{label.collectionPointName}</TableCell>
+                          <TableCell>{label.cycle}</TableCell>
+                          <TableCell>
+                            <Badge color={label.isPrimary === '正份' ? 'green' : 'amber'}>
+                              {label.isPrimary}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                {filteredPreviewLabels.length > 100 && (
+                  <div className="bg-zinc-50 px-4 py-2 text-center text-sm text-zinc-500 border-t border-zinc-200">
+                    仅显示前 100 条，共 {filteredPreviewLabels.length} 条
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1883,17 +2260,6 @@ export default function LabelsPage() {
           <LabelSettingsTab 
             currentProject={currentProject}
             availableOptions={availableOptions}
-          />
-        )}
-
-        {/* 查看与打印 */}
-        {activeTab === 'view' && (
-          <ViewAndPrintTab 
-            currentProject={currentProject}
-            availableOptions={availableOptions}
-            batches={batches}
-            fetchBatches={fetchBatches}
-            onGoToGenerate={() => setActiveTab('generate')}
           />
         )}
       </div>
