@@ -105,3 +105,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# User feedback documents
+feedback-docs/
+!feedback-docs/README.md
