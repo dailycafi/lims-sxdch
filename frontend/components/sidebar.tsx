@@ -137,8 +137,16 @@ export const SidebarItem = forwardRef(function SidebarItem(
     className,
     children,
     scroll = false,
+    onNavigate,
     ...props
-  }: { current?: boolean; className?: string; children: React.ReactNode; scroll?: boolean } & (
+  }: {
+    current?: boolean;
+    className?: string;
+    children: React.ReactNode;
+    scroll?: boolean;
+    /** 导航拦截回调，返回 true 表示已处理导航，返回 false 使用默认行为 */
+    onNavigate?: (href: string, e: React.MouseEvent) => boolean;
+  } & (
     | Omit<Headless.ButtonProps, 'as' | 'className'>
     | Omit<Headless.ButtonProps<typeof Link>, 'as' | 'className'>
   ),
@@ -164,6 +172,16 @@ export const SidebarItem = forwardRef(function SidebarItem(
     'data-current:bg-zinc-800 data-current:text-white data-current:shadow-sm data-current:*:data-[slot=icon]:fill-white'
   )
 
+  // 处理点击事件，支持导航拦截
+  const handleClick = (e: React.MouseEvent) => {
+    if ('href' in props && onNavigate) {
+      const handled = onNavigate(props.href as string, e)
+      if (handled) {
+        e.preventDefault()
+      }
+    }
+  }
+
   return (
     <span className={clsx(className, 'relative')}>
       {current && (
@@ -180,6 +198,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
           className={classes}
           data-current={current ? 'true' : undefined}
           ref={ref}
+          onClick={handleClick}
         >
           <TouchTarget>{children}</TouchTarget>
         </Headless.CloseButton>
