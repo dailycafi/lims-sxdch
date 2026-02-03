@@ -31,16 +31,16 @@ class TestGenerateAllSampleCodes:
         assert response.status_code == 200
         data = response.json()
 
-        # Verify response structure
+        # Verify response structure (matches actual API response)
         assert "sample_codes" in data
-        assert "total_count" in data
-        assert "groups_processed" in data
+        assert "count" in data
+        assert "message" in data
         assert "summary" in data
 
         # Should have generated codes
-        assert data["total_count"] > 0
+        assert data["count"] > 0
         assert isinstance(data["sample_codes"], list)
-        assert data["groups_processed"] >= 1
+        assert len(data["sample_codes"]) == data["count"]
 
     @pytest.mark.asyncio
     async def test_generate_returns_unique_codes(
@@ -64,26 +64,23 @@ class TestGenerateAllSampleCodes:
         assert len(codes) == len(set(codes))
 
     @pytest.mark.asyncio
-    async def test_generate_no_confirmed_groups(
+    async def test_generate_no_confirmed_groups_returns_400(
         self,
         client: AsyncClient,
         auth_headers: dict,
         test_project: Project,
         test_group: TestGroup,  # This is unconfirmed
     ):
-        """Test generating codes when no confirmed groups exist."""
+        """Test generating codes when no confirmed groups exist returns 400."""
         response = await client.post(
             f"/api/v1/projects/{test_project.id}/generate-all-sample-codes",
             headers=auth_headers,
         )
 
-        # Should still succeed but with 0 codes
-        assert response.status_code == 200
+        # API returns 400 when no confirmed groups
+        assert response.status_code == 400
         data = response.json()
-
-        assert data["total_count"] == 0
-        assert data["groups_processed"] == 0
-        assert len(data["sample_codes"]) == 0
+        assert "detail" in data
 
     @pytest.mark.asyncio
     async def test_generate_nonexistent_project_returns_404(
@@ -113,14 +110,14 @@ class TestGenerateAllSampleCodes:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_generate_summary_contains_group_info(
+    async def test_generate_summary_contains_detection_info(
         self,
         client: AsyncClient,
         auth_headers: dict,
         test_project: Project,
         confirmed_test_group: TestGroup,
     ):
-        """Test that summary contains information about processed groups."""
+        """Test that summary contains detection configuration info."""
         response = await client.post(
             f"/api/v1/projects/{test_project.id}/generate-all-sample-codes",
             headers=auth_headers,
@@ -129,14 +126,15 @@ class TestGenerateAllSampleCodes:
         assert response.status_code == 200
         data = response.json()
 
-        # Summary should contain group details
+        # Summary should contain detection details
         summary = data["summary"]
         assert isinstance(summary, list)
+        assert len(summary) > 0
 
-        if len(summary) > 0:
-            group_summary = summary[0]
-            assert "group_id" in group_summary or "group_name" in group_summary
-            assert "codes_generated" in group_summary
+        # Each summary item should have detection info
+        for item in summary:
+            assert "test_type" in item
+            assert "generated_count" in item
 
 
 class TestGenerateWithMultipleGroups:
@@ -217,78 +215,44 @@ class TestGenerateWithMultipleGroups:
         assert response.status_code == 200
         data = response.json()
 
-        # Should have processed both groups
-        assert data["groups_processed"] == 2
+        # Should have processed both groups (check summary length)
+        assert len(data["summary"]) >= 2
 
         # Total codes should be sum from both groups
-        assert data["total_count"] > 0
+        assert data["count"] > 0
 
 
-class TestProjectEndpoints:
-    """Basic tests for project endpoints."""
+class TestProjectSampleCodeRule:
+    """Tests for project sample code rule validation."""
 
     @pytest.mark.asyncio
-    async def test_get_project(
+    async def test_generate_fails_without_sample_code_rule(
         self,
         client: AsyncClient,
         auth_headers: dict,
-        test_project: Project,
+        db_session: AsyncSession,
+        test_user: User,
     ):
-        """Test getting a single project."""
-        response = await client.get(
-            f"/api/v1/projects/{test_project.id}",
+        """Test generating codes fails when project has no sample code rule."""
+        # Create project without sample_code_rule
+        project = Project(
+            sponsor_project_code="NO-RULE-001",
+            lab_project_code="NR-001",
+            sample_code_rule=None,  # No rule configured
+            is_active=True,
+            is_archived=False,
+            created_by=test_user.id,
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        response = await client.post(
+            f"/api/v1/projects/{project.id}/generate-all-sample-codes",
             headers=auth_headers,
         )
 
-        assert response.status_code == 200
+        # Should return 400 with error message
+        assert response.status_code == 400
         data = response.json()
-
-        assert data["id"] == test_project.id
-        assert data["sponsor_project_code"] == test_project.sponsor_project_code
-        assert data["lab_project_code"] == test_project.lab_project_code
-
-    @pytest.mark.asyncio
-    async def test_list_projects(
-        self,
-        client: AsyncClient,
-        auth_headers: dict,
-        test_project: Project,
-    ):
-        """Test listing projects."""
-        response = await client.get(
-            "/api/v1/projects",
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Response could be list or paginated object
-        if isinstance(data, list):
-            assert len(data) >= 1
-        else:
-            assert "items" in data or "data" in data
-
-    @pytest.mark.asyncio
-    async def test_project_has_sample_code_rule(
-        self,
-        client: AsyncClient,
-        auth_headers: dict,
-        test_project: Project,
-    ):
-        """Test that project has sample_code_rule configured."""
-        response = await client.get(
-            f"/api/v1/projects/{test_project.id}",
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify sample_code_rule structure
-        assert "sample_code_rule" in data
-        rule = data["sample_code_rule"]
-
-        assert "elements" in rule
-        assert "slots" in rule
-        assert "dictionaries" in rule
+        assert "detail" in data

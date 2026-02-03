@@ -11,11 +11,12 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 
 # Set test environment variables before importing app modules
 os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/lims_test"
+    "postgresql+asyncpg://cafi@localhost:5432/lims_test"
 )
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only-do-not-use-in-production"
 os.environ["DEBUG"] = "true"
@@ -53,21 +54,46 @@ def event_loop() -> Generator:
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+@pytest_asyncio.fixture(scope="session")
+async def setup_database():
     """
-    Create a fresh database session for each test.
-    Creates all tables before the test and drops them after.
+    Create all tables once at the start of the test session.
+    Drop all tables at the end.
     """
     async with test_engine.begin() as conn:
+        # Drop all tables first (with CASCADE to handle foreign keys)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
         await conn.run_sync(Base.metadata.create_all)
 
-    async with TestSessionLocal() as session:
-        yield session
-        await session.rollback()
+    yield
 
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+
+
+@pytest_asyncio.fixture(scope="function")
+async def db_session(setup_database) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Create a fresh database session for each test.
+    Uses SAVEPOINT for nested transaction isolation.
+    """
+    # Start a connection and transaction
+    connection = await test_engine.connect()
+    transaction = await connection.begin()
+
+    # Create session bound to the connection
+    session = AsyncSession(bind=connection, expire_on_commit=False)
+
+    try:
+        yield session
+    finally:
+        await session.close()
+        await transaction.rollback()
+        await connection.close()
 
 
 @pytest_asyncio.fixture(scope="function")

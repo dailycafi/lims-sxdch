@@ -223,7 +223,7 @@ class TestTestGroupCRUD:
     ):
         """Test getting test groups for a project."""
         response = await client.get(
-            f"/api/v1/test-groups/project/{test_project.id}",
+            f"/api/v1/projects/{test_project.id}/test-groups",
             headers=auth_headers,
         )
 
