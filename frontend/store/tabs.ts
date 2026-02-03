@@ -5,12 +5,16 @@ import { TAB_MODULES } from '@/config/tab-modules'
 
 const MAX_TABS = 20
 
+// Counter for generating unique IDs within the same millisecond
+let idCounter = 0
+
 /**
  * 生成唯一 Tab ID
  */
 function generateTabId(moduleKey: string): string {
   const slug = moduleKey.replace(/\//g, '-').replace(/^-/, '')
-  return `${slug}-${Date.now()}`
+  idCounter = (idCounter + 1) % 1000
+  return `${slug}-${Date.now()}-${idCounter}`
 }
 
 /**
