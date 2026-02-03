@@ -15,6 +15,8 @@ import { toast } from 'react-hot-toast';
 import { TasksService } from '@/services';
 import { TaskCategory, TaskItem, TaskOverview } from '@/types/api';
 import { useProjectStore } from '@/store/project';
+import { useTabState } from '@/hooks/useTabState';
+import type { TabContentProps } from '@/types/tabs';
 
 type TaskTabKey = 'all' | TaskCategory;
 
@@ -46,12 +48,28 @@ const tabConfig: { key: TaskTabKey; label: string }[] = [
    { key: 'destroy', label: '样本销毁' },
  ];
 
-export default function TaskCenterPage() {
-   const router = useRouter();
-   const { projects, selectedProjectId, setSelectedProject } = useProjectStore();
-   const [overview, setOverview] = useState<TaskOverview | null>(null);
-   const [loading, setLoading] = useState(false);
-   const [activeTab, setActiveTab] = useState<TaskTabKey>('all');
+// 默认 Tab 状态
+const defaultTabState = {
+  activeTab: 'all' as TaskTabKey,
+};
+
+export default function TaskCenterPage({ tabId, isActive }: Partial<TabContentProps> = {}) {
+  const router = useRouter();
+  const { projects, selectedProjectId, setSelectedProject } = useProjectStore();
+  const [overview, setOverview] = useState<TaskOverview | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Tab 模式下使用 useTabState 持久化状态
+  const isTabMode = !!tabId;
+  const tabState = useTabState(tabId || 'standalone', defaultTabState);
+
+  // 根据模式选择状态管理方式
+  const [localActiveTab, setLocalActiveTab] = useState<TaskTabKey>('all');
+
+  const activeTab = isTabMode ? (tabState.state.activeTab || 'all') : localActiveTab;
+  const setActiveTab = isTabMode
+    ? (tab: TaskTabKey) => tabState.setState({ activeTab: tab })
+    : setLocalActiveTab;
 
    const fetchTasks = async () => {
      setLoading(true);
@@ -122,10 +140,10 @@ export default function TaskCenterPage() {
      }
    };
 
-   return (
-     <AppLayout>
-       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  // 页面内容
+  const content = (
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Text className="text-zinc-600">
             查看当前项目下的样本相关任务，点击任务可快速跳转到对应流程页面
           </Text>
@@ -214,18 +232,25 @@ export default function TaskCenterPage() {
                        </div>
                      </TableCell>
                      <TableCell>
-                       <div className="flex items-center gap-2 text-blue-600">
-                         <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                         <span>跳转</span>
-                       </div>
-                     </TableCell>
-                   </TableRow>
-                 ))
-               )}
-             </TableBody>
-           </Table>
-         </div>
-       </div>
-     </AppLayout>
-   );
- }
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                        <span>跳转</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+  );
+
+  // Tab 模式不需要 AppLayout，直接返回内容
+  if (isTabMode) {
+    return content;
+  }
+
+  // 独立模式使用 AppLayout
+  return <AppLayout>{content}</AppLayout>;
+}

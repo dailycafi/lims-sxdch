@@ -9,18 +9,20 @@ import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
 import { api } from '@/lib/api';
-import { 
-  MagnifyingGlassIcon, 
-  FunnelIcon, 
+import {
+  MagnifyingGlassIcon,
+  FunnelIcon,
   BeakerIcon,
   ChevronUpIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  XMarkIcon 
+  XMarkIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { SamplesService, ProjectsService } from '@/services';
+import { useTabState } from '@/hooks/useTabState';
+import type { TabContentProps } from '@/types/tabs';
 
 // 分页配置
 const PAGE_SIZE = 50;
@@ -85,35 +87,66 @@ const formatStorageLocation = (sample: any) => {
   return '-';
 };
 
-export default function SamplesPage() {
+// 默认筛选状态
+const defaultFilters = {
+  sampleCode: '',
+  project: 'all',
+  status: 'all',
+  storageLocation: 'all',
+  cycleGroup: 'all',
+  testType: 'all',
+  aliquotType: 'all',
+  collectionSeq: 'all',
+  subjectCode: '',
+  purpose: 'all',
+  transportCondition: 'all',
+  specialNotes: '',
+  dateFrom: '',
+  dateTo: ''
+};
+
+// 默认 Tab 状态
+const defaultTabState = {
+  filters: defaultFilters,
+  viewMode: 'all' as 'all' | 'in_storage' | 'checked_out' | 'transferred',
+  currentPage: 1,
+  isFilterExpanded: true,
+};
+
+export default function SamplesPage({ tabId, isActive }: Partial<TabContentProps> = {}) {
+  // Tab 模式下使用 useTabState 持久化状态
+  const isTabMode = !!tabId;
+  const tabState = useTabState(tabId || 'standalone', defaultTabState);
+
+  // 根据模式选择状态管理方式
+  const [localFilters, setLocalFilters] = useState(defaultFilters);
+  const [localViewMode, setLocalViewMode] = useState<'all' | 'in_storage' | 'checked_out' | 'transferred'>('all');
+  const [localCurrentPage, setLocalCurrentPage] = useState(1);
+  const [localIsFilterExpanded, setLocalIsFilterExpanded] = useState(true);
+
+  // 统一的状态访问
+  const filters = isTabMode ? (tabState.state.filters || defaultFilters) : localFilters;
+  const viewMode = isTabMode ? (tabState.state.viewMode || 'all') : localViewMode;
+  const currentPage = isTabMode ? (tabState.state.currentPage || 1) : localCurrentPage;
+  const isFilterExpanded = isTabMode ? (tabState.state.isFilterExpanded ?? true) : localIsFilterExpanded;
+
+  // 统一的状态更新
+  const setFilters = isTabMode
+    ? (newFilters: typeof defaultFilters) => tabState.setState({ filters: newFilters })
+    : setLocalFilters;
+  const setViewMode = isTabMode
+    ? (mode: typeof viewMode) => tabState.setState({ viewMode: mode })
+    : setLocalViewMode;
+  const setCurrentPage = isTabMode
+    ? (page: number) => tabState.setState({ currentPage: page })
+    : setLocalCurrentPage;
+  const setIsFilterExpanded = isTabMode
+    ? (expanded: boolean) => tabState.setState({ isFilterExpanded: expanded })
+    : setLocalIsFilterExpanded;
+
   const [projects, setProjects] = useState<any[]>([]);
   const [samples, setSamples] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // 分页状态
-  const [currentPage, setCurrentPage] = useState(1);
-  
-  // 新增筛选状态
-  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
-  const [filters, setFilters] = useState({
-    sampleCode: '',
-    project: 'all',
-    status: 'all',
-    storageLocation: 'all',
-    cycleGroup: 'all',
-    testType: 'all',
-    aliquotType: 'all',
-    collectionSeq: 'all',
-    subjectCode: '',
-    purpose: 'all',
-    transportCondition: 'all',
-    specialNotes: '',
-    dateFrom: '',
-    dateTo: ''
-  });
-  
-  // 新增视图模式
-  const [viewMode, setViewMode] = useState<'all' | 'in_storage' | 'checked_out' | 'transferred'>('all');
 
   // 合并多个 useMemo 为单次遍历，避免重复迭代数组
   // 参考: React Best Practices - 7.6 Combine Multiple Array Iterations
@@ -299,31 +332,16 @@ export default function SamplesPage() {
 
   // 重置筛选
   const resetFilters = () => {
-    setFilters({
-      sampleCode: '',
-      project: 'all',
-      status: 'all',
-      storageLocation: 'all',
-      cycleGroup: 'all',
-      testType: 'all',
-      aliquotType: 'all',
-      collectionSeq: 'all',
-      subjectCode: '',
-      purpose: 'all',
-      transportCondition: 'all',
-      specialNotes: '',
-      dateFrom: '',
-      dateTo: ''
-    });
+    setFilters(defaultFilters);
   };
 
-  return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto">
-        {/* 页面标题 */}
-        <div className="mb-6">
-          <Text className="text-zinc-600">查询和跟踪样本信息</Text>
-        </div>
+  // 页面内容
+  const content = (
+    <div className="max-w-7xl mx-auto">
+      {/* 页面标题 */}
+      <div className="mb-6">
+        <Text className="text-zinc-600">查询和跟踪样本信息</Text>
+      </div>
 
         {/* 筛选区域 - 可折叠 */}
         <div className="bg-white rounded-lg shadow-md border border-gray-100 mb-6 overflow-hidden">
@@ -742,6 +760,13 @@ export default function SamplesPage() {
           )}
         </motion.div>
       </div>
-    </AppLayout>
   );
+
+  // Tab 模式不需要 AppLayout，直接返回内容
+  if (isTabMode) {
+    return content;
+  }
+
+  // 独立模式使用 AppLayout
+  return <AppLayout>{content}</AppLayout>;
 }

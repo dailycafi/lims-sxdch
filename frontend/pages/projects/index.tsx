@@ -11,13 +11,15 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
-import { 
+import {
   FunnelIcon,
   ChevronUpIcon,
   PlusIcon
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ProjectsService } from '@/services';
+import { useTabState } from '@/hooks/useTabState';
+import type { TabContentProps } from '@/types/tabs';
 
 interface ProjectItem {
   id: number;
@@ -31,20 +33,55 @@ interface ProjectItem {
   sample_count?: number;
 }
 
-export default function ProjectsPage() {
+// 默认筛选状态
+const defaultFilters = {
+  status: 'all',
+  sponsor: 'all',
+  dateFrom: '',
+  dateTo: ''
+};
+
+// 默认 Tab 状态
+const defaultTabState = {
+  searchQuery: '',
+  filters: defaultFilters,
+  viewMode: 'all' as 'all' | 'active' | 'completed' | 'archived',
+  isFilterExpanded: false,
+};
+
+export default function ProjectsPage({ tabId, isActive }: Partial<TabContentProps> = {}) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
-  
-  const [filters, setFilters] = useState({
-    status: 'all',
-    sponsor: 'all',
-    dateFrom: '',
-    dateTo: ''
-  });
-  
-  const [viewMode, setViewMode] = useState<'all' | 'active' | 'completed' | 'archived'>('all');
+
+  // Tab 模式下使用 useTabState 持久化状态
+  const isTabMode = !!tabId;
+  const tabState = useTabState(tabId || 'standalone', defaultTabState);
+
+  // 根据模式选择状态管理方式
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState(defaultFilters);
+  const [localViewMode, setLocalViewMode] = useState<'all' | 'active' | 'completed' | 'archived'>('all');
+  const [localIsFilterExpanded, setLocalIsFilterExpanded] = useState(false);
+
+  // 统一的状态访问
+  const searchQuery = isTabMode ? (tabState.state.searchQuery || '') : localSearchQuery;
+  const filters = isTabMode ? (tabState.state.filters || defaultFilters) : localFilters;
+  const viewMode = isTabMode ? (tabState.state.viewMode || 'all') : localViewMode;
+  const isFilterExpanded = isTabMode ? (tabState.state.isFilterExpanded ?? false) : localIsFilterExpanded;
+
+  // 统一的状态更新
+  const setSearchQuery = isTabMode
+    ? (query: string) => tabState.setState({ searchQuery: query })
+    : setLocalSearchQuery;
+  const setFilters = isTabMode
+    ? (newFilters: typeof defaultFilters) => tabState.setState({ filters: newFilters })
+    : setLocalFilters;
+  const setViewMode = isTabMode
+    ? (mode: typeof viewMode) => tabState.setState({ viewMode: mode })
+    : setLocalViewMode;
+  const setIsFilterExpanded = isTabMode
+    ? (expanded: boolean) => tabState.setState({ isFilterExpanded: expanded })
+    : setLocalIsFilterExpanded;
 
   useEffect(() => {
     fetchProjects();
@@ -127,18 +164,18 @@ export default function ProjectsPage() {
   // 获取唯一的申办方列表
   const sponsors = Array.from(new Set(projects.map(p => p.sponsor))).filter(Boolean);
 
-  return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto">
-        {/* 页面标题 */}
-        <div className="mb-6 flex items-center justify-end">
-          <Link href="/projects/new">
-            <Button>
-              <PlusIcon className="h-4 w-4 mr-1" />
-              新建项目
-            </Button>
-          </Link>
-        </div>
+  // 页面内容
+  const content = (
+    <div className="max-w-7xl mx-auto">
+      {/* 页面标题 */}
+      <div className="mb-6 flex items-center justify-end">
+        <Link href="/projects/new">
+          <Button>
+            <PlusIcon className="h-4 w-4 mr-1" />
+            新建项目
+          </Button>
+        </Link>
+      </div>
 
         {/* 筛选区域 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
@@ -309,6 +346,13 @@ export default function ProjectsPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
+
+  // Tab 模式不需要 AppLayout，直接返回内容
+  if (isTabMode) {
+    return content;
+  }
+
+  // 独立模式使用 AppLayout
+  return <AppLayout>{content}</AppLayout>;
 }
