@@ -30,11 +30,11 @@ function removeCachedStorage(key: string): void {
   localStorage.removeItem(key);
   storageCache.delete(key);
 }
-import { 
-  Sidebar, 
-  SidebarBody, 
-  SidebarHeader, 
-  SidebarSection, 
+import {
+  Sidebar,
+  SidebarBody,
+  SidebarHeader,
+  SidebarSection,
   SidebarItem,
   SidebarHeading,
   SidebarSpacer,
@@ -42,6 +42,9 @@ import {
   SidebarFooter,
   SidebarToggle,
   SidebarContent,
+  SidebarSubmenu,
+  SidebarSubmenuItem,
+  SidebarItemWithTooltip,
   useSidebar
 } from '@/components/sidebar';
 import clsx from 'clsx';
@@ -117,76 +120,125 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
   '/tasks': [
     { label: '任务中心', current: true }
   ],
+  // 样本管理
+  '/samples/receive': [
+    { label: '样本管理' },
+    { label: '样本接收', current: true }
+  ],
   '/samples/inventory': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '清点入库', current: true }
   ],
   '/samples/storage': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '样本存储', current: true }
   ],
   '/samples/borrow': [
-    { label: '样本管理', href: '/samples' },
-    { label: '样本领用', current: true }
+    { label: '样本管理' },
+    { label: '样本存取', current: true }
   ],
   '/samples/transfer': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '样本转移', current: true }
   ],
   '/samples/destroy': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '样本销毁', current: true }
   ],
   '/samples/tracking': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '跟踪表', current: true }
   ],
   '/samples': [
-    { label: '样本管理', href: '/samples' },
+    { label: '样本管理' },
     { label: '样本查询', current: true }
   ],
+  // 特殊样本
+  '/samples/special/apply': [
+    { label: '特殊样本' },
+    { label: '申请入库', current: true }
+  ],
+  '/samples/special/receive': [
+    { label: '特殊样本' },
+    { label: '样本接收', current: true }
+  ],
+  '/samples/special/inventory': [
+    { label: '特殊样本' },
+    { label: '清点入库', current: true }
+  ],
+  '/samples/special/borrow': [
+    { label: '特殊样本' },
+    { label: '样本存取', current: true }
+  ],
+  '/samples/special/transfer': [
+    { label: '特殊样本' },
+    { label: '样本转移', current: true }
+  ],
+  '/samples/special/destroy': [
+    { label: '特殊样本' },
+    { label: '样本销毁', current: true }
+  ],
+  // 空白基质
+  '/samples/matrix/receive': [
+    { label: '空白基质' },
+    { label: '样本接收', current: true }
+  ],
+  '/samples/matrix/inventory': [
+    { label: '空白基质' },
+    { label: '样本清点', current: true }
+  ],
+  '/samples/matrix/aliquot': [
+    { label: '空白基质' },
+    { label: '分装入库', current: true }
+  ],
+  '/samples/matrix/borrow': [
+    { label: '空白基质' },
+    { label: '样本存取', current: true }
+  ],
+  '/samples/matrix/transfer': [
+    { label: '空白基质' },
+    { label: '样本转移', current: true }
+  ],
+  '/samples/matrix/destroy': [
+    { label: '空白基质' },
+    { label: '样本销毁', current: true }
+  ],
+  // 项目管理
   '/projects': [
-    { label: '项目管理', href: '/projects' },
-    { label: '项目列表', current: true }
+    { label: '项目管理' },
+    { label: '项目配置', current: true }
   ],
   '/projects/new': [
-    { label: '项目管理', href: '/projects' },
+    { label: '项目管理' },
     { label: '新建项目', current: true }
   ],
-  '/statistics': [
-    { label: '统计分析', href: '/statistics' },
-    { label: '统计查询', current: true }
-  ],
-  '/deviation': [
-    { label: '统计分析', href: '/statistics' },
-    { label: '偏差管理', current: true }
-  ],
   '/archive': [
-    { label: '统计分析', href: '/statistics' },
+    { label: '项目管理' },
     { label: '项目归档', current: true }
   ],
-  '/archive/samples': [
-    { label: '统计分析', href: '/statistics' },
-    { label: '样本归档', current: true }
+  // 标签管理
+  '/labels': [
+    { label: '标签管理', current: true }
   ],
+  // 统计查询
+  '/statistics': [
+    { label: '统计查询', current: true }
+  ],
+  // 系统管理
   '/global-params': [
-    { label: '系统管理', href: '/settings' },
+    { label: '系统管理' },
     { label: '全局参数', current: true }
   ],
   '/audit': [
-    { label: '系统管理', href: '/settings' },
-    { label: '审计日志', current: true }
+    { label: '系统管理' },
+    { label: '审计追踪', current: true }
   ],
   '/settings': [
-    { label: '系统管理', href: '/settings' },
+    { label: '系统管理' },
     { label: '系统设置', current: true }
   ],
   '/profile': [
     { label: '个人信息', current: true }
-  ],
-  '/labels': [
-    { label: '工作台', href: '#' },
-    { label: '标签管理', current: true }
   ],
 };
 
@@ -398,123 +450,123 @@ export function AppLayout({ children }: AppLayoutProps) {
           <SidebarHeader className="!p-0 border-b-0">
             <SidebarHeaderContent user={user} />
             <SidebarSection className="px-4 pb-4">
-              <SidebarItem href="/" scroll={false} current={isCurrentPath('/')}>
+              <SidebarItemWithTooltip href="/" scroll={false} current={isCurrentPath('/')} label="主页">
                 <HomeIcon data-slot="icon" className="!w-4 !h-4" />
                 <SidebarLabel>主页</SidebarLabel>
-              </SidebarItem>
+              </SidebarItemWithTooltip>
             </SidebarSection>
           </SidebarHeader>
-          
+
           <SidebarBody>
-            <div className="space-y-6">
-              {/* 工作台 */}
-              <div>
-                <SidebarHeading>工作台</SidebarHeading>
-                <div className="space-y-1">
-                  <SidebarItem href="/tasks" scroll={false} current={isCurrentPath('/tasks')}>
-                    <ClipboardDocumentCheckIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>任务中心</SidebarLabel>
-                    {pendingTaskCount > 0 && (
-                      <SidebarContent className="ml-auto">
-                        <Badge className="bg-gradient-to-r from-green-400 to-green-500 text-zinc-900 text-[10px] font-semibold">
-                          NEW
-                        </Badge>
-                      </SidebarContent>
-                    )}
-                  </SidebarItem>
-                  <SidebarItem href="/projects" scroll={false} current={isCurrentPath('/projects')}>
-                    <FolderIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>项目管理</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/labels" scroll={false} current={isCurrentPath('/labels')}>
-                    <TagIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>标签管理</SidebarLabel>
-                  </SidebarItem>
-                </div>
-              </div>
+            <div className="space-y-4">
+              {/* 项目管理 */}
+              <SidebarSubmenu label="项目管理" icon={FolderIcon} defaultOpen={router.pathname.startsWith('/projects') || router.pathname === '/archive'}>
+                <SidebarSubmenuItem href="/projects/new" current={isCurrentPath('/projects/new')}>
+                  新建项目
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/projects" current={router.pathname === '/projects'}>
+                  项目配置
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/archive" current={isCurrentPath('/archive')}>
+                  项目归档
+                </SidebarSubmenuItem>
+              </SidebarSubmenu>
+
+              {/* 标签管理 */}
+              <SidebarSubmenu label="标签管理" icon={TagIcon} defaultOpen={router.pathname.startsWith('/labels')}>
+                <SidebarSubmenuItem href="/labels" current={router.pathname === '/labels' && !router.query.tab}>
+                  标签生成
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/labels?tab=settings" current={router.query.tab === 'settings'}>
+                  标签设置
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/labels?tab=print" current={router.query.tab === 'print'}>
+                  标签打印
+                </SidebarSubmenuItem>
+              </SidebarSubmenu>
 
               {/* 样本管理 */}
-              <div>
-                <SidebarHeading>样本管理</SidebarHeading>
-                <div className="space-y-1">
-                  <SidebarItem href="/samples/receive" scroll={false} current={isCurrentPath('/samples/receive')}>
-                    <BeakerIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本接收</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples/inventory" scroll={false} current={isCurrentPath('/samples/inventory')}>
-                    <ClipboardDocumentListIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>清点入库</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/storage" scroll={false} current={isCurrentPath('/storage')}>
-                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>存储设备</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples/borrow" scroll={false} current={isCurrentPath('/samples/borrow')}>
-                    <ArrowUpOnSquareIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本作业</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples/transfer" scroll={false} current={isCurrentPath('/samples/transfer')}>
-                    <ArrowsRightLeftIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本转移</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples/destroy" scroll={false} current={isCurrentPath('/samples/destroy')}>
-                    <TrashIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本销毁</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples/tracking" scroll={false} current={isCurrentPath('/samples/tracking')}>
-                    <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>跟踪表</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/samples" scroll={false} current={isCurrentPath('/samples')}>
-                    <MagnifyingGlassIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本查询</SidebarLabel>
-                  </SidebarItem>
-                </div>
-              </div>
+              <SidebarSubmenu label="样本管理" icon={BeakerIcon} defaultOpen={router.pathname.startsWith('/samples') && !router.pathname.startsWith('/samples/special') && !router.pathname.startsWith('/samples/matrix')}>
+                <SidebarSubmenuItem href="/samples/receive" current={isCurrentPath('/samples/receive')}>
+                  样本接收
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/inventory" current={router.pathname.startsWith('/samples/inventory')}>
+                  清点入库
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/borrow" current={isCurrentPath('/samples/borrow')}>
+                  样本存取
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/transfer" current={isCurrentPath('/samples/transfer')}>
+                  样本转移
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/destroy" current={isCurrentPath('/samples/destroy')}>
+                  样本销毁
+                </SidebarSubmenuItem>
+              </SidebarSubmenu>
 
+              {/* 特殊样本 */}
+              <SidebarSubmenu label="特殊样本" icon={ShieldCheckIcon} defaultOpen={router.pathname.startsWith('/samples/special')}>
+                <SidebarSubmenuItem href="/samples/special/apply" current={isCurrentPath('/samples/special/apply')}>
+                  申请入库
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/special/receive" current={isCurrentPath('/samples/special/receive')}>
+                  样本接收
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/special/inventory" current={isCurrentPath('/samples/special/inventory')}>
+                  清点入库
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/special/borrow" current={isCurrentPath('/samples/special/borrow')}>
+                  样本存取
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/special/transfer" current={isCurrentPath('/samples/special/transfer')}>
+                  样本转移
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/special/destroy" current={isCurrentPath('/samples/special/destroy')}>
+                  样本销毁
+                </SidebarSubmenuItem>
+              </SidebarSubmenu>
 
-              {/* 统计分析 */}
-              <div>
-                <SidebarHeading>统计分析</SidebarHeading>
-                <div className="space-y-1">
-                  <SidebarItem href="/statistics" scroll={false} current={isCurrentPath('/statistics')}>
-                    <ChartBarIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>统计查询</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/deviation" scroll={false} current={isCurrentPath('/deviation')}>
-                    <ExclamationTriangleIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>偏差管理</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/archive" scroll={false} current={isCurrentPath('/archive')}>
-                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>项目归档</SidebarLabel>
-                  </SidebarItem>
-                  <SidebarItem href="/archive/samples" scroll={false} current={isCurrentPath('/archive/samples')}>
-                    <ArchiveBoxIcon data-slot="icon" className="!w-4 !h-4" />
-                    <SidebarLabel>样本归档</SidebarLabel>
-                  </SidebarItem>
-                </div>
-              </div>
+              {/* 空白基质 */}
+              <SidebarSubmenu label="空白基质" icon={CircleStackIcon} defaultOpen={router.pathname.startsWith('/samples/matrix')}>
+                <SidebarSubmenuItem href="/samples/matrix/receive" current={isCurrentPath('/samples/matrix/receive')}>
+                  样本接收
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/matrix/inventory" current={isCurrentPath('/samples/matrix/inventory')}>
+                  样本清点
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/matrix/aliquot" current={isCurrentPath('/samples/matrix/aliquot')}>
+                  分装入库
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/matrix/borrow" current={isCurrentPath('/samples/matrix/borrow')}>
+                  样本存取
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/matrix/transfer" current={isCurrentPath('/samples/matrix/transfer')}>
+                  样本转移
+                </SidebarSubmenuItem>
+                <SidebarSubmenuItem href="/samples/matrix/destroy" current={isCurrentPath('/samples/matrix/destroy')}>
+                  样本销毁
+                </SidebarSubmenuItem>
+              </SidebarSubmenu>
+
+              {/* 统计查询 */}
+              <SidebarItemWithTooltip href="/statistics" scroll={false} current={isCurrentPath('/statistics')} label="统计查询">
+                <ChartBarIcon data-slot="icon" className="!w-4 !h-4" />
+                <SidebarLabel>统计查询</SidebarLabel>
+              </SidebarItemWithTooltip>
 
               {/* 系统管理 - 仅管理员可见 */}
               {shouldShowMenuItem(['system_admin', 'sample_admin']) && (
-                <div>
-                  <SidebarHeading>系统管理</SidebarHeading>
-                  <div className="space-y-1">
-                    <SidebarItem href="/settings" scroll={false} current={isCurrentPath('/settings')}>
-                      <Cog6ToothIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>系统设置</SidebarLabel>
-                    </SidebarItem>
-                    <SidebarItem href="/global-params" scroll={false} current={isCurrentPath('/global-params')}>
-                      <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>全局参数</SidebarLabel>
-                    </SidebarItem>
-                    <SidebarItem href="/audit" scroll={false} current={isCurrentPath('/audit')}>
-                      <DocumentTextIcon data-slot="icon" className="!w-4 !h-4" />
-                      <SidebarLabel>审计日志</SidebarLabel>
-                    </SidebarItem>
-                  </div>
-                </div>
+                <SidebarSubmenu label="系统管理" icon={Cog6ToothIcon} defaultOpen={router.pathname.startsWith('/settings') || router.pathname.startsWith('/global-params') || router.pathname.startsWith('/audit')}>
+                  <SidebarSubmenuItem href="/settings" current={isCurrentPath('/settings')}>
+                    系统设置
+                  </SidebarSubmenuItem>
+                  <SidebarSubmenuItem href="/global-params" current={isCurrentPath('/global-params')}>
+                    全局参数
+                  </SidebarSubmenuItem>
+                  <SidebarSubmenuItem href="/audit" current={isCurrentPath('/audit')}>
+                    审计追踪
+                  </SidebarSubmenuItem>
+                </SidebarSubmenu>
               )}
             </div>
 
@@ -524,10 +576,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* 底部退出登录 */}
           <SidebarFooter>
             <SidebarSection>
-              <SidebarItem onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-900/20">
+              <SidebarItemWithTooltip onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-900/20" label="退出登录">
                 <ArrowRightOnRectangleIcon data-slot="icon" className="!w-4 !h-4" />
                 <SidebarLabel>退出登录</SidebarLabel>
-              </SidebarItem>
+              </SidebarItemWithTooltip>
             </SidebarSection>
           </SidebarFooter>
         </Sidebar>

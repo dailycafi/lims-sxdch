@@ -13,7 +13,8 @@ import { Textarea } from '@/components/textarea';
 import { Tabs } from '@/components/tabs';
 import { SearchInput } from '@/components/search-input';
 import { api } from '@/lib/api';
-import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon, TagIcon } from '@heroicons/react/20/solid';
+import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon, BeakerIcon, TagIcon, ArchiveBoxIcon, PrinterIcon, QrCodeIcon } from '@heroicons/react/20/solid';
+import JsBarcode from 'jsbarcode';
 import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { AnimatePresence } from 'framer-motion';
@@ -61,7 +62,18 @@ interface SampleType {
   updated_at: string;
 }
 
-type TabType = 'organizations' | 'clinical-samples' | 'qc-stability-samples';
+type TabType = 'organizations' | 'clinical-samples' | 'qc-stability-samples' | 'storage-devices';
+
+interface Freezer {
+  id: number;
+  name: string;
+  barcode: string;
+  location: string;
+  temperature: number;
+  description: string;
+  total_shelves: number;
+  is_active: boolean;
+}
 
 export default function GlobalParamsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('organizations');
@@ -70,6 +82,7 @@ export default function GlobalParamsPage() {
   const [orgTypes, setOrgTypes] = useState<OrganizationType[]>([]);
   const [clinicalSamples, setClinicalSamples] = useState<SampleType[]>([]);
   const [qcSamples, setQcSamples] = useState<SampleType[]>([]);
+  const [freezers, setFreezers] = useState<Freezer[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
@@ -137,15 +150,17 @@ export default function GlobalParamsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [orgsRes, orgTypesRes, sampleTypesRes, clinicalOptionsRes, qcOptionsRes] = await Promise.all([
+      const [orgsRes, orgTypesRes, sampleTypesRes, clinicalOptionsRes, qcOptionsRes, freezersRes] = await Promise.all([
         api.get('/global-params/organizations'),
         api.get('/global-params/organization-types'),
         api.get('/global-params/sample-types'),
         api.get('/global-params/clinical-sample-options').catch(() => ({ data: {} })),
         api.get('/global-params/qc-sample-options').catch(() => ({ data: {} })),
+        api.get('/storage/freezers').catch(() => ({ data: [] })),
       ]);
       setOrganizations(orgsRes.data);
       setOrgTypes(orgTypesRes.data);
+      setFreezers(freezersRes.data);
       
       const allSamples = sampleTypesRes.data as SampleType[];
       setClinicalSamples(allSamples.filter(s => s.category === 'clinical' || !s.category));
@@ -485,6 +500,31 @@ export default function GlobalParamsPage() {
     return orgType?.label || type;
   };
 
+  const handlePrintBarcode = (text: string, label: string) => {
+    const canvas = document.createElement('canvas');
+    JsBarcode(canvas, text, {
+      format: "CODE128",
+      width: 2,
+      height: 50,
+      displayValue: true
+    });
+    const imgUrl = canvas.toDataURL("image/png");
+
+    const win = window.open('', '', 'width=400,height=300');
+    if (win) {
+      win.document.write(`
+        <html>
+          <body style="text-align:center; padding: 20px;">
+            <h3>${label}</h3>
+            <img src="${imgUrl}" />
+          </body>
+          <script>window.onload = function() { window.print(); window.close(); }</script>
+        </html>
+      `);
+      win.document.close();
+    }
+  };
+
   const getOrgTypeColor = (type: string) => {
     switch (type) {
       case 'sponsor': return 'blue';
@@ -512,7 +552,8 @@ export default function GlobalParamsPage() {
             tabs={[
               { key: 'organizations', label: '组织管理' },
               { key: 'clinical-samples', label: '临床样本配置' },
-              { key: 'qc-stability-samples', label: '稳定性及质控样本配置' }
+              { key: 'qc-stability-samples', label: '稳定性及质控样本配置' },
+              { key: 'storage-devices', label: '存储设备' }
             ]}
             activeTab={activeTab}
             onChange={(key) => setActiveTab(key as TabType)}
@@ -1417,6 +1458,73 @@ export default function GlobalParamsPage() {
                   保存配置
                 </Button>
               </div>
+            </div>
+          </>
+        )}
+
+        {/* 存储设备内容 */}
+        {activeTab === 'storage-devices' && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <Text className="text-zinc-600">管理冰箱、液氮罐等存储设备及其层级结构</Text>
+              <div className="flex gap-2">
+                <Button href="/storage/scan" outline className="whitespace-nowrap !px-5 !py-2.5 gap-x-2">
+                  <QrCodeIcon className="!w-5 !h-5" />
+                  扫描作业
+                </Button>
+                <Button href="/storage/new" className="whitespace-nowrap !px-5 !py-2.5 gap-x-2">
+                  <PlusIcon className="!w-5 !h-5" />
+                  添加设备
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>设备名称</TableHeader>
+                    <TableHeader>条码</TableHeader>
+                    <TableHeader>位置</TableHeader>
+                    <TableHeader>温度设定</TableHeader>
+                    <TableHeader>层数</TableHeader>
+                    <TableHeader>状态</TableHeader>
+                    <TableHeader>操作</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <AnimatedLoadingState colSpan={7} variant="skeleton" />
+                  ) : freezers.length === 0 ? (
+                    <AnimatedEmptyState colSpan={7} text="暂无存储设备" />
+                  ) : (
+                    freezers.map(freezer => (
+                      <TableRow key={freezer.id}>
+                        <TableCell className="font-medium">{freezer.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{freezer.barcode || freezer.name}</TableCell>
+                        <TableCell>{freezer.location || '-'}</TableCell>
+                        <TableCell>{freezer.temperature}°C</TableCell>
+                        <TableCell>{freezer.total_shelves} 层</TableCell>
+                        <TableCell>
+                          <Badge color={freezer.is_active ? 'green' : 'red'}>
+                            {freezer.is_active ? '正常' : '停用'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button plain href={`/storage/${freezer.id}`}>查看详情</Button>
+                            <Tooltip content="打印条码">
+                              <Button plain onClick={() => handlePrintBarcode(freezer.barcode || freezer.name, freezer.name)}>
+                                <PrinterIcon className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </>
         )}
