@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { formatDate } from '@/lib/date-utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 import { AppLayout } from '@/components/layouts/AppLayout';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
@@ -11,13 +12,15 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from '@
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Tabs } from '@/components/tabs';
-import { 
+import {
   FunnelIcon,
   ChevronUpIcon,
-  PlusIcon
+  PlusIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/20/solid';
 import { AnimatedLoadingState, AnimatedEmptyState, AnimatedTableRow } from '@/components/animated-table';
 import { ProjectsService } from '@/services';
+import { api } from '@/lib/api';
 
 interface ProjectItem {
   id: number;
@@ -29,6 +32,7 @@ interface ProjectItem {
   is_archived: boolean;
   created_at: string;
   sample_count?: number;
+  has_sample_code_rule?: boolean;
 }
 
 export default function ProjectsPage() {
@@ -64,6 +68,7 @@ export default function ProjectsPage() {
         is_archived: project.is_archived,
         created_at: project.created_at,
         sample_count: 0,
+        has_sample_code_rule: !!project.sample_code_rule,
       }));
       setProjects(transformedProjects);
     } catch (error) {
@@ -126,6 +131,22 @@ export default function ProjectsPage() {
 
   // 获取唯一的申办方列表
   const sponsors = Array.from(new Set(projects.map(p => p.sponsor))).filter(Boolean);
+
+  // 生成所有样本编号
+  const [generatingProjectId, setGeneratingProjectId] = useState<number | null>(null);
+  const handleGenerateAllCodes = async (projectId: number) => {
+    setGeneratingProjectId(projectId);
+    try {
+      const response = await api.post(`/projects/${projectId}/generate-all-sample-codes`);
+      const { count, summary } = response.data;
+      toast.success(`成功生成 ${count} 个样本编号`, { duration: 4000 });
+    } catch (error: any) {
+      const message = error.response?.data?.detail || '生成失败';
+      toast.error(message);
+    } finally {
+      setGeneratingProjectId(null);
+    }
+  };
 
   return (
     <AppLayout>
@@ -294,11 +315,23 @@ export default function ProjectsPage() {
                         <TableCell>{formatDate(project.created_at)}</TableCell>
                         <TableCell>{project.sample_count || 0}</TableCell>
                         <TableCell className="text-right pr-6">
-                          <Link href={`/projects/${project.id}`}>
-                            <Button plain>
-                              配置项目
-                            </Button>
-                          </Link>
+                          <div className="flex items-center justify-end gap-2">
+                            {project.has_sample_code_rule && !project.is_archived && (
+                              <Button
+                                outline
+                                onClick={() => handleGenerateAllCodes(project.id)}
+                                disabled={generatingProjectId === project.id}
+                              >
+                                <DocumentTextIcon className="h-4 w-4 mr-1" />
+                                {generatingProjectId === project.id ? '生成中...' : '生成编号'}
+                              </Button>
+                            )}
+                            <Link href={`/projects/${project.id}`}>
+                              <Button plain>
+                                配置项目
+                              </Button>
+                            </Link>
+                          </div>
                         </TableCell>
                       </AnimatedTableRow>
                     ))}

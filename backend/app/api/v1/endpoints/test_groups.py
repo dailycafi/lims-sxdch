@@ -369,21 +369,21 @@ async def copy_test_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
-    """复制试验组"""
+    """复制试验组，支持在复制时覆盖字段值"""
     if not check_test_group_permission(current_user):
         raise HTTPException(status_code=403, detail="没有权限复制试验组")
-    
+
     # 获取源试验组
     result = await db.execute(
         select(TestGroup).where(TestGroup.id == data.source_id)
     )
     source = result.scalar_one_or_none()
-    
+
     if not source or not source.is_active:
         raise HTTPException(status_code=404, detail="源试验组不存在")
-    
+
     await assert_project_access(db, current_user, source.project_id)
-    
+
     # 获取当前项目最大的 display_order
     max_order_result = await db.execute(
         select(TestGroup.display_order)
@@ -393,28 +393,38 @@ async def copy_test_group(
         .limit(1)
     )
     max_order = max_order_result.scalar_one_or_none() or 0
-    
-    # 创建新的试验组
+
+    # 处理检测配置的覆盖
+    detection_configs_data = source.detection_configs
+    if data.detection_configs is not None:
+        detection_configs_data = [dc.model_dump() for dc in data.detection_configs]
+
+    # 处理采集点配置的覆盖
+    collection_points_data = source.collection_points
+    if data.collection_points is not None:
+        collection_points_data = [cp.model_dump() for cp in data.collection_points]
+
+    # 创建新的试验组，使用覆盖数据或源数据
     new_test_group = TestGroup(
         project_id=source.project_id,
-        name=None,  # 不再使用 name 字段
-        cycle=source.cycle,
-        dosage=source.dosage,
-        planned_count=source.planned_count,
-        backup_count=source.backup_count,
-        subject_prefix=source.subject_prefix,
-        subject_start_number=source.subject_start_number,
-        detection_configs=source.detection_configs,
-        collection_points=source.collection_points,
+        name=data.name if data.name is not None else source.name,
+        cycle=data.cycle if data.cycle is not None else source.cycle,
+        dosage=data.dosage if data.dosage is not None else source.dosage,
+        planned_count=data.planned_count if data.planned_count is not None else source.planned_count,
+        backup_count=data.backup_count if data.backup_count is not None else source.backup_count,
+        subject_prefix=data.subject_prefix if data.subject_prefix is not None else source.subject_prefix,
+        subject_start_number=data.subject_start_number if data.subject_start_number is not None else source.subject_start_number,
+        detection_configs=detection_configs_data,
+        collection_points=collection_points_data,
         display_order=max_order + 1,
         created_by=current_user.id,
         is_confirmed=False,  # 复制的试验组默认未确认
     )
-    
+
     db.add(new_test_group)
     await db.commit()
     await db.refresh(new_test_group)
-    
+
     # 创建审计日志
     await create_audit_log(
         db=db,
@@ -426,9 +436,10 @@ async def copy_test_group(
             "source_id": source.id,
             "source_cycle": source.cycle,
             "source_dosage": source.dosage,
+            "overrides": data.model_dump(exclude_unset=True, exclude={"source_id"}),
         },
     )
-    
+
     return new_test_group
 
 

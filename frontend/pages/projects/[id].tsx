@@ -604,6 +604,23 @@ export default function ProjectDetailPage() {
 
   const [isSampleTypeDialogOpen, setIsSampleTypeDialogOpen] = useState(false);
   const [editingSampleType, setEditingSampleType] = useState<SampleType | null>(null);
+
+  // 一键生成所有编号
+  const [isGeneratingAllCodes, setIsGeneratingAllCodes] = useState(false);
+  const handleGenerateAllCodes = async () => {
+    if (!project) return;
+    setIsGeneratingAllCodes(true);
+    try {
+      const response = await api.post(`/projects/${id}/generate-all-sample-codes`);
+      const { count, summary } = response.data;
+      toast.success(`成功生成 ${count} 个样本编号`, { duration: 4000 });
+    } catch (error: any) {
+      const message = error.response?.data?.detail || '生成失败';
+      toast.error(message);
+    } finally {
+      setIsGeneratingAllCodes(false);
+    }
+  };
   const [sampleTypeForm, setSampleTypeForm] = useState({
     category: 'clinical',
     cycle_group: '',
@@ -816,10 +833,22 @@ export default function ProjectDetailPage() {
                     router.push(`/projects/${id}/sample-codes?tab=clinical`);
                   }} disabled={!project.sample_code_rule} className="shadow-sm relative z-10">
                     <DocumentTextIcon />
-                    生成编号
+                    自定义生成
+                  </Button>
+                  <Button
+                    color="dark"
+                    onClick={handleGenerateAllCodes}
+                    disabled={!project.sample_code_rule || isGeneratingAllCodes}
+                    className="shadow-sm relative z-10 bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <DocumentTextIcon />
+                    {isGeneratingAllCodes ? '生成中...' : '一键生成'}
                   </Button>
                 </div>
               </div>
+              <Text className="text-xs text-zinc-500 mb-2">
+                「一键生成」将根据下方已确认的试验组配置，自动生成所有临床样本编号。
+              </Text>
             </div>
           </div>
         </div>

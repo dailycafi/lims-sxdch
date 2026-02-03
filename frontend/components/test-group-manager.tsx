@@ -92,9 +92,25 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
 
   // 审计理由
   const [auditReason, setAuditReason] = useState('');
-  
+
   // 编号预览展开状态
   const [subjectPreviewExpanded, setSubjectPreviewExpanded] = useState(false);
+
+  // 复制对话框相关状态
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
+  const [copyingGroup, setCopyingGroup] = useState<TestGroup | null>(null);
+  const [copyForm, setCopyForm] = useState<TestGroupCreate>({
+    project_id: projectId,
+    name: '',
+    cycle: '',
+    dosage: '',
+    planned_count: 0,
+    backup_count: 0,
+    subject_prefix: '',
+    subject_start_number: 1,
+    detection_configs: [],
+    collection_points: [],
+  });
 
   useEffect(() => {
     fetchTestGroups();
@@ -237,14 +253,58 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     }
   };
 
-  const handleCopy = async (group: TestGroup) => {
+  // 打开复制对话框
+  const openCopyDialog = (group: TestGroup) => {
+    setCopyingGroup(group);
+    setCopyForm({
+      project_id: projectId,
+      name: group.name || '',
+      cycle: group.cycle || '',
+      dosage: group.dosage || '',
+      planned_count: group.planned_count,
+      backup_count: group.backup_count,
+      subject_prefix: group.subject_prefix || '',
+      subject_start_number: group.subject_start_number || 1,
+      detection_configs: group.detection_configs || [],
+      collection_points: group.collection_points || [],
+    });
+    setIsCopyDialogOpen(true);
+  };
+
+  // 执行复制
+  const handleCopySubmit = async () => {
+    if (!copyingGroup) return;
+
+    // 验证必填字段
+    if (!copyForm.cycle) {
+      toast.error('请选择周期');
+      return;
+    }
+
     try {
-      await testGroupsAPI.copyTestGroup(group.id);
+      await testGroupsAPI.copyTestGroupWithData(copyingGroup.id, {
+        name: copyForm.name || undefined,
+        cycle: copyForm.cycle,
+        dosage: copyForm.dosage || undefined,
+        planned_count: copyForm.planned_count,
+        backup_count: copyForm.backup_count,
+        subject_prefix: copyForm.subject_prefix || undefined,
+        subject_start_number: copyForm.subject_start_number,
+        detection_configs: copyForm.detection_configs,
+        collection_points: copyForm.collection_points,
+      });
       toast.success('试验组复制成功', { duration: 4000 });
+      setIsCopyDialogOpen(false);
+      setCopyingGroup(null);
       fetchTestGroups();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || '复制失败');
     }
+  };
+
+  const closeCopyDialog = () => {
+    setIsCopyDialogOpen(false);
+    setCopyingGroup(null);
   };
 
   const handleConfirm = async (password: string, reason: string) => {
@@ -497,7 +557,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                       <Button plain onClick={() => openDialog(group)} title="编辑">
                         <PencilSquareIcon className="w-4 h-4" />
                       </Button>
-                      <Button plain onClick={() => handleCopy(group)} title="复制">
+                      <Button plain onClick={() => openCopyDialog(group)} title="复制">
                         <DocumentDuplicateIcon className="w-4 h-4" />
                       </Button>
                       <Button plain onClick={() => openConfirmDialog(group.id)} title="确认锁定">
@@ -1047,6 +1107,131 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         </DialogBody>
         <DialogActions>
           <Button onClick={() => setIsSubjectsDialogOpen(false)}>关闭</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 复制试验组对话框 */}
+      <Dialog open={isCopyDialogOpen} onClose={closeCopyDialog} size="xl">
+        <DialogTitle>复制试验组</DialogTitle>
+        <DialogDescription>
+          复制「{copyingGroup?.cycle || ''}」的配置，修改后保存为新的试验组（未锁定状态）
+        </DialogDescription>
+        <DialogBody>
+          <div className="space-y-6">
+            {/* 基本信息 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  试验组名称 <span className="text-zinc-400 text-xs">（可选）</span>
+                </label>
+                <Input
+                  value={copyForm.name}
+                  onChange={(e) => setCopyForm({ ...copyForm, name: e.target.value })}
+                  placeholder="如：A组、对照组"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  周期 <span className="text-red-500">*</span>
+                </label>
+                {globalParams.cycles.length > 0 ? (
+                  <Select
+                    value={copyForm.cycle}
+                    onChange={(e) => setCopyForm({ ...copyForm, cycle: e.target.value })}
+                  >
+                    <option value="">请选择</option>
+                    {globalParams.cycles.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={copyForm.cycle}
+                    onChange={(e) => setCopyForm({ ...copyForm, cycle: e.target.value })}
+                    placeholder="输入周期"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  剂量组
+                </label>
+                <Input
+                  value={copyForm.dosage}
+                  onChange={(e) => setCopyForm({ ...copyForm, dosage: e.target.value })}
+                  placeholder="如：100mg、200mg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  计划例数
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={copyForm.planned_count}
+                  onChange={(e) => setCopyForm({ ...copyForm, planned_count: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  备份例数
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={copyForm.backup_count}
+                  onChange={(e) => setCopyForm({ ...copyForm, backup_count: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+
+            {/* 受试者编号规则 */}
+            <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
+              <Text className="font-medium text-zinc-900 mb-3">受试者编号规则</Text>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    编号前缀（第一部分）
+                  </label>
+                  <Input
+                    value={copyForm.subject_prefix}
+                    onChange={(e) => setCopyForm({ ...copyForm, subject_prefix: e.target.value.toUpperCase() })}
+                    placeholder="如：R"
+                    maxLength={10}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    起始编号（第二部分）
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={copyForm.subject_start_number}
+                    onChange={(e) => setCopyForm({ ...copyForm, subject_start_number: parseInt(e.target.value) || 1 })}
+                    placeholder="如：1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 提示信息 */}
+            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <Text className="text-sm text-blue-800">
+                复制后的试验组将处于未锁定状态，您可以继续编辑检测配置和采集点。
+              </Text>
+            </div>
+          </div>
+        </DialogBody>
+        <DialogActions>
+          <Button plain onClick={closeCopyDialog}>取消</Button>
+          <Button onClick={handleCopySubmit}>
+            复制并保存
+          </Button>
         </DialogActions>
       </Dialog>
     </div>

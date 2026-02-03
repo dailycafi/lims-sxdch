@@ -1230,85 +1230,137 @@ const ViewAndPrintTab = ({
     );
   }
 
+  // 计算活跃筛选器数量
+  const activeFilterCount = [
+    filters.group,
+    filters.testType,
+    filters.subjectNo,
+    filters.isPrimary,
+    searchKeyword
+  ].filter(Boolean).length;
+
   return (
-    <div className="space-y-6">
-      {/* 筛选区域 */}
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <FunnelIcon className="w-5 h-5 text-zinc-400" />
-          <Text className="font-semibold text-zinc-900">筛选区域</Text>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">组别</label>
-            <Select
-              value={filters.group}
-              onChange={(e) => setFilters({ ...filters, group: e.target.value })}
-            >
-              <option value="">全部</option>
-              {availableOptions.cycles.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
+    <div className="space-y-4">
+      {/* 紧凑筛选区域 - 单行水平排列 */}
+      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 px-4 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <FunnelIcon className="w-4 h-4 text-zinc-400" />
+            <Text className="text-sm font-medium text-zinc-700">筛选</Text>
           </div>
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">检测类型</label>
-            <Select
-              value={filters.testType}
-              onChange={(e) => setFilters({ ...filters, testType: e.target.value })}
-            >
-              <option value="">全部</option>
-              {availableOptions.testTypes.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">受试者编号</label>
+
+          <Select
+            value={filters.group}
+            onChange={(e) => setFilters({ ...filters, group: e.target.value })}
+            className="!py-1.5 text-sm w-28"
+          >
+            <option value="">组别</option>
+            {availableOptions.cycles.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </Select>
+
+          <Select
+            value={filters.testType}
+            onChange={(e) => setFilters({ ...filters, testType: e.target.value })}
+            className="!py-1.5 text-sm w-28"
+          >
+            <option value="">检测类型</option>
+            {availableOptions.testTypes.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </Select>
+
+          <Input
+            value={filters.subjectNo}
+            onChange={(e) => setFilters({ ...filters, subjectNo: e.target.value })}
+            placeholder="受试者编号"
+            className="!py-1.5 text-sm w-32"
+          />
+
+          <Select
+            value={filters.isPrimary}
+            onChange={(e) => setFilters({ ...filters, isPrimary: e.target.value })}
+            className="!py-1.5 text-sm w-24"
+          >
+            <option value="">正/备份</option>
+            <option value="primary">正份</option>
+            <option value="backup">备份</option>
+          </Select>
+
+          <div className="relative flex-grow max-w-xs">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
             <Input
-              value={filters.subjectNo}
-              onChange={(e) => setFilters({ ...filters, subjectNo: e.target.value })}
-              placeholder="输入编号..."
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="搜索编号..."
+              className="!py-1.5 text-sm pl-8"
             />
           </div>
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">正/备份</label>
-            <Select
-              value={filters.isPrimary}
-              onChange={(e) => setFilters({ ...filters, isPrimary: e.target.value })}
+
+          {activeFilterCount > 0 && (
+            <button
+              onClick={resetFilters}
+              className="text-xs text-zinc-500 hover:text-zinc-700 flex items-center gap-1"
             >
-              <option value="">全部</option>
-              <option value="primary">正份</option>
-              <option value="backup">备份</option>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">搜索</label>
-            <div className="relative">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <Input
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="手动输入..."
-                className="pl-9"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Button plain onClick={resetFilters}>
-            <XMarkIcon className="w-4 h-4 mr-1" />
-            重置筛选
-          </Button>
+              <XMarkIcon className="w-3.5 h-3.5" />
+              清除 ({activeFilterCount})
+            </button>
+          )}
         </div>
       </div>
-      
-      {/* 操作栏 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge color="blue">{filteredLabels.length} 条记录</Badge>
+
+      {/* 筛选结果摘要区域 */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge color="blue" className="!px-2.5 !py-1">
+            {filteredLabels.length} 条记录
+          </Badge>
           {selectedLabels.size > 0 && (
-            <Badge color="amber">已选 {selectedLabels.size} 条</Badge>
+            <Badge color="amber" className="!px-2.5 !py-1">
+              已选 {selectedLabels.size} 条
+            </Badge>
+          )}
+          {/* 显示当前筛选条件标签 */}
+          {filters.group && (
+            <span className="inline-flex items-center gap-1 bg-zinc-100 text-zinc-700 rounded-full px-2.5 py-1 text-xs">
+              组别: {filters.group}
+              <button onClick={() => setFilters({ ...filters, group: '' })} className="hover:text-red-500">
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.testType && (
+            <span className="inline-flex items-center gap-1 bg-zinc-100 text-zinc-700 rounded-full px-2.5 py-1 text-xs">
+              类型: {filters.testType}
+              <button onClick={() => setFilters({ ...filters, testType: '' })} className="hover:text-red-500">
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.subjectNo && (
+            <span className="inline-flex items-center gap-1 bg-zinc-100 text-zinc-700 rounded-full px-2.5 py-1 text-xs">
+              受试者: {filters.subjectNo}
+              <button onClick={() => setFilters({ ...filters, subjectNo: '' })} className="hover:text-red-500">
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.isPrimary && (
+            <span className="inline-flex items-center gap-1 bg-zinc-100 text-zinc-700 rounded-full px-2.5 py-1 text-xs">
+              {filters.isPrimary === 'primary' ? '正份' : '备份'}
+              <button onClick={() => setFilters({ ...filters, isPrimary: '' })} className="hover:text-red-500">
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {searchKeyword && (
+            <span className="inline-flex items-center gap-1 bg-zinc-100 text-zinc-700 rounded-full px-2.5 py-1 text-xs">
+              搜索: {searchKeyword}
+              <button onClick={() => setSearchKeyword('')} className="hover:text-red-500">
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">

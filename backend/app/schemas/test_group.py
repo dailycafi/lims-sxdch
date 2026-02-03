@@ -89,6 +89,16 @@ class TestGroupResponse(TestGroupBase):
 class TestGroupCopy(BaseModel):
     """复制试验组"""
     source_id: int  # 源试验组 ID
+    # 可选的覆盖字段，复制时可以修改这些值
+    name: Optional[str] = None
+    cycle: Optional[str] = None
+    dosage: Optional[str] = None
+    planned_count: Optional[int] = None
+    backup_count: Optional[int] = None
+    subject_prefix: Optional[str] = None
+    subject_start_number: Optional[int] = None
+    detection_configs: Optional[List[DetectionConfigItem]] = None
+    collection_points: Optional[List[CollectionPointItem]] = None
 
 
 # 采集点相关

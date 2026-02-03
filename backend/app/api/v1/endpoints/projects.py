@@ -10,6 +10,7 @@ from itertools import product
 from app.core.database import get_db
 from app.models.project import Project
 from app.models.project_organization import ProjectOrganization
+from app.models.test_group import TestGroup
 from app.models.sample import (
     Sample,
     SampleReceiveRecord,
@@ -1111,4 +1112,159 @@ async def generate_stability_qc_codes(
     return {
         "sample_codes": sample_codes,
         "count": len(sample_codes)
+    }
+
+
+@router.post("/{project_id}/generate-all-sample-codes")
+async def generate_all_sample_codes(
+    project_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    根据项目的所有试验组配置，一键生成所有临床样本编号。
+    此端点会读取项目中所有已确认的试验组，根据其配置自动生成样本编号。
+    """
+    if not check_project_permission(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以生成样本编号"
+        )
+
+    # 获取项目
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+
+    if not project.sample_code_rule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请先配置样本编号规则"
+        )
+
+    # 获取所有已确认的试验组
+    test_groups_result = await db.execute(
+        select(TestGroup)
+        .where(TestGroup.project_id == project_id)
+        .where(TestGroup.is_active == True)
+        .where(TestGroup.is_confirmed == True)
+        .order_by(TestGroup.display_order)
+    )
+    test_groups = test_groups_result.scalars().all()
+
+    if not test_groups:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="没有已确认的试验组，请先确认试验组配置"
+        )
+
+    all_sample_codes = []
+    generation_summary = []
+
+    for tg in test_groups:
+        # 生成受试者编号列表
+        subjects = []
+        if tg.subject_prefix and tg.planned_count > 0:
+            total_count = tg.planned_count + (tg.backup_count or 0)
+            for i in range(total_count):
+                num = (tg.subject_start_number or 1) + i
+                subjects.append(f"{tg.subject_prefix}{num:03d}")
+
+        # 处理检测配置
+        detection_configs = tg.detection_configs or []
+        if not detection_configs:
+            continue
+
+        for detection in detection_configs:
+            test_type = detection.get("test_type", "")
+            collection_points = detection.get("collection_points", [])
+            primary_sets = detection.get("primary_sets", 0)
+            backup_sets = detection.get("backup_sets", 0)
+
+            # 生成正份和备份代码
+            primary_codes = []
+            backup_codes = []
+
+            # 从项目规则中获取正备份代码模式
+            rule = project.sample_code_rule or {}
+            dictionaries = rule.get("dictionaries", {})
+            primary_types = dictionaries.get("primary_types", [])
+            backup_types = dictionaries.get("backup_types", [])
+
+            # 使用项目配置的正备份代码
+            for i in range(primary_sets):
+                if i < len(primary_types):
+                    primary_codes.append(primary_types[i])
+                else:
+                    primary_codes.append(f"P{i+1}")
+
+            for i in range(backup_sets):
+                if i < len(backup_types):
+                    backup_codes.append(backup_types[i])
+                else:
+                    backup_codes.append(f"B{i+1}")
+
+            # 构建生成参数
+            seq_time_pairs = []
+            for cp in collection_points:
+                seq_time_pairs.append({
+                    "seq": cp.get("code", ""),
+                    "time": cp.get("name", "")
+                })
+
+            if not seq_time_pairs:
+                seq_time_pairs = [{"seq": "", "time": ""}]
+
+            generation_params = {
+                "cycles": [tg.cycle] if tg.cycle else [""],
+                "test_types": [test_type] if test_type else [""],
+                "subjects": subjects,
+                "primary": primary_codes,
+                "backup": backup_codes,
+                "seq_time_pairs": seq_time_pairs,
+                "clinic_codes": [""],
+            }
+
+            # 生成样本编号
+            codes = generate_sample_codes_logic(project, generation_params)
+            all_sample_codes.extend(codes)
+
+            generation_summary.append({
+                "test_group_id": tg.id,
+                "test_group_cycle": tg.cycle,
+                "test_type": test_type,
+                "subjects_count": len(subjects),
+                "collection_points_count": len(collection_points),
+                "primary_sets": primary_sets,
+                "backup_sets": backup_sets,
+                "generated_count": len(codes)
+            })
+
+    # 去重
+    unique_codes = list(dict.fromkeys(all_sample_codes))
+
+    # 创建审计日志
+    await create_audit_log(
+        db=db,
+        user_id=current_user.id,
+        entity_type="project",
+        entity_id=project.id,
+        action="generate_all_sample_codes",
+        details={
+            "test_groups_count": len(test_groups),
+            "total_codes_generated": len(unique_codes),
+            "summary": generation_summary
+        }
+    )
+
+    return {
+        "message": f"成功生成 {len(unique_codes)} 个样本编号",
+        "sample_codes": unique_codes,
+        "count": len(unique_codes),
+        "summary": generation_summary
     }
