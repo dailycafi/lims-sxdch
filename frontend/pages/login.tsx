@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
-import { Image } from '@/components/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/button';
@@ -65,7 +64,7 @@ const BackgroundDecoration = (
 
 // 静态的底部信息组件
 const FooterInfo = (
-  <motion.div 
+  <motion.div
     className="mt-6 text-center"
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -78,7 +77,7 @@ const FooterInfo = (
       <span>安全登录</span>
     </div>
     <div className="mt-2 text-xs text-gray-400">
-      <span>© 2025 徐汇区中心医院</span>
+      <span>© 2025 LIMS 样本管理系统</span>
     </div>
   </motion.div>
 );
@@ -325,6 +324,24 @@ export default function LoginPage() {
       {/* 背景装饰 - 使用提升的静态 JSX */}
       {BackgroundDecoration}
 
+      {/* 左上角软件logo和名称 */}
+      <motion.div
+        className="fixed top-6 left-6 flex items-center gap-3 z-20"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+          <svg className="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9.674 2.075a.75.75 0 01.652 0l7.25 3.5A.75.75 0 0117 6.75v6.5a.75.75 0 01-.576 1.175l-7.25 3.5a.75.75 0 01-.648 0l-7.25-3.5A.75.75 0 013 13.25v-6.5a.75.75 0 01.576-1.175l7.25-3.5zM10 8.5L4.5 6.25v5.5L10 13.5l5.5-1.75v-5.5L10 8.5z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <div>
+          <div className="text-lg font-bold text-gray-900">LIMS</div>
+          <div className="text-sm text-gray-600">样本管理系统</div>
+        </div>
+      </motion.div>
+
       {/* 右上角错误提示 */}
       <AnimatePresence>
         {showErrorToast && error && (
@@ -385,45 +402,21 @@ export default function LoginPage() {
         transition={{ duration: 0.6 }}
       >
         {/* 头部信息 */}
-        <motion.div 
+        <motion.div
           className="text-center mb-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.6 }}
         >
-          <motion.div 
-            className="flex justify-center mb-6"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <div className="relative">
-              <motion.div 
-                className="absolute inset-0 bg-blue-200 rounded-2xl blur-xl opacity-30"
-                animate={{ opacity: [0.3, 0.5, 0.3] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-              <div className="relative bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
-                <Image
-                  src="/logo.png"
-                  alt="徐汇区中心医院"
-                  width={64}
-                  height={64}
-                  className="rounded-xl"
-                  priority
-                />
-              </div>
-            </div>
-          </motion.div>
-          
           <Heading level={1} className="text-gray-900 text-2xl font-bold mb-2">
-            徐汇区中心医院
+            欢迎登录
           </Heading>
           <Text className="text-gray-600 mb-4">
-            实验室信息管理系统
+            请输入您的账号和密码
           </Text>
           {/* 实时状态指示器 */}
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-            <motion.div 
+            <motion.div
               className={`w-2 h-2 ${statusInfo.color} rounded-full`}
               animate={statusInfo.animate}
               transition={{ duration: 1.5, repeat: Infinity }}
