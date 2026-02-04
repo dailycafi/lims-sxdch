@@ -1084,6 +1084,143 @@ async def receive_samples(
     return {"message": f"成功接收 {sample_count} 个样本", "receive_id": receive_record.id}
 
 
+class ReceiveRecordUpdate(BaseModel):
+    """接收记录更新请求"""
+    transport_method: Optional[str] = None
+    temperature_monitor_id: Optional[str] = None
+    is_over_temperature: Optional[bool] = None
+    sample_count: Optional[int] = None
+    sample_status: Optional[str] = None
+    editor_id: int
+    edit_reason: str
+
+
+@router.post("/receive/verify-editor")
+async def verify_editor(
+    username: str = Form(...),
+    password: str = Form(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """验证编辑者身份（用于编辑接收记录）"""
+    from app.core.security import verify_password
+
+    # 查找用户
+    result = await db.execute(select(User).where(User.username == username))
+    editor = result.scalar_one_or_none()
+
+    if not editor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名或密码错误"
+        )
+
+    # 验证密码
+    if not verify_password(password, editor.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名或密码错误"
+        )
+
+    # 检查用户是否为样本管理员
+    if editor.role not in [UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以编辑接收记录"
+        )
+
+    # 检查用户是否激活
+    if not editor.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户账户已被禁用"
+        )
+
+    return {
+        "success": True,
+        "editor_id": editor.id,
+        "editor_name": editor.full_name or editor.username,
+        "editor_username": editor.username
+    }
+
+
+@router.put("/receive-records/{record_id}")
+async def update_receive_record(
+    record_id: int,
+    update_data: ReceiveRecordUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db)
+):
+    """更新接收记录"""
+    # 获取接收记录
+    result = await db.execute(
+        select(SampleReceiveRecord).where(SampleReceiveRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="接收记录不存在"
+        )
+
+    # 验证编辑者权限
+    editor_result = await db.execute(
+        select(User).where(User.id == update_data.editor_id)
+    )
+    editor = editor_result.scalar_one_or_none()
+
+    if not editor or editor.role not in [UserRole.SYSTEM_ADMIN, UserRole.SAMPLE_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="编辑者权限不足"
+        )
+
+    # 记录原始值用于审计日志
+    original_values = {
+        "transport_method": record.transport_method,
+        "temperature_monitor_id": record.temperature_monitor_id,
+        "is_over_temperature": record.is_over_temperature,
+        "sample_count": record.sample_count,
+        "sample_status": record.sample_status,
+    }
+
+    # 更新字段
+    updated_fields = {}
+    if update_data.transport_method is not None:
+        record.transport_method = update_data.transport_method
+        updated_fields["transport_method"] = update_data.transport_method
+    if update_data.temperature_monitor_id is not None:
+        record.temperature_monitor_id = update_data.temperature_monitor_id
+        updated_fields["temperature_monitor_id"] = update_data.temperature_monitor_id
+    if update_data.is_over_temperature is not None:
+        record.is_over_temperature = update_data.is_over_temperature
+        updated_fields["is_over_temperature"] = update_data.is_over_temperature
+    if update_data.sample_count is not None:
+        record.sample_count = update_data.sample_count
+        updated_fields["sample_count"] = update_data.sample_count
+    if update_data.sample_status is not None:
+        record.sample_status = update_data.sample_status
+        updated_fields["sample_status"] = update_data.sample_status
+
+    # 创建审计日志
+    audit_log = AuditLog(
+        user_id=update_data.editor_id,
+        entity_type="sample_receive_record",
+        entity_id=record_id,
+        action="update",
+        details={
+            "original_values": original_values,
+            "updated_values": updated_fields,
+        },
+        reason=update_data.edit_reason,
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    return {"success": True, "message": "接收记录更新成功"}
 
 
 
