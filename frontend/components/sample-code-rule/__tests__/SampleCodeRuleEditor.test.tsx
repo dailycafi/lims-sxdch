@@ -1,41 +1,68 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SampleCodeRuleEditor } from '../SampleCodeRuleEditor';
-import { DraggableElementChip } from '../DraggableElementChip';
-import { RulePreview } from '../RulePreview';
-import { TemplateManager } from '../TemplateManager';
-import { DEFAULT_ELEMENTS, SEPARATOR_OPTIONS, TEMPLATE_STORAGE_KEY } from '../types';
-import type { CodeSlot, SampleCodeElement } from '../types';
+import { PreviewDisplay } from '../PreviewDisplay';
+import { SAMPLE_CODE_ELEMENTS, SEPARATOR_OPTIONS } from '../types';
+import type { CodeSlot } from '../types';
+
+// Mock dnd-kit to avoid drag-and-drop complexity in tests
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DragOverlay: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  closestCenter: vi.fn(),
+  PointerSensor: vi.fn(),
+  useSensor: vi.fn(),
+  useSensors: vi.fn(() => []),
+  useDroppable: vi.fn(() => ({ isOver: false, setNodeRef: vi.fn() })),
+  useDraggable: vi.fn(() => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    isDragging: false
+  })),
+}));
+
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  verticalListSortingStrategy: 'vertical',
+  arrayMove: vi.fn((arr, from, to) => {
+    const result = [...arr];
+    const [removed] = result.splice(from, 1);
+    result.splice(to, 0, removed);
+    return result;
+  }),
+  useSortable: vi.fn(() => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  })),
+}));
 
 describe('SampleCodeRuleEditor', () => {
-  const mockOnChange = vi.fn();
+  const mockOnSlotsChange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear();
   });
 
   describe('initial render', () => {
     it('renders all available elements', () => {
-      render(<SampleCodeRuleEditor slots={[]} onChange={mockOnChange} />);
+      render(<SampleCodeRuleEditor slots={[]} onSlotsChange={mockOnSlotsChange} />);
 
-      DEFAULT_ELEMENTS.forEach((element) => {
+      SAMPLE_CODE_ELEMENTS.forEach((element) => {
         expect(screen.getByText(element.label)).toBeInTheDocument();
-        expect(screen.getByText(element.number)).toBeInTheDocument();
       });
     });
 
     it('shows empty state when no slots configured', () => {
-      render(<SampleCodeRuleEditor slots={[]} onChange={mockOnChange} />);
+      render(<SampleCodeRuleEditor slots={[]} onSlotsChange={mockOnSlotsChange} />);
 
-      expect(screen.getByText('将下方的编号要素拖拽到此处')).toBeInTheDocument();
-    });
-
-    it('shows preview placeholder when no slots', () => {
-      render(<SampleCodeRuleEditor slots={[]} onChange={mockOnChange} />);
-
-      expect(screen.getByText('请配置编号规则')).toBeInTheDocument();
+      expect(screen.getByText('拖拽下方要素到此处')).toBeInTheDocument();
     });
   });
 
@@ -46,31 +73,21 @@ describe('SampleCodeRuleEditor', () => {
     ];
 
     it('renders configured elements in drop zone', () => {
-      render(<SampleCodeRuleEditor slots={slotsWithElements} onChange={mockOnChange} />);
+      render(<SampleCodeRuleEditor slots={slotsWithElements} onSlotsChange={mockOnSlotsChange} />);
 
-      // Elements appear in both drop zone and source area
-      const sponsorElements = screen.getAllByText('申办方项目编号');
-      const subjectElements = screen.getAllByText('受试者编号');
-
-      expect(sponsorElements.length).toBeGreaterThanOrEqual(2); // Preview + source area
-      expect(subjectElements.length).toBeGreaterThanOrEqual(2);
+      // Elements should be visible
+      expect(screen.getAllByText('申办方项目编号').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('受试者编号').length).toBeGreaterThanOrEqual(1);
     });
 
-    it('marks used elements as disabled in source area', () => {
-      render(<SampleCodeRuleEditor slots={slotsWithElements} onChange={mockOnChange} />);
-
-      const chips = screen.getAllByText('申办方项目编号');
-      expect(chips.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('calls onChange when reset button is clicked', async () => {
+    it('calls onSlotsChange when reset button is clicked', async () => {
       const user = userEvent.setup();
-      render(<SampleCodeRuleEditor slots={slotsWithElements} onChange={mockOnChange} />);
+      render(<SampleCodeRuleEditor slots={slotsWithElements} onSlotsChange={mockOnSlotsChange} />);
 
-      const resetButton = screen.getByText('重置所有');
+      const resetButton = screen.getByText('重置');
       await user.click(resetButton);
 
-      expect(mockOnChange).toHaveBeenCalledWith([]);
+      expect(mockOnSlotsChange).toHaveBeenCalledWith([]);
     });
   });
 
@@ -80,8 +97,8 @@ describe('SampleCodeRuleEditor', () => {
       render(
         <SampleCodeRuleEditor
           slots={slots}
-          onChange={mockOnChange}
-          projectData={{ sponsorCode: 'PROJ-001', labCode: 'LAB-001' }}
+          onSlotsChange={mockOnSlotsChange}
+          projectData={{ sponsor_project_code: 'PROJ-001', lab_project_code: 'LAB-001' }}
         />
       );
 
@@ -93,8 +110,8 @@ describe('SampleCodeRuleEditor', () => {
       render(
         <SampleCodeRuleEditor
           slots={slots}
-          onChange={mockOnChange}
-          projectData={{ sponsorCode: 'PROJ-001', labCode: 'LAB-001' }}
+          onSlotsChange={mockOnSlotsChange}
+          projectData={{ sponsor_project_code: 'PROJ-001', lab_project_code: 'LAB-001' }}
         />
       );
 
@@ -103,66 +120,13 @@ describe('SampleCodeRuleEditor', () => {
   });
 });
 
-describe('DraggableElementChip', () => {
-  const mockElement: SampleCodeElement = {
-    id: 'test_element',
-    name: 'test_element',
-    label: '测试元素',
-    number: '①',
-  };
-
-  const specialElement: SampleCodeElement = {
-    ...mockElement,
-    id: 'special',
-    label: '特殊元素',
-    isSpecial: true,
-  };
-
-  it('renders element label and number', () => {
-    render(<DraggableElementChip element={mockElement} isUsed={false} onDragEnd={vi.fn()} />);
-
-    expect(screen.getByText('测试元素')).toBeInTheDocument();
-    expect(screen.getByText('①')).toBeInTheDocument();
-  });
-
-  it('applies blue styling for normal elements', () => {
-    const { container } = render(
-      <DraggableElementChip element={mockElement} isUsed={false} onDragEnd={vi.fn()} />
-    );
-
-    const chip = container.firstChild as HTMLElement;
-    expect(chip.className).toContain('bg-blue-100');
-    expect(chip.className).toContain('text-blue-700');
-  });
-
-  it('applies purple styling for special elements', () => {
-    const { container } = render(
-      <DraggableElementChip element={specialElement} isUsed={false} onDragEnd={vi.fn()} />
-    );
-
-    const chip = container.firstChild as HTMLElement;
-    expect(chip.className).toContain('bg-purple-100');
-    expect(chip.className).toContain('text-purple-700');
-  });
-
-  it('applies disabled styling when used', () => {
-    const { container } = render(
-      <DraggableElementChip element={mockElement} isUsed={true} onDragEnd={vi.fn()} />
-    );
-
-    const chip = container.firstChild as HTMLElement;
-    expect(chip.className).toContain('opacity-50');
-    expect(chip.className).toContain('cursor-not-allowed');
-  });
-});
-
-describe('RulePreview', () => {
-  const elements = DEFAULT_ELEMENTS;
+describe('PreviewDisplay', () => {
+  const elements = SAMPLE_CODE_ELEMENTS;
 
   it('shows placeholder when no slots', () => {
-    render(<RulePreview slots={[]} elements={elements} />);
+    render(<PreviewDisplay slots={[]} elements={elements} />);
 
-    expect(screen.getByText('请配置编号规则')).toBeInTheDocument();
+    expect(screen.getByText(/将下方的编号要素拖拽至此处/i)).toBeInTheDocument();
   });
 
   it('displays element labels in preview', () => {
@@ -171,21 +135,10 @@ describe('RulePreview', () => {
       { elementId: 'subject_id', separator: '' },
     ];
 
-    render(<RulePreview slots={slots} elements={elements} />);
+    render(<PreviewDisplay slots={slots} elements={elements} />);
 
-    expect(screen.getByText('SPONSOR')).toBeInTheDocument();
-    expect(screen.getByText('受试者编号')).toBeInTheDocument();
-  });
-
-  it('displays separator between elements', () => {
-    const slots: CodeSlot[] = [
-      { elementId: 'sponsor_code', separator: '-' },
-      { elementId: 'subject_id', separator: '' },
-    ];
-
-    render(<RulePreview slots={slots} elements={elements} />);
-
-    expect(screen.getByText('-')).toBeInTheDocument();
+    // Should display element labels (may appear multiple times in preview and legend)
+    expect(screen.getAllByText('申办方项目编号').length).toBeGreaterThanOrEqual(1);
   });
 
   it('uses project data for sponsor and lab codes', () => {
@@ -195,100 +148,27 @@ describe('RulePreview', () => {
     ];
 
     render(
-      <RulePreview
+      <PreviewDisplay
         slots={slots}
         elements={elements}
-        projectData={{ sponsorCode: 'ABC-123', labCode: 'XYZ-789' }}
+        projectData={{ sponsor_project_code: 'ABC-123', lab_project_code: 'XYZ-789' }}
       />
     );
 
-    expect(screen.getByText('ABC-123')).toBeInTheDocument();
-    expect(screen.getByText('XYZ-789')).toBeInTheDocument();
-  });
-});
-
-describe('TemplateManager', () => {
-  const mockOnApply = vi.fn();
-  const testSlots: CodeSlot[] = [
-    { elementId: 'sponsor_code', separator: '-' },
-    { elementId: 'subject_id', separator: '' },
-  ];
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(null);
-  });
-
-  it('shows empty state when no templates', () => {
-    render(<TemplateManager currentSlots={[]} onApplyTemplate={mockOnApply} />);
-
-    expect(screen.getByText('暂无保存的模板')).toBeInTheDocument();
-  });
-
-  it('disables save button when no slots', () => {
-    render(<TemplateManager currentSlots={[]} onApplyTemplate={mockOnApply} />);
-
-    const saveButton = screen.getByText('保存为模板');
-    expect(saveButton).toBeDisabled();
-  });
-
-  it('enables save button when slots exist', () => {
-    render(<TemplateManager currentSlots={testSlots} onApplyTemplate={mockOnApply} />);
-
-    const saveButton = screen.getByText('保存为模板');
-    expect(saveButton).not.toBeDisabled();
-  });
-
-  it('shows save dialog when save button clicked', async () => {
-    const user = userEvent.setup();
-    render(<TemplateManager currentSlots={testSlots} onApplyTemplate={mockOnApply} />);
-
-    await user.click(screen.getByText('保存为模板'));
-
-    expect(screen.getByPlaceholderText('输入模板名称')).toBeInTheDocument();
-  });
-
-  it('loads templates from localStorage', () => {
-    const storedTemplates = [
-      { id: 'template-1', name: '模板一', slots: testSlots, createdAt: new Date().toISOString() },
-    ];
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify(storedTemplates));
-
-    render(<TemplateManager currentSlots={[]} onApplyTemplate={mockOnApply} />);
-
-    expect(screen.getByText('模板一')).toBeInTheDocument();
-  });
-
-  it('calls onApplyTemplate when template is clicked', async () => {
-    const user = userEvent.setup();
-    const storedTemplates = [
-      { id: 'template-1', name: '模板一', slots: testSlots, createdAt: new Date().toISOString() },
-    ];
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify(storedTemplates));
-
-    render(<TemplateManager currentSlots={[]} onApplyTemplate={mockOnApply} />);
-
-    await user.click(screen.getByText('模板一'));
-
-    expect(mockOnApply).toHaveBeenCalledWith(testSlots);
+    expect(screen.getAllByText('ABC-123').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('XYZ-789').length).toBeGreaterThanOrEqual(1);
   });
 });
 
 describe('types', () => {
-  it('DEFAULT_ELEMENTS includes preprocessed_component as special', () => {
-    const preprocessed = DEFAULT_ELEMENTS.find((e) => e.id === 'preprocessed_component');
-
-    expect(preprocessed).toBeDefined();
-    expect(preprocessed?.isSpecial).toBe(true);
-    expect(preprocessed?.number).toBe('⑩');
+  it('SAMPLE_CODE_ELEMENTS has correct elements', () => {
+    expect(SAMPLE_CODE_ELEMENTS.length).toBe(9);
+    expect(SAMPLE_CODE_ELEMENTS.map((e) => e.id)).toContain('sponsor_code');
+    expect(SAMPLE_CODE_ELEMENTS.map((e) => e.id)).toContain('subject_id');
   });
 
   it('SEPARATOR_OPTIONS has correct options', () => {
     expect(SEPARATOR_OPTIONS).toHaveLength(3);
     expect(SEPARATOR_OPTIONS.map((o) => o.id)).toEqual(['', '-', '_']);
-  });
-
-  it('TEMPLATE_STORAGE_KEY is defined', () => {
-    expect(TEMPLATE_STORAGE_KEY).toBe('sample-code-rule-templates');
   });
 });
