@@ -476,6 +476,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
               </div>
 
+              {/* 特殊样本 */}
+              <div>
+                <SidebarHeading>特殊样本</SidebarHeading>
+                <div className="space-y-1">
+                  <SidebarItem href="/samples/special/apply" scroll={false} current={isCurrentPath('/samples/special/apply')} onNavigate={handleSidebarNavigation}>
+                    <PlusIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>申请入库</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/samples/special/receive" scroll={false} current={isCurrentPath('/samples/special/receive')} onNavigate={handleSidebarNavigation}>
+                    <BeakerIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>样本接收</SidebarLabel>
+                  </SidebarItem>
+                </div>
+              </div>
 
               {/* 统计分析 */}
               <div>
