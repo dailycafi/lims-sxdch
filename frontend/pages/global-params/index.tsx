@@ -138,6 +138,7 @@ export default function GlobalParamsPage() {
   const [qcForm, setQCForm] = useState({
     sample_categories: [''], // 样本类别数组 (STB/QC)
     codes: [''],      // 代码数组
+    storage_conditions: [''], // 保存条件（温度）数组
   });
 
   // 审计理由
@@ -185,6 +186,7 @@ export default function GlobalParamsPage() {
       setQCForm({
         sample_categories: qcOptions.sample_categories?.length > 0 ? qcOptions.sample_categories : [''],
         codes: qcOptions.codes?.length > 0 ? qcOptions.codes : [''],
+        storage_conditions: qcOptions.storage_conditions?.length > 0 ? qcOptions.storage_conditions : [''],
       });
       
     } catch (error) {
@@ -478,6 +480,7 @@ export default function GlobalParamsPage() {
       await api.put('/global-params/qc-sample-options', {
         sample_categories: qcForm.sample_categories.filter(v => v.trim()),
         codes: qcForm.codes.filter(v => v.trim()),
+        storage_conditions: qcForm.storage_conditions.filter(v => v.trim()),
       });
       toast.success('稳定性及质控样本配置保存成功');
       fetchData();
@@ -491,6 +494,7 @@ export default function GlobalParamsPage() {
     setQCForm({
       sample_categories: [''],
       codes: [''],
+      storage_conditions: [''],
     });
     setAuditReason('');
   };
@@ -604,17 +608,14 @@ export default function GlobalParamsPage() {
                         <TableHeader>组织名称</TableHeader>
                         <TableHeader>类型</TableHeader>
                         <TableHeader>地址</TableHeader>
-                        <TableHeader>联系人</TableHeader>
-                        <TableHeader>联系电话</TableHeader>
-                        <TableHeader>邮箱</TableHeader>
                         <TableHeader>操作</TableHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {loading ? (
-                        <AnimatedLoadingState colSpan={7} variant="skeleton" />
+                        <AnimatedLoadingState colSpan={4} variant="skeleton" />
                       ) : filteredOrganizations.length === 0 ? (
-                        <AnimatedEmptyState colSpan={7} text="暂无数据" />
+                        <AnimatedEmptyState colSpan={4} text="暂无数据" />
                       ) : (
                         filteredOrganizations.map((org) => (
                           <TableRow key={org.id}>
@@ -625,9 +626,6 @@ export default function GlobalParamsPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-zinc-600">{org.address || '-'}</TableCell>
-                            <TableCell className="text-zinc-600">{org.contact_person || '-'}</TableCell>
-                            <TableCell className="text-zinc-600">{org.contact_phone || '-'}</TableCell>
-                            <TableCell className="text-zinc-600">{org.contact_email || '-'}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 <Tooltip content="编辑">
@@ -1408,9 +1406,9 @@ export default function GlobalParamsPage() {
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && code.trim()) {
                                 e.preventDefault();
-                                setQCForm({ 
-                                  ...qcForm, 
-                                  codes: [...qcForm.codes, ''] 
+                                setQCForm({
+                                  ...qcForm,
+                                  codes: [...qcForm.codes, '']
                                 });
                               }
                             }}
@@ -1436,9 +1434,74 @@ export default function GlobalParamsPage() {
                     <Button
                       outline
                       onClick={() => {
-                        setQCForm({ 
-                          ...qcForm, 
-                          codes: [...qcForm.codes, ''] 
+                        setQCForm({
+                          ...qcForm,
+                          codes: [...qcForm.codes, '']
+                        });
+                      }}
+                      className={buttonClass}
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 保存条件（温度） */}
+                <div className="bg-zinc-50 rounded-lg p-5 border border-zinc-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-cyan-500"></div>
+                    <label className="text-sm font-semibold text-zinc-900">
+                      保存条件
+                    </label>
+                    <span className="text-xs text-zinc-500">（温度选项）</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {qcForm.storage_conditions.map((condition, index) => (
+                      <div key={index} className="flex items-center gap-1 h-10">
+                        <div className={inputWrapperClass}>
+                          <Input
+                            value={condition}
+                            autoFocus={index > 0 && index === qcForm.storage_conditions.length - 1}
+                            onChange={(e) => {
+                              const newConditions = [...qcForm.storage_conditions];
+                              newConditions[index] = e.target.value;
+                              setQCForm({ ...qcForm, storage_conditions: newConditions });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && condition.trim()) {
+                                e.preventDefault();
+                                setQCForm({
+                                  ...qcForm,
+                                  storage_conditions: [...qcForm.storage_conditions, '']
+                                });
+                              }
+                            }}
+                            placeholder="如：-80°C、-20°C、4°C"
+                            className={`${inputClass} w-36`}
+                          />
+                        </div>
+                        {qcForm.storage_conditions.length > 1 && (
+                          <Button
+                            plain
+                            className={`${buttonClass} w-10 hover:bg-red-50 !p-0`}
+                            onClick={() => {
+                              const newConditions = qcForm.storage_conditions.filter((_, i) => i !== index);
+                              setQCForm({ ...qcForm, storage_conditions: newConditions });
+                            }}
+                            title="删除"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      outline
+                      onClick={() => {
+                        setQCForm({
+                          ...qcForm,
+                          storage_conditions: [...qcForm.storage_conditions, '']
                         });
                       }}
                       className={buttonClass}
