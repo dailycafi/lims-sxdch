@@ -1,7 +1,6 @@
 import { ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { Image } from '@/components/image';
 import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import { useTabsStore } from '@/store/tabs';
@@ -390,28 +389,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     <SidebarLayout
       navbar={
         <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
-          {/* 左侧：Logo和标题 */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Image
-              src="/logo.png"
-              alt="徐汇区中心医院"
-              width={32}
-              height={32}
-              className="h-8 w-8 flex-shrink-0 rounded-lg"
-            />
-            <div className="min-w-0 hidden sm:block">
-              <div className="truncate text-sm font-semibold text-zinc-800 dark:text-white">
-                徐汇区中心医院
-              </div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400">
-                样本管理系统
-              </div>
-            </div>
-          </div>
-
-          {/* 中间：项目选择器 - 仅在非主页显示 */}
+          {/* 项目选择器 - 仅在非主页显示 */}
           {router.pathname !== '/' && (
-            <div className="flex flex-1 min-w-0 justify-end mr-2">
+            <div className="flex flex-1 min-w-0 justify-end">
               <ProjectSwitcher />
             </div>
           )}
