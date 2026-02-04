@@ -10,7 +10,7 @@ interface Project {
   id: number;
   lab_project_code: string;
   sponsor_project_code?: string;
-  status: string;
+  status?: string | null;
   sample_count?: number;
 }
 
@@ -23,7 +23,7 @@ export function ProjectListPanel() {
     setActiveProjects(active);
   }, [projects]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | null | undefined) => {
     switch (status) {
       case 'active':
       case 'in_progress':
@@ -37,7 +37,7 @@ export function ProjectListPanel() {
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string | null | undefined) => {
     switch (status) {
       case 'active':
       case 'in_progress':
