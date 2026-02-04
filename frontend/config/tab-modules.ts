@@ -94,6 +94,12 @@ export const TAB_MODULES: Record<string, TabModuleConfig> = {
     icon: 'MagnifyingGlassIcon',
     allowMultiple: false,
   },
+  '/blank-matrix': {
+    component: wrapPageComponent(() => import('@/pages/blank-matrix')),
+    title: '空白基质',
+    icon: 'CircleStackIcon',
+    allowMultiple: false,
+  },
 
   // 统计分析
   '/statistics': {

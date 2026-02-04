@@ -190,6 +190,10 @@ const routeToBreadcrumb: Record<string, BreadcrumbItem[]> = {
     { label: '工作台', href: '#' },
     { label: '标签管理', current: true }
   ],
+  '/blank-matrix': [
+    { label: '样本管理', href: '/samples' },
+    { label: '空白基质', current: true }
+  ],
 };
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -472,6 +476,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SidebarItem href="/samples" scroll={false} current={isCurrentPath('/samples')} onNavigate={handleSidebarNavigation}>
                     <MagnifyingGlassIcon data-slot="icon" className="!w-4 !h-4" />
                     <SidebarLabel>样本查询</SidebarLabel>
+                  </SidebarItem>
+                  <SidebarItem href="/blank-matrix" scroll={false} current={isCurrentPath('/blank-matrix')} onNavigate={handleSidebarNavigation}>
+                    <CircleStackIcon data-slot="icon" className="!w-4 !h-4" />
+                    <SidebarLabel>空白基质</SidebarLabel>
                   </SidebarItem>
                 </div>
               </div>

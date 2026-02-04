@@ -23,3 +23,12 @@ from app.models.auth import RefreshToken
 from app.models.storage import StorageFreezer, StorageShelf, StorageRack, StorageBox
 from app.models.test_group import TestGroup, CollectionPoint
 from app.models.label import LabelConfig, LabelBatch, Label
+from app.models.blank_matrix import (
+    BlankMatrixStatus,
+    AnticoagulantType,
+    MatrixType,
+    BlankMatrixReceiveRecord,
+    BlankMatrixSample,
+    BlankMatrixBorrowRequest,
+    BlankMatrixBorrowItem
+)
