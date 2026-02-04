@@ -173,7 +173,7 @@ export default function BlankMatrixInventory() {
     setSubmitting(true);
     try {
       // 生成编号
-      const projectCode = currentProject?.code || selectedTask.project_name || 'UNK';
+      const projectCode = currentProject?.lab_project_code || selectedTask.project_name || 'UNK';
       const anticoagulant = selectedTask.anticoagulants[0] || 'EDTA';
 
       const generateResult = await BlankMatrixService.generateCodes({

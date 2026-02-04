@@ -196,7 +196,7 @@ export default function BlankMatrixReceive() {
       if (result.success) {
         // 如果需要入库，调用清点接口
         if (isFinal && sampleEntries.length > 0) {
-          const projectCode = currentProject?.code || 'UNK';
+          const projectCode = currentProject?.lab_project_code || 'UNK';
           const generateResult = await BlankMatrixService.generateCodes({
             project_code: projectCode,
             anticoagulant: selectedAnticoagulants[0],

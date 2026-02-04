@@ -335,7 +335,7 @@ export default function SpecialSampleReceivePage() {
                         <div className="mt-3 flex gap-2">
                           <Button
                             color="green"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               handleApproval(app);
                             }}
@@ -345,14 +345,13 @@ export default function SpecialSampleReceivePage() {
                             批准
                           </Button>
                           <Button
-                            color="red"
                             outline
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               setSelectedForApproval(app);
                               setShowApprovalDialog(true);
                             }}
-                            className="flex-1 text-xs py-1"
+                            className="flex-1 text-xs py-1 text-red-600 border-red-300 hover:bg-red-50"
                           >
                             <XMarkIcon className="w-3 h-3" />
                             拒绝

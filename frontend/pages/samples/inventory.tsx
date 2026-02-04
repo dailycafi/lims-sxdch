@@ -161,27 +161,33 @@ export default function InventoryPage({ tabId, isActive }: Partial<TabContentPro
 
       {/* 视图模式切换 */}
       <div className="mb-4 flex gap-2">
-        <Button
-          plain={viewMode !== 'all'}
-          color={viewMode === 'all' ? 'blue' : undefined}
-          onClick={() => setViewMode('all')}
-        >
-          全部 ({tasks.length})
-        </Button>
-        <Button
-          plain={viewMode !== 'pending'}
-          color={viewMode === 'pending' ? 'blue' : undefined}
-          onClick={() => setViewMode('pending')}
-        >
-          待清点 ({tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length})
-        </Button>
-        <Button
-          plain={viewMode !== 'completed'}
-          color={viewMode === 'completed' ? 'blue' : undefined}
-          onClick={() => setViewMode('completed')}
-        >
-          已完成 ({tasks.filter(t => t.status === 'completed').length})
-        </Button>
+        {viewMode === 'all' ? (
+          <Button color="blue" onClick={() => setViewMode('all')}>
+            全部 ({tasks.length})
+          </Button>
+        ) : (
+          <Button plain onClick={() => setViewMode('all')}>
+            全部 ({tasks.length})
+          </Button>
+        )}
+        {viewMode === 'pending' ? (
+          <Button color="blue" onClick={() => setViewMode('pending')}>
+            待清点 ({tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length})
+          </Button>
+        ) : (
+          <Button plain onClick={() => setViewMode('pending')}>
+            待清点 ({tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length})
+          </Button>
+        )}
+        {viewMode === 'completed' ? (
+          <Button color="blue" onClick={() => setViewMode('completed')}>
+            已完成 ({tasks.filter(t => t.status === 'completed').length})
+          </Button>
+        ) : (
+          <Button plain onClick={() => setViewMode('completed')}>
+            已完成 ({tasks.filter(t => t.status === 'completed').length})
+          </Button>
+        )}
       </div>
 
       {/* 任务列表 */}
