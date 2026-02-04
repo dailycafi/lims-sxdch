@@ -179,22 +179,28 @@ const LabelPreview = ({
       {template.showBarcode && (
         <div className="mt-2 pt-2 border-t border-zinc-200">
           {getBarcodeUrl(barcodeText) ? (
-            <img 
-              src={getBarcodeUrl(barcodeText)} 
-              alt="barcode" 
-              className="h-10 w-full object-contain"
-            />
+            <div className="flex flex-col items-center">
+              <img
+                src={getBarcodeUrl(barcodeText)}
+                alt="barcode"
+                className="h-10 w-full object-contain"
+              />
+              <span className="text-[10px] text-zinc-600 font-mono mt-1">{barcodeText}</span>
+            </div>
           ) : (
-            <div className="h-10 bg-zinc-100 flex items-center justify-center">
-              <div className="flex gap-px">
-                {Array.from({ length: 40 }).map((_, i) => (
-                  <div 
-                    key={i} 
-                    className="bg-zinc-800" 
-                    style={{ width: Math.random() > 0.5 ? 2 : 1, height: 40 }}
-                  />
-                ))}
+            <div className="flex flex-col items-center">
+              <div className="h-10 bg-zinc-100 flex items-center justify-center w-full">
+                <div className="flex gap-px">
+                  {Array.from({ length: 40 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="bg-zinc-800"
+                      style={{ width: Math.random() > 0.5 ? 2 : 1, height: 40 }}
+                    />
+                  ))}
+                </div>
               </div>
+              <span className="text-[10px] text-zinc-600 font-mono mt-1">{barcodeText}</span>
             </div>
           )}
         </div>
@@ -618,74 +624,6 @@ const LabelSettingsTab = ({
                 >
                   大尺寸 (60×40mm)
                 </button>
-              </div>
-            </div>
-
-            {/* 预览数据输入 */}
-            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-              <Text className="text-xs font-bold text-zinc-400 uppercase tracking-wider">预览测试数据</Text>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">筛选号</label>
-                  <Input
-                    value={previewData.subject}
-                    onChange={(e) => updatePreview('subject', e.target.value)}
-                    className="text-sm"
-                    placeholder="S001"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">检测类型</label>
-                  <Select
-                    value={previewData.testType}
-                    onChange={(e) => updatePreview('testType', e.target.value)}
-                    className="text-sm"
-                  >
-                    <option value="">选择类型...</option>
-                    {availableOptions.testTypes.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                    <option value="PK">PK</option>
-                    <option value="IR 检测">IR 检测</option>
-                  </Select>
-                </div>
-                {settingType === 'sampling_tube' && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">备注</label>
-                    <Input
-                      value={previewData.note}
-                      onChange={(e) => updatePreview('note', e.target.value)}
-                      className="text-sm"
-                      placeholder="采血(HS)"
-                    />
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
-                    {settingType === 'sampling_tube' ? '正份代码' : '备份代码'}
-                  </label>
-                  <Select
-                    value={previewData.code}
-                    onChange={(e) => updatePreview('code', e.target.value)}
-                    className="text-sm"
-                  >
-                    <option value="">选择代码...</option>
-                    {availableOptions.primaryCodes.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                    <option value="a">a</option>
-                    <option value="b">b</option>
-                  </Select>
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">计划采样时间</label>
-                  <Input
-                    value={previewData.time}
-                    onChange={(e) => updatePreview('time', e.target.value)}
-                    className="text-sm"
-                    placeholder="D1 给药前 30min"
-                  />
-                </div>
               </div>
             </div>
 
@@ -1120,6 +1058,7 @@ const ViewAndPrintTab = ({
           <div class="label-row"><span class="label-key">采样时间：</span><span class="label-value underline">${parsed.collectPoint}</span></div>
           <div class="barcode">
             <img src="${barcodeUrl}" alt="${l.label_code}" />
+            <div class="barcode-text">${l.label_code}</div>
           </div>
         </div>
       `;
@@ -1133,10 +1072,10 @@ const ViewAndPrintTab = ({
           <style>
             body { font-family: 'SF Pro SC', 'PingFang SC', sans-serif; padding: 10mm; margin: 0; }
             .labels { display: flex; flex-wrap: wrap; gap: 5mm; }
-            .label { 
-              width: 50mm; 
-              height: 35mm; 
-              border: 1px solid #ccc; 
+            .label {
+              width: 50mm;
+              height: 35mm;
+              border: 1px solid #ccc;
               padding: 2mm 3mm;
               box-sizing: border-box;
               page-break-inside: avoid;
@@ -1147,9 +1086,10 @@ const ViewAndPrintTab = ({
             .label-value { font-weight: 500; }
             .label-value.underline { text-decoration: underline; text-underline-offset: 2px; }
             .barcode { margin-top: 2mm; text-align: center; }
-            .barcode img { max-width: 100%; height: 12mm; }
-            @media print { 
-              body { padding: 0; } 
+            .barcode img { max-width: 100%; height: 10mm; }
+            .barcode-text { font-family: monospace; font-size: 7pt; margin-top: 1mm; }
+            @media print {
+              body { padding: 0; }
               .label { border: none; }
             }
           </style>
@@ -1158,12 +1098,12 @@ const ViewAndPrintTab = ({
           <div class="labels">${labelsHtml}</div>
         </body>
       </html>`);
-    
+
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 500);
   };
-  
+
   // 删除标签
   const handleDelete = async () => {
     if (!deleteUsername || !deletePassword) {
@@ -1691,7 +1631,10 @@ export default function LabelsPage() {
   
   // 编号预览搜索
   const [previewSearchKeyword, setPreviewSearchKeyword] = useState('');
-  
+
+  // 选中的预览标签索引（用于打印筛选）
+  const [selectedPreviewIndices, setSelectedPreviewIndices] = useState<Set<number>>(new Set());
+
   // 分隔符设置
   const [separator, setSeparator] = useState<string>('-');
   
@@ -1762,12 +1705,17 @@ export default function LabelsPage() {
   const filteredPreviewLabels = useMemo(() => {
     if (!previewSearchKeyword) return previewLabels;
     const keyword = previewSearchKeyword.toLowerCase();
-    return previewLabels.filter(label => 
+    return previewLabels.filter(label =>
       label.sampleNo.toLowerCase().includes(keyword) ||
       label.subjectNo.toLowerCase().includes(keyword)
     );
   }, [previewLabels, previewSearchKeyword]);
-  
+
+  // 当筛选条件变化时清空选中状态
+  useEffect(() => {
+    setSelectedPreviewIndices(new Set());
+  }, [previewSearchKeyword, selectedOptions, labelType]);
+
   // 预计生成数量
   const estimatedCount = useMemo(() => {
     const subjectNoCount = selectedOptions.subjectNos.length || 1;
@@ -1965,10 +1913,18 @@ export default function LabelsPage() {
   
   // 打印标签
   const handlePrintLabels = (labelTypeFilter?: 'sampling_tube' | 'cryo_tube') => {
-    const labelsToPrint = filteredPreviewLabels.filter(l => 
-      !labelTypeFilter || (labelTypeFilter === 'sampling_tube' ? l.sampleType === '采样管' : l.sampleType === '冻存管')
-    );
-    
+    // 如果有选中的标签，只打印选中的；否则打印所有筛选后的标签
+    let labelsToPrint = selectedPreviewIndices.size > 0
+      ? filteredPreviewLabels.filter((_, index) => selectedPreviewIndices.has(index))
+      : filteredPreviewLabels;
+
+    // 再按标签类型筛选
+    if (labelTypeFilter) {
+      labelsToPrint = labelsToPrint.filter(l =>
+        labelTypeFilter === 'sampling_tube' ? l.sampleType === '采样管' : l.sampleType === '冻存管'
+      );
+    }
+
     if (labelsToPrint.length === 0) {
       toast.error('没有可打印的标签');
       return;
@@ -2007,11 +1963,11 @@ export default function LabelsPage() {
           <div class="label-row"><span class="label-key">筛选号：</span><span class="label-value underline">${l.subjectNo}</span></div>
           <div class="label-row"><span class="label-key">用途：</span><span class="label-value">${l.testType}</span></div>
           <div class="label-row"><span class="label-key">采集点：</span><span class="label-value underline">${l.collectionPoint}</span></div>
-          ${barcodeUrl ? `<div class="barcode"><img src="${barcodeUrl}" alt="${l.sampleNo}" /></div>` : ''}
+          ${barcodeUrl ? `<div class="barcode"><img src="${barcodeUrl}" alt="${l.sampleNo}" /><div class="barcode-text">${l.sampleNo}</div></div>` : ''}
         </div>
       `;
     }).join('');
-    
+
     printWindow.document.write(`<!DOCTYPE html>
       <html lang="zh-CN">
         <head>
@@ -2020,10 +1976,10 @@ export default function LabelsPage() {
           <style>
             body { font-family: 'SF Pro SC', 'PingFang SC', sans-serif; padding: 10mm; margin: 0; }
             .labels { display: flex; flex-wrap: wrap; gap: 5mm; }
-            .label { 
-              width: 50mm; 
-              height: 35mm; 
-              border: 1px solid #ccc; 
+            .label {
+              width: 50mm;
+              height: 35mm;
+              border: 1px solid #ccc;
               padding: 2mm 3mm;
               box-sizing: border-box;
               page-break-inside: avoid;
@@ -2034,9 +1990,10 @@ export default function LabelsPage() {
             .label-value { font-weight: 500; }
             .label-value.underline { text-decoration: underline; text-underline-offset: 2px; }
             .barcode { margin-top: 2mm; text-align: center; }
-            .barcode img { max-width: 100%; height: 12mm; }
-            @media print { 
-              body { padding: 0; } 
+            .barcode img { max-width: 100%; height: 10mm; }
+            .barcode-text { font-family: monospace; font-size: 7pt; margin-top: 1mm; }
+            @media print {
+              body { padding: 0; }
               .label { border: none; }
             }
           </style>
@@ -2045,7 +2002,7 @@ export default function LabelsPage() {
           <div class="labels">${labelsHtml}</div>
         </body>
       </html>`);
-    
+
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 500);
@@ -2219,6 +2176,9 @@ export default function LabelsPage() {
                 <div className="flex items-center gap-3">
                   <Text className="text-base font-bold text-zinc-900">编号预览</Text>
                   <Badge color="blue" className="!px-2 !py-0.5">共 {filteredPreviewLabels.length} 个</Badge>
+                  {selectedPreviewIndices.size > 0 && (
+                    <Badge color="amber" className="!px-2 !py-0.5">已选 {selectedPreviewIndices.size} 个</Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   {/* 搜索框 */}
@@ -2232,30 +2192,43 @@ export default function LabelsPage() {
                     />
                   </div>
                   {/* 打印按钮 */}
-                  <Button 
-                    outline 
+                  <Button
+                    outline
                     onClick={() => handlePrintLabels('sampling_tube')}
                     disabled={filteredPreviewLabels.length === 0}
                   >
                     <PrinterIcon className="w-4 h-4 mr-1.5" />
-                    打印采血管标签
+                    打印采血管标签{selectedPreviewIndices.size > 0 ? ` (${selectedPreviewIndices.size})` : ''}
                   </Button>
-                  <Button 
-                    outline 
+                  <Button
+                    outline
                     onClick={() => handlePrintLabels('cryo_tube')}
                     disabled={filteredPreviewLabels.length === 0}
                   >
                     <PrinterIcon className="w-4 h-4 mr-1.5" />
-                    打印冻存管标签
+                    打印冻存管标签{selectedPreviewIndices.size > 0 ? ` (${selectedPreviewIndices.size})` : ''}
                   </Button>
                 </div>
               </div>
-              
+
               {/* 预览表格 */}
               <div className="border border-zinc-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableHeader className="w-10">
+                        <Checkbox
+                          checked={selectedPreviewIndices.size === Math.min(filteredPreviewLabels.length, 100) && filteredPreviewLabels.length > 0}
+                          onChange={() => {
+                            const visibleCount = Math.min(filteredPreviewLabels.length, 100);
+                            if (selectedPreviewIndices.size === visibleCount) {
+                              setSelectedPreviewIndices(new Set());
+                            } else {
+                              setSelectedPreviewIndices(new Set(Array.from({ length: visibleCount }, (_, i) => i)));
+                            }
+                          }}
+                        />
+                      </TableHeader>
                       <TableHeader>样本编号</TableHeader>
                       <TableHeader>受试者编号</TableHeader>
                       <TableHeader>样本类型</TableHeader>
@@ -2269,13 +2242,27 @@ export default function LabelsPage() {
                   <TableBody>
                     {filteredPreviewLabels.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-12 text-zinc-500">
+                        <TableCell colSpan={9} className="text-center py-12 text-zinc-500">
                           请选择生成维度以预览编号
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredPreviewLabels.slice(0, 100).map((label, index) => (
                         <TableRow key={index}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPreviewIndices.has(index)}
+                              onChange={() => {
+                                const next = new Set(selectedPreviewIndices);
+                                if (next.has(index)) {
+                                  next.delete(index);
+                                } else {
+                                  next.add(index);
+                                }
+                                setSelectedPreviewIndices(next);
+                              }}
+                            />
+                          </TableCell>
                           <TableCell className="font-mono font-medium">{label.sampleNo || '____'}</TableCell>
                           <TableCell>{label.subjectNo}</TableCell>
                           <TableCell>
