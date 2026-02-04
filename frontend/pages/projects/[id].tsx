@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { toast } from 'react-hot-toast';
@@ -10,7 +10,6 @@ import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
 import { Heading } from '@/components/heading';
-import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
@@ -20,26 +19,22 @@ import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import { Tabs } from '@/components/tabs';
-import { 
-  CogIcon, 
-  DocumentTextIcon, 
+import {
+  CogIcon,
+  DocumentTextIcon,
   AdjustmentsHorizontalIcon,
-  XMarkIcon,
   PlusIcon,
   TrashIcon,
   PencilSquareIcon,
   MagnifyingGlassIcon,
   BeakerIcon,
-  ClipboardDocumentListIcon,
-  DocumentDuplicateIcon,
-  CheckCircleIcon,
-  LockClosedIcon,
   UserGroupIcon
 } from '@heroicons/react/20/solid';
 import { TagInput } from '@/components/tag-input';
 import { TestGroupManager } from '@/components/test-group-manager';
 import { Tooltip } from '@/components/tooltip';
 import { Fieldset, Field, Label, FieldGroup } from '@/components/fieldset';
+import { SampleCodeRuleEditor, SAMPLE_CODE_ELEMENTS } from '@/components/sample-code-rule';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
@@ -69,25 +64,6 @@ interface Project {
   is_archived: boolean;
   created_at: string;
 }
-
-interface SampleCodeElement {
-  id: string;
-  name: string;
-  label: string;
-  number: string;
-}
-
-const sampleCodeElements: SampleCodeElement[] = [
-  { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号', number: '①' },
-  { id: 'lab_code', name: 'lab_code', label: '实验室项目编号', number: '②' },
-  { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号', number: '③' },
-  { id: 'subject_id', name: 'subject_id', label: '受试者编号', number: '④' },
-  { id: 'test_type', name: 'test_type', label: '检测类型', number: '⑤' },
-  { id: 'sample_seq', name: 'sample_seq', label: '采血序号', number: '⑥' },
-  { id: 'sample_time', name: 'sample_time', label: '采血时间', number: '⑦' },
-  { id: 'cycle_group', name: 'cycle_group', label: '周期/组别', number: '⑧' },
-  { id: 'sample_type', name: 'sample_type', label: '正份备份', number: '⑨' },
-];
 
 interface SampleType {
   id: number;
@@ -428,29 +404,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleSlotChange = (index: number, elementId: string) => {
-    const newSlots = [...slots];
-    newSlots[index] = { ...newSlots[index], elementId };
-    setSlots(newSlots);
-  };
-
-  const handleSeparatorChange = (index: number, separator: string) => {
-    const newSlots = [...slots];
-    newSlots[index] = { ...newSlots[index], separator };
-    setSlots(newSlots);
-  };
-
-  const handleAddSlot = () => {
-    // 新添加的槽位默认使用短横分隔符
-    setSlots([...slots, { elementId: '', separator: '-' }]);
-  };
-
-  const handleRemoveSlot = (index: number) => {
-    const newSlots = [...slots];
-    newSlots.splice(index, 1);
-    setSlots(newSlots);
-  };
-
   const generateVisualPreview = () => {
     return (
       <div className="font-mono text-xl tracking-wide">
@@ -458,7 +411,7 @@ export default function ProjectDetailPage() {
           if (!slot.elementId) return null;
           const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s.elementId);
           let example = '???';
-          const element = sampleCodeElements.find(e => e.id === slot.elementId);
+          const element = SAMPLE_CODE_ELEMENTS.find(e => e.id === slot.elementId);
           if (element) {
               if (slot.elementId === 'sponsor_code') example = project?.sponsor_project_code || 'SPONSOR';
               else if (slot.elementId === 'lab_code') example = project?.lab_project_code || 'LAB';
@@ -793,7 +746,7 @@ export default function ProjectDetailPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-8 text-sm mt-4">
                     {slots.map((slot, index) => {
                       if (!slot.elementId) return null;
-                      const element = sampleCodeElements.find(e => e.id === slot.elementId);
+                      const element = SAMPLE_CODE_ELEMENTS.find(e => e.id === slot.elementId);
                       if (!element) return null;
                       const separatorLabel = SEPARATOR_OPTIONS.find(s => s.id === slot.separator)?.label || '';
                       return (
@@ -881,83 +834,14 @@ export default function ProjectDetailPage() {
             className="mb-6"
           />
           {configTab === 'rules' ? (
-            <div className="space-y-8">
-              <div className="space-y-3">
-                <Text className="text-base font-semibold text-zinc-900">编号预览</Text>
-                <div className="p-6 bg-zinc-50/80 rounded-2xl border border-zinc-200/60 flex items-center justify-center min-h-[100px] shadow-sm">{generateVisualPreview()}</div>
-                <p className="text-xs text-zinc-500 px-1">* 编号将按照 A 到 G 的顺序自动拼接，未配置的位置将被自动忽略。</p>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <Text className="text-base font-semibold text-zinc-900">规则配置</Text>
-                  <button onClick={() => setSlots([])} className="text-xs text-zinc-600 font-medium hover:text-zinc-900">重置所有</button>
-                </div>
-                <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                  {slots.map((slot, index) => {
-                    const label = SLOT_LABELS[index] || String.fromCharCode(65 + index);
-                    const currentElement = sampleCodeElements.find(e => e.id === slot.elementId);
-                    const isLast = index === slots.length - 1 || slots.slice(index + 1).every(s => !s.elementId);
-                    return (
-                      <div key={index} className="group p-4 hover:bg-zinc-50 transition-colors relative">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-mono font-bold text-lg mr-4 group-hover:bg-white group-hover:shadow-sm transition-all">{label}</div>
-                          <div className="flex-grow min-w-0">
-                            <div className="relative inline-block">
-                              <select 
-                                value={slot.elementId || ''} 
-                                onChange={(e) => handleSlotChange(index, e.target.value)} 
-                                className="appearance-none bg-transparent py-2 pl-0 pr-7 text-base text-zinc-900 font-medium focus:outline-none cursor-pointer"
-                              >
-                                <option value="" disabled>请选择编号要素</option>
-                                {sampleCodeElements.map(el => (
-                                  <option key={el.id} value={el.id}>{el.number} {el.label}</option>
-                                ))}
-                              </select>
-                              <svg className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                            <div className="text-xs text-zinc-500 mt-0.5">{currentElement ? `已选择: ${currentElement.label}` : '请选择一个编号要素'}</div>
-                          </div>
-                          <button data-slot="control" onClick={() => handleRemoveSlot(index)} className="ml-4 p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><XMarkIcon className="w-5 h-5" /></button>
-                        </div>
-                        {/* 分隔符选择 - 只在非最后一个元素时显示，放在下一行 */}
-                        {!isLast && slot.elementId && (
-                          <div className="mt-3 ml-14 flex items-center gap-3">
-                            <span className="text-xs text-zinc-500">后接分隔符</span>
-                            <div className="flex gap-2">
-                              {SEPARATOR_OPTIONS.map(opt => (
-                                <button
-                                  key={opt.id}
-                                  onClick={() => handleSeparatorChange(index, opt.id)}
-                                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                                    slot.separator === opt.id
-                                      ? 'bg-zinc-800 text-white'
-                                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  <div className="p-4 bg-zinc-50/50 flex justify-center">
-                    <button 
-                      onClick={handleAddSlot}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                      添加位置
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SampleCodeRuleEditor
+              slots={slots}
+              onSlotsChange={setSlots}
+              projectData={{
+                sponsor_project_code: project.sponsor_project_code,
+                lab_project_code: project.lab_project_code,
+              }}
+            />
           ) : configTab === 'options' ? (
             <div className="space-y-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
