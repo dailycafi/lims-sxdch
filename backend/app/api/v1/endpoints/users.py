@@ -460,12 +460,13 @@ async def change_password(
 @router.post("/{user_id}/reset-password")
 async def reset_password(
     user_id: int,
-    password_data: PasswordReset,
-    current_user: Annotated[User, Depends(get_current_user)],
+    password_data: PasswordReset = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """重置密码（管理员操作）
-    
+
+    如果不提供 new_password，系统将自动生成一个随机复杂密码。
     管理员重置密码后，用户需要在下次登录时强制修改密码。
     """
     if not check_user_permission(current_user):
@@ -473,29 +474,33 @@ async def reset_password(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限重置密码"
         )
-    
+
     # 获取目标用户
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
-    
-    # 验证新密码强度
-    await validate_password_complexity(
-        password_data.new_password,
-        user.username,
-        db
-    )
-    
+
+    # 确定使用的密码：系统生成或用户提供
+    generated_password = None
+    if password_data is None or password_data.new_password is None:
+        # 系统自动生成随机复杂密码
+        new_password = generate_random_password(12)
+        generated_password = new_password
+    else:
+        new_password = password_data.new_password
+        # 验证用户提供的密码强度
+        await validate_password_complexity(new_password, user.username, db)
+
     # 更新密码
-    user.hashed_password = get_password_hash(password_data.new_password)
+    user.hashed_password = get_password_hash(new_password)
     user.must_change_password = True  # 设置首次登录修改密码标记
     # 注意：不更新 password_changed_at，因为这是管理员操作，不是用户自己修改
-    
+
     # 记录审计日志
     audit_log = AuditLog(
         user_id=current_user.id,
@@ -504,15 +509,20 @@ async def reset_password(
         action="reset_password",
         details={
             "target_username": user.username,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "auto_generated": generated_password is not None
         },
         timestamp=datetime.now(timezone.utc)
     )
     db.add(audit_log)
-    
+
     await db.commit()
-    
-    return {"message": "密码重置成功，用户下次登录需要修改密码"}
+
+    # 返回结果，如果是系统生成的密码则返回给管理员
+    return {
+        "message": "密码重置成功，用户下次登录需要修改密码",
+        "generated_password": generated_password
+    }
 
 
 @router.get("/password-requirements/info")

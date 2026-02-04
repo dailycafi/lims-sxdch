@@ -76,7 +76,13 @@ class PasswordChange(BaseModel):
 
 class PasswordReset(BaseModel):
     """重置密码（管理员操作）"""
-    new_password: str
+    new_password: Optional[str] = None  # 可选，不提供则系统自动生成
+
+
+class PasswordResetResponse(BaseModel):
+    """重置密码响应"""
+    message: str
+    generated_password: Optional[str] = None  # 系统生成的密码（仅在自动生成时返回）
 
 
 class UserDelete(BaseModel):

@@ -155,11 +155,21 @@ export default function SettingsPage() {
     return Boolean(v);
   }, [settings]);
 
+  // 密码过期天数
+  const passwordExpireDaysValue = useMemo(() => {
+    const v = settings.find((s) => s.key === 'password_expire_days')?.value;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 90; // 默认90天
+  }, [settings]);
+
+  const [passwordExpireDaysDraft, setPasswordExpireDaysDraft] = useState<string>('90');
+
   useEffect(() => {
     // 同步输入框初始值（不在每次输入时回写，避免打断用户输入）
     if (activeTab !== 'system') return;
     setSessionTimeoutDraft(String(sessionTimeoutValue));
-  }, [activeTab, sessionTimeoutValue]);
+    setPasswordExpireDaysDraft(String(passwordExpireDaysValue));
+  }, [activeTab, sessionTimeoutValue, passwordExpireDaysValue]);
 
   // 系统设置加载
   const fetchSettings = async () => {
@@ -198,6 +208,17 @@ export default function SettingsPage() {
     }
     if (n === sessionTimeoutValue) return;
     await handleUpdateSetting('session_timeout', Math.floor(n));
+  };
+
+  const commitPasswordExpireDays = async () => {
+    const n = Number(passwordExpireDaysDraft);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error('请输入有效的密码过期天数');
+      setPasswordExpireDaysDraft(String(passwordExpireDaysValue));
+      return;
+    }
+    if (n === passwordExpireDaysValue) return;
+    await handleUpdateSetting('password_expire_days', Math.floor(n));
   };
 
   // 用户数据加载
@@ -247,13 +268,25 @@ export default function SettingsPage() {
     fetchUsers();
   };
 
+  // 密码重置结果对话框状态
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null);
+
   const handleResetPassword = async (user: User) => {
-    const newPassword = prompt(`为用户 ${user.username} 设置新密码：`);
-    if (!newPassword) return;
+    if (!confirm(`确定要重置用户 ${user.full_name}（@${user.username}）的密码吗？\n\n系统将自动生成新密码。`)) {
+      return;
+    }
 
     try {
-      await UsersService.resetPassword(user.id, newPassword);
-      toast.success('密码重置成功，用户下次登录需要修改密码');
+      const result = await UsersService.resetPassword(user.id);
+      if (result.generated_password) {
+        // 显示生成的密码给管理员
+        setResetPasswordResult({
+          username: user.username,
+          password: result.generated_password
+        });
+      } else {
+        toast.success('密码重置成功，用户下次登录需要修改密码');
+      }
     } catch (error: any) {
       const errorMsg = extractDetailMessage(error.response?.data) || error.message || '重置密码失败';
       toast.error(errorMsg);
@@ -607,6 +640,74 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+
+                <div className="border-t border-zinc-100 my-6"></div>
+
+                {/* 密码过期时间 */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="max-w-xl">
+                    <Text className="font-semibold text-zinc-900">密码过期时间</Text>
+                    <Text className="text-sm text-zinc-500 mt-1">密码超过设定天数后，用户需要重新设置密码</Text>
+                  </div>
+                  <div className="w-full sm:w-48 flex-shrink-0">
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={passwordExpireDaysDraft}
+                        onChange={(e) => setPasswordExpireDaysDraft(e.target.value)}
+                        onBlur={commitPasswordExpireDays}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitPasswordExpireDays();
+                          }
+                        }}
+                        disabled={savingSettings}
+                        className="bg-zinc-50 border-zinc-200 h-11 focus:bg-white transition-all pr-12"
+                        placeholder="90"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <span className="text-sm text-zinc-500">天</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 管理员信息和退出登录 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+                      <UserIcon className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <Text className="font-semibold text-zinc-900">{currentUser?.full_name}</Text>
+                      <Text className="text-sm text-zinc-500">@{currentUser?.username}</Text>
+                    </div>
+                    <div className="ml-4">
+                      {currentUser?.roles?.map((role) => (
+                        <Badge key={role.id} color="purple" className="mr-1">
+                          {role.name}
+                        </Badge>
+                      )) || getRoleBadge(currentUser?.role || '')}
+                    </div>
+                  </div>
+                  <Button
+                    color="red"
+                    onClick={() => {
+                      useAuthStore.getState().logout();
+                      router.push('/login');
+                    }}
+                    className="shadow-sm"
+                  >
+                    退出登录
+                  </Button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -677,7 +778,7 @@ export default function SettingsPage() {
                     <TableHeader className="py-4 text-zinc-600 font-semibold">邮箱</TableHeader>
                     <TableHeader className="py-4 text-zinc-600 font-semibold">状态</TableHeader>
                     <TableHeader className="py-4 text-zinc-600 font-semibold">创建时间</TableHeader>
-                    <TableHeader className="text-right pr-6 py-4 text-zinc-600 font-semibold">操作</TableHeader>
+                    <TableHeader className="py-4 text-zinc-600 font-semibold">操作</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -710,8 +811,8 @@ export default function SettingsPage() {
                           <TableCell className="text-zinc-500 py-4 font-medium">
                             {formatDate(user.created_at)}
                           </TableCell>
-                          <TableCell className="text-right pr-6 py-4">
-                            <div className="flex justify-end gap-1">
+                          <TableCell className="py-4">
+                            <div className="flex gap-1">
                               {isAdmin && (
                                 <>
                                   <Button plain onClick={() => handleEditUser(user)} className="text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100">
@@ -773,7 +874,7 @@ export default function SettingsPage() {
                     <TableHeader className="py-4 text-zinc-600 font-semibold">描述</TableHeader>
                     <TableHeader className="py-4 text-zinc-600 font-semibold">权限数量</TableHeader>
                     <TableHeader className="py-4 text-zinc-600 font-semibold">创建时间</TableHeader>
-                    <TableHeader className="text-right pr-6 py-4 text-zinc-600 font-semibold">操作</TableHeader>
+                    <TableHeader className="py-4 text-zinc-600 font-semibold">操作</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -810,8 +911,8 @@ export default function SettingsPage() {
                           <TableCell className="text-zinc-500 py-4 font-medium">
                             {formatDate(role.created_at)}
                           </TableCell>
-                          <TableCell className="text-right pr-6 py-4">
-                            <div className="flex justify-end gap-1">
+                          <TableCell className="py-4">
+                            <div className="flex gap-1">
                               {canManageRoles && (
                                 <>
                                   <Button plain onClick={() => handleEditRole(role)} className="text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100">
@@ -1014,6 +1115,61 @@ export default function SettingsPage() {
           </Button>
           <Button onClick={handleRoleSubmit} disabled={roleDialogLoading}>
             {roleDialogLoading ? '处理中...' : (editingRole ? '保存' : '创建')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 密码重置结果对话框 */}
+      <Dialog open={!!resetPasswordResult} onClose={() => setResetPasswordResult(null)} size="md">
+        <DialogTitle>
+          <div className="flex items-center gap-2 text-green-600">
+            <KeyIcon className="h-5 w-5" />
+            密码重置成功
+          </div>
+        </DialogTitle>
+        <DialogDescription>
+          请将新密码告知用户，用户下次登录时需要修改密码
+        </DialogDescription>
+
+        <DialogBody className="space-y-4">
+          {resetPasswordResult && (
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+              <div className="space-y-3">
+                <div>
+                  <Text className="text-sm text-green-700">用户名</Text>
+                  <Text className="font-mono text-green-900 font-semibold">{resetPasswordResult.username}</Text>
+                </div>
+                <div>
+                  <Text className="text-sm text-green-700">新密码</Text>
+                  <div className="flex items-center gap-2">
+                    <Text className="font-mono text-green-900 font-semibold text-lg bg-white px-3 py-1 rounded border border-green-300">
+                      {resetPasswordResult.password}
+                    </Text>
+                    <Button
+                      plain
+                      onClick={() => {
+                        navigator.clipboard.writeText(resetPasswordResult.password);
+                        toast.success('密码已复制到剪贴板');
+                      }}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      复制
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
+            <Text className="text-sm text-yellow-800">
+              ⚠️ 请妥善保管此密码，关闭对话框后将无法再次查看
+            </Text>
+          </div>
+        </DialogBody>
+
+        <DialogActions>
+          <Button onClick={() => setResetPasswordResult(null)}>
+            我已记录，关闭
           </Button>
         </DialogActions>
       </Dialog>

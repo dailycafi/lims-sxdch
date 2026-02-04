@@ -136,11 +136,29 @@ async def _issue_token_pair(
     return access_token, refresh_token_plain, expires_in
 
 
-PASSWORD_EXPIRE_DAYS = 90  # 密码过期天数
+DEFAULT_PASSWORD_EXPIRE_DAYS = 90  # 默认密码过期天数
 
 
-def check_password_expired(user: User) -> bool:
-    """检查密码是否过期（超过90天）"""
+async def get_password_expire_days(db: AsyncSession) -> int:
+    """从数据库获取密码过期天数，默认为90天"""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == "password_expire_days"))
+    setting = result.scalar_one_or_none()
+
+    if setting and setting.value is not None:
+        try:
+            days = int(setting.value)
+            if days > 0:
+                return days
+        except (ValueError, TypeError):
+            pass
+
+    return DEFAULT_PASSWORD_EXPIRE_DAYS
+
+
+async def check_password_expired(user: User, db: AsyncSession) -> bool:
+    """检查密码是否过期"""
+    password_expire_days = await get_password_expire_days(db)
+
     if user.password_changed_at is None:
         # 如果没有密码修改记录，检查创建时间
         # 但如果 must_change_password 为 True，则不算过期（等待首次登录修改）
@@ -150,15 +168,15 @@ def check_password_expired(user: User) -> bool:
         created_at = user.created_at
         if created_at and created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
-        if created_at and (datetime.now(timezone.utc) - created_at).days >= PASSWORD_EXPIRE_DAYS:
+        if created_at and (datetime.now(timezone.utc) - created_at).days >= password_expire_days:
             return True
         return False
-    
+
     password_changed_at = user.password_changed_at
     if password_changed_at.tzinfo is None:
         password_changed_at = password_changed_at.replace(tzinfo=timezone.utc)
-    
-    return (datetime.now(timezone.utc) - password_changed_at).days >= PASSWORD_EXPIRE_DAYS
+
+    return (datetime.now(timezone.utc) - password_changed_at).days >= password_expire_days
 
 
 class LoginToken(Token):
@@ -173,10 +191,10 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     """用户登录
-    
+
     返回中包含 must_change_password 字段：
     - 如果为 True，前端需要强制用户修改密码
-    - password_expired 表示密码是否因为超过90天而过期
+    - password_expired 表示密码是否因为超过设定天数而过期（可在系统设置中配置）
     """
     # ... existing user lookup code ...
     result = await db.execute(select(User).where(User.username == form_data.username))
@@ -196,7 +214,7 @@ async def login(
         )
     
     # 检查密码是否过期
-    password_expired = check_password_expired(user)
+    password_expired = await check_password_expired(user, db)
     must_change_password = user.must_change_password or password_expired
     
     # 废弃当前用户已有的 refresh token，避免旧会话继续使用

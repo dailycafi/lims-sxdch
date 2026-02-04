@@ -77,7 +77,8 @@ async def init_db(drop_existing=False):
         # 0. 创建系统设置
         session.add_all([
             SystemSetting(key="session_timeout", value=30, description="自动登出时间（分钟）"),
-            SystemSetting(key="password_complexity_enabled", value=True, description="是否启用密码复杂度校验")
+            SystemSetting(key="password_complexity_enabled", value=True, description="是否启用密码复杂度校验"),
+            SystemSetting(key="password_expire_days", value=90, description="密码过期时间（天）")
         ])
         await session.flush()
 
