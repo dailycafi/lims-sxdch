@@ -18,9 +18,13 @@ class TestGroup(Base):
     
     # 受试者编号配置
     planned_count = Column(Integer, default=0)  # 计划例数
-    backup_count = Column(Integer, default=0)  # 备份例数
-    subject_prefix = Column(String, nullable=True)  # 第一例受试者编号前缀（如 R）
+    subject_prefix = Column(String, nullable=True)  # 受试者编号前缀（如 R）
     subject_start_number = Column(Integer, default=1)  # 起始编号（如 1 表示 001）
+
+    # 备用人员编号配置（与受试者编号规则相同结构）
+    backup_subject_prefix = Column(String, nullable=True)  # 备用人员编号前缀（如 B）
+    backup_subject_start_number = Column(Integer, default=1)  # 备用人员起始编号
+    backup_subject_count = Column(Integer, default=0)  # 备用人员数量
     
     # 检测配置（支持多个检测类型）
     # 格式: [{"test_type": "PK", "sample_type": "血浆", "primary_sets": 4, "backup_sets": 2}, ...]

@@ -60,9 +60,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     cycle: '',
     dosage: '',
     planned_count: 0,
-    backup_count: 0,
     subject_prefix: '',
     subject_start_number: 1,
+    backup_subject_prefix: '',
+    backup_subject_start_number: 1,
+    backup_subject_count: 0,
     detection_configs: [],
     collection_points: [],
   });
@@ -95,6 +97,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
 
   // 编号预览展开状态
   const [subjectPreviewExpanded, setSubjectPreviewExpanded] = useState(false);
+  const [backupSubjectPreviewExpanded, setBackupSubjectPreviewExpanded] = useState(false);
 
   // 复制对话框相关状态
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
@@ -105,9 +108,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
     cycle: '',
     dosage: '',
     planned_count: 0,
-    backup_count: 0,
     subject_prefix: '',
     subject_start_number: 1,
+    backup_subject_prefix: '',
+    backup_subject_start_number: 1,
+    backup_subject_count: 0,
     detection_configs: [],
     collection_points: [],
   });
@@ -167,9 +172,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
       cycle: '',
       dosage: '',
       planned_count: 0,
-      backup_count: 0,
       subject_prefix: '',
       subject_start_number: 1,
+      backup_subject_prefix: '',
+      backup_subject_start_number: 1,
+      backup_subject_count: 0,
       detection_configs: [],
       collection_points: [],
     });
@@ -188,9 +195,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         cycle: group.cycle || '',
         dosage: group.dosage || '',
         planned_count: group.planned_count,
-        backup_count: group.backup_count,
         subject_prefix: group.subject_prefix || '',
         subject_start_number: group.subject_start_number || 1,
+        backup_subject_prefix: group.backup_subject_prefix || '',
+        backup_subject_start_number: group.backup_subject_start_number || 1,
+        backup_subject_count: group.backup_subject_count || 0,
         detection_configs: group.detection_configs || [],
         collection_points: group.collection_points || [],
       });
@@ -262,9 +271,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
       cycle: group.cycle || '',
       dosage: group.dosage || '',
       planned_count: group.planned_count,
-      backup_count: group.backup_count,
       subject_prefix: group.subject_prefix || '',
       subject_start_number: group.subject_start_number || 1,
+      backup_subject_prefix: group.backup_subject_prefix || '',
+      backup_subject_start_number: group.backup_subject_start_number || 1,
+      backup_subject_count: group.backup_subject_count || 0,
       detection_configs: group.detection_configs || [],
       collection_points: group.collection_points || [],
     });
@@ -287,9 +298,11 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         cycle: copyForm.cycle,
         dosage: copyForm.dosage || undefined,
         planned_count: copyForm.planned_count,
-        backup_count: copyForm.backup_count,
         subject_prefix: copyForm.subject_prefix || undefined,
         subject_start_number: copyForm.subject_start_number,
+        backup_subject_prefix: copyForm.backup_subject_prefix || undefined,
+        backup_subject_start_number: copyForm.backup_subject_start_number,
+        backup_subject_count: copyForm.backup_subject_count,
         detection_configs: copyForm.detection_configs,
         collection_points: copyForm.collection_points,
       });
@@ -457,14 +470,25 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
   // 生成受试者编号预览
   const generateSubjectPreview = (showAll = false) => {
     const plannedCount = form.planned_count || 0;
-    const backupCount = form.backup_count || 0;
     if (!form.subject_prefix || plannedCount <= 0) return [];
     const subjects = [];
-    const totalCount = plannedCount + backupCount;
-    const displayCount = showAll ? totalCount : Math.min(totalCount, 10);
+    const displayCount = showAll ? plannedCount : Math.min(plannedCount, 10);
     for (let i = 0; i < displayCount; i++) {
       const num = (form.subject_start_number || 1) + i;
       subjects.push(`${form.subject_prefix}${num.toString().padStart(3, '0')}`);
+    }
+    return subjects;
+  };
+
+  // 生成备用人员编号预览
+  const generateBackupSubjectPreview = (showAll = false) => {
+    const backupCount = form.backup_subject_count || 0;
+    if (!form.backup_subject_prefix || backupCount <= 0) return [];
+    const subjects = [];
+    const displayCount = showAll ? backupCount : Math.min(backupCount, 10);
+    for (let i = 0; i < displayCount; i++) {
+      const num = (form.backup_subject_start_number || 1) + i;
+      subjects.push(`${form.backup_subject_prefix}${num.toString().padStart(3, '0')}`);
     }
     return subjects;
   };
@@ -542,7 +566,7 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                       <span>周期: {group.cycle || '-'}</span>
                       <span>剂量组: {group.dosage || '-'}</span>
                       <span>计划例数: {group.planned_count}</span>
-                      <span>备份例数: {group.backup_count}</span>
+                      {group.backup_subject_count > 0 && <span>备用人员: {group.backup_subject_count}</span>}
                     </div>
                   </div>
                 </div>
@@ -581,6 +605,14 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                         前缀: {group.subject_prefix || '-'}, 起始: {group.subject_start_number || 1}
                       </Text>
                     </div>
+                    {(group.backup_subject_prefix || group.backup_subject_count > 0) && (
+                      <div>
+                        <Text className="text-xs font-medium text-zinc-500 uppercase">备用人员编号规则</Text>
+                        <Text className="mt-1 text-sm text-zinc-900">
+                          前缀: {group.backup_subject_prefix || '-'}, 起始: {group.backup_subject_start_number || 1}, 数量: {group.backup_subject_count || 0}
+                        </Text>
+                      </div>
+                    )}
                   </div>
 
                   {/* 检测配置列表（包含各自的采集点） */}
@@ -641,8 +673,8 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         </DialogDescription>
         <DialogBody>
           <div className="space-y-6">
-            {/* 基本信息 */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* 第一行：试验组名称、周期、剂量组 */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   试验组名称 <span className="text-zinc-400 text-xs">（可选）</span>
@@ -675,9 +707,6 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   />
                 )}
               </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   剂量组
@@ -688,6 +717,10 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   placeholder="如：100mg、200mg"
                 />
               </div>
+            </div>
+
+            {/* 第二行：计划例数、编号前缀、起始编号 */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   计划例数
@@ -701,70 +734,112 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  备份例数
+                  编号前缀
+                </label>
+                <Input
+                  value={form.subject_prefix}
+                  onChange={(e) => setForm({ ...form, subject_prefix: e.target.value.toUpperCase() })}
+                  placeholder="如：R"
+                  maxLength={10}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  起始编号
                 </label>
                 <Input
                   type="number"
-                  min={0}
-                  value={form.backup_count}
-                  onChange={(e) => setForm({ ...form, backup_count: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  value={form.subject_start_number}
+                  onChange={(e) => setForm({ ...form, subject_start_number: parseInt(e.target.value) || 1 })}
+                  placeholder="如：1"
                 />
               </div>
             </div>
 
-            {/* 受试者编号规则 */}
-            <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
-              <Text className="font-medium text-zinc-900 mb-3">受试者编号规则</Text>
-              <div className="grid grid-cols-2 gap-4">
+            {/* 受试者编号预览 */}
+            {form.subject_prefix && (form.planned_count || 0) > 0 && (
+              <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
+                <Text className="font-medium text-zinc-900 mb-3">受试者编号预览</Text>
+                <div className="flex flex-wrap gap-2">
+                  {generateSubjectPreview(subjectPreviewExpanded).map((s, i) => (
+                    <Badge key={i} color="blue">
+                      {s}
+                    </Badge>
+                  ))}
+                  {(form.planned_count || 0) > 10 && (
+                    <Badge
+                      color="zinc"
+                      className="cursor-pointer hover:bg-zinc-200 transition-colors"
+                      onClick={() => setSubjectPreviewExpanded(!subjectPreviewExpanded)}
+                    >
+                      {subjectPreviewExpanded ? '收起' : `...还有 ${(form.planned_count || 0) - 10} 个`}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 备用人员编号规则 */}
+            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+              <Text className="font-medium text-zinc-900 mb-3">备用人员编号规则</Text>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    编号前缀（第一部分）
+                    备用人员数量
                   </label>
                   <Input
-                    value={form.subject_prefix}
-                    onChange={(e) => setForm({ ...form, subject_prefix: e.target.value.toUpperCase() })}
-                    placeholder="如：R"
-                    maxLength={10}
+                    type="number"
+                    min={0}
+                    value={form.backup_subject_count}
+                    onChange={(e) => setForm({ ...form, backup_subject_count: parseInt(e.target.value) || 0 })}
+                    placeholder="如：2"
                   />
-                  <Text className="text-xs text-zinc-500 mt-1">所有受试者都使用这个前缀</Text>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    起始编号（第二部分）
+                    编号前缀
+                  </label>
+                  <Input
+                    value={form.backup_subject_prefix}
+                    onChange={(e) => setForm({ ...form, backup_subject_prefix: e.target.value.toUpperCase() })}
+                    placeholder="如：B"
+                    maxLength={10}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    起始编号
                   </label>
                   <Input
                     type="number"
                     min={1}
-                    value={form.subject_start_number}
-                    onChange={(e) => setForm({ ...form, subject_start_number: parseInt(e.target.value) || 1 })}
+                    value={form.backup_subject_start_number}
+                    onChange={(e) => setForm({ ...form, backup_subject_start_number: parseInt(e.target.value) || 1 })}
                     placeholder="如：1"
                   />
-                  <Text className="text-xs text-zinc-500 mt-1">后续编号依次递增</Text>
                 </div>
               </div>
-              {/* 编号预览 */}
-              {form.subject_prefix && (form.planned_count || 0) > 0 && (
-                <div className="mt-3 p-3 bg-white rounded border border-zinc-200">
+              {/* 备用人员编号预览 */}
+              {form.backup_subject_prefix && (form.backup_subject_count || 0) > 0 && (
+                <div className="mt-3 p-3 bg-white rounded border border-amber-200">
                   <Text className="text-xs font-medium text-zinc-500 mb-2">编号预览：</Text>
                   <div className="flex flex-wrap gap-2">
-                    {generateSubjectPreview(subjectPreviewExpanded).map((s, i) => (
-                      <Badge key={i} color={i < (form.planned_count || 0) ? 'blue' : 'amber'}>
+                    {generateBackupSubjectPreview(backupSubjectPreviewExpanded).map((s, i) => (
+                      <Badge key={i} color="amber">
                         {s}
                       </Badge>
                     ))}
-                    {(form.planned_count || 0) + (form.backup_count || 0) > 10 && (
-                      <Badge 
-                        color="zinc" 
+                    {(form.backup_subject_count || 0) > 10 && (
+                      <Badge
+                        color="zinc"
                         className="cursor-pointer hover:bg-zinc-200 transition-colors"
-                        onClick={() => setSubjectPreviewExpanded(!subjectPreviewExpanded)}
+                        onClick={() => setBackupSubjectPreviewExpanded(!backupSubjectPreviewExpanded)}
                       >
-                        {subjectPreviewExpanded ? '收起' : `...还有 ${(form.planned_count || 0) + (form.backup_count || 0) - 10} 个`}
+                        {backupSubjectPreviewExpanded ? '收起' : `...还有 ${(form.backup_subject_count || 0) - 10} 个`}
                       </Badge>
                     )}
                   </div>
-                  <Text className="text-xs text-zinc-500 mt-2">
-                    蓝色为计划例数，橙色为备份例数
-                  </Text>
                 </div>
               )}
             </div>
@@ -1118,8 +1193,8 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
         </DialogDescription>
         <DialogBody>
           <div className="space-y-6">
-            {/* 基本信息 */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* 第一行：试验组名称、周期、剂量组 */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   试验组名称 <span className="text-zinc-400 text-xs">（可选）</span>
@@ -1152,9 +1227,6 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   />
                 )}
               </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   剂量组
@@ -1165,6 +1237,10 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
                   placeholder="如：100mg、200mg"
                 />
               </div>
+            </div>
+
+            {/* 第二行：计划例数、编号前缀、起始编号 */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
                   计划例数
@@ -1178,41 +1254,65 @@ export function TestGroupManager({ projectId, isArchived = false }: TestGroupMan
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  备份例数
+                  编号前缀
+                </label>
+                <Input
+                  value={copyForm.subject_prefix}
+                  onChange={(e) => setCopyForm({ ...copyForm, subject_prefix: e.target.value.toUpperCase() })}
+                  placeholder="如：R"
+                  maxLength={10}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  起始编号
                 </label>
                 <Input
                   type="number"
-                  min={0}
-                  value={copyForm.backup_count}
-                  onChange={(e) => setCopyForm({ ...copyForm, backup_count: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  value={copyForm.subject_start_number}
+                  onChange={(e) => setCopyForm({ ...copyForm, subject_start_number: parseInt(e.target.value) || 1 })}
+                  placeholder="如：1"
                 />
               </div>
             </div>
 
-            {/* 受试者编号规则 */}
-            <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-200">
-              <Text className="font-medium text-zinc-900 mb-3">受试者编号规则</Text>
-              <div className="grid grid-cols-2 gap-4">
+            {/* 备用人员编号规则 */}
+            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+              <Text className="font-medium text-zinc-900 mb-3">备用人员编号规则</Text>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    编号前缀（第一部分）
+                    备用人员数量
                   </label>
                   <Input
-                    value={copyForm.subject_prefix}
-                    onChange={(e) => setCopyForm({ ...copyForm, subject_prefix: e.target.value.toUpperCase() })}
-                    placeholder="如：R"
+                    type="number"
+                    min={0}
+                    value={copyForm.backup_subject_count}
+                    onChange={(e) => setCopyForm({ ...copyForm, backup_subject_count: parseInt(e.target.value) || 0 })}
+                    placeholder="如：2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    编号前缀
+                  </label>
+                  <Input
+                    value={copyForm.backup_subject_prefix}
+                    onChange={(e) => setCopyForm({ ...copyForm, backup_subject_prefix: e.target.value.toUpperCase() })}
+                    placeholder="如：B"
                     maxLength={10}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    起始编号（第二部分）
+                    起始编号
                   </label>
                   <Input
                     type="number"
                     min={1}
-                    value={copyForm.subject_start_number}
-                    onChange={(e) => setCopyForm({ ...copyForm, subject_start_number: parseInt(e.target.value) || 1 })}
+                    value={copyForm.backup_subject_start_number}
+                    onChange={(e) => setCopyForm({ ...copyForm, backup_subject_start_number: parseInt(e.target.value) || 1 })}
                     placeholder="如：1"
                   />
                 </div>
