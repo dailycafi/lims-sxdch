@@ -84,16 +84,24 @@ class SampleReceiveRecord(Base):
     sample_status = Column(String, nullable=False)  # 样本状态：完好、破损等
     storage_location = Column(String, nullable=True)  # 暂存位置
     express_photos = Column(Text, nullable=True)  # 快递单照片路径（JSON数组）
-    
+
+    # 新增字段：样本清单上传、样本选择、其他信息、复核人
+    sample_list_file_path = Column(String, nullable=True)  # 上传的样本清单文件路径
+    selected_sample_ids = Column(Text, nullable=True)  # 选中的样本ID（JSON数组）
+    additional_notes = Column(Text, nullable=True)  # 其他信息备注
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # 复核人ID
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)  # 复核时间
+
     received_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     received_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(String, default="pending")  # pending, in_progress, completed
-    
+
     # 关系
     project = relationship("Project")
     clinical_org = relationship("Organization", foreign_keys=[clinical_org_id])
     transport_org = relationship("Organization", foreign_keys=[transport_org_id])
-    receiver = relationship("User")
+    receiver = relationship("User", foreign_keys=[received_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
 
 
 class SampleBorrowRequest(Base):
