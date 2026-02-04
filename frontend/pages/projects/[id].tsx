@@ -647,7 +647,7 @@ export default function ProjectDetailPage() {
                 <dd className="mt-1 text-zinc-900">{project.sponsor_project_code}</dd>
               </div>
               <div>
-                <dt className="text-zinc-500">实验室项目编号</dt>
+                <dt className="text-zinc-500">测试机构项目编号</dt>
                 <dd className="mt-1 text-zinc-900">{project.lab_project_code}</dd>
               </div>
               <div>
@@ -1316,7 +1316,7 @@ export default function ProjectDetailPage() {
               </Field>
 
               <Field className="flex items-center gap-4">
-                <Label className="w-32 flex-shrink-0">实验室项目编号</Label>
+                <Label className="w-32 flex-shrink-0">测试机构项目编号</Label>
                 <div className="flex-1">
                   <Input
                     value={editForm.lab_project_code}

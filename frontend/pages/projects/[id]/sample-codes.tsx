@@ -581,7 +581,7 @@ export default function ProjectSampleCodesPage() {
                             <th>序号</th>
                             <th>申办方</th>
                             <th>申办方项目编号</th>
-                            <th>实验室项目编号</th>
+                            <th>测试机构项目编号</th>
                             <th>样本编号</th>
                         </tr>
                     </thead>
