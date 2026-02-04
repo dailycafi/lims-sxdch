@@ -30,3 +30,12 @@ from app.models.special_sample import (
     SpecialSampleStatus,
     SpecialSampleType
 )
+from app.models.blank_matrix import (
+    BlankMatrixStatus,
+    AnticoagulantType,
+    MatrixType,
+    BlankMatrixReceiveRecord,
+    BlankMatrixSample,
+    BlankMatrixBorrowRequest,
+    BlankMatrixBorrowItem
+)

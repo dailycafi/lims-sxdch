@@ -13,6 +13,7 @@ import { UserAccessService } from './user-access.service';
 import { SettingsService } from './settings.service';
 import { testGroupsAPI } from './test-groups.service';
 import { SpecialSamplesService } from './special-samples.service';
+import { BlankMatrixService } from './blank-matrix.service';
 
 // 统一导出所有服务
 export {
@@ -30,6 +31,7 @@ export {
   SettingsService,
   testGroupsAPI,
   SpecialSamplesService,
+  BlankMatrixService,
 };
 
 // 为了方便使用，也可以创建一个统一的 API 对象
@@ -48,4 +50,5 @@ export const API = {
   settings: SettingsService,
   testGroups: testGroupsAPI,
   specialSamples: SpecialSamplesService,
+  blankMatrix: BlankMatrixService,
 } as const;
