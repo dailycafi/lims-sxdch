@@ -159,7 +159,7 @@ class TestGenerateWithMultipleGroups:
             cycle="P1",
             dosage="100mg",
             planned_count=3,
-            backup_count=1,
+            backup_subject_count=1,
             subject_prefix="A",
             subject_start_number=1,
             detection_configs=[
@@ -184,7 +184,7 @@ class TestGenerateWithMultipleGroups:
             cycle="P2",
             dosage="200mg",
             planned_count=2,
-            backup_count=1,
+            backup_subject_count=1,
             subject_prefix="B",
             subject_start_number=1,
             detection_configs=[

@@ -1170,7 +1170,7 @@ async def generate_all_sample_codes(
         # 生成受试者编号列表
         subjects = []
         if tg.subject_prefix and tg.planned_count > 0:
-            total_count = tg.planned_count + (tg.backup_count or 0)
+            total_count = tg.planned_count + (tg.backup_subject_count or 0)
             for i in range(total_count):
                 num = (tg.subject_start_number or 1) + i
                 subjects.append(f"{tg.subject_prefix}{num:03d}")

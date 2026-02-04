@@ -36,7 +36,7 @@ class TestTestGroupCopy:
         assert data["cycle"] == test_group.cycle
         assert data["dosage"] == test_group.dosage
         assert data["planned_count"] == test_group.planned_count
-        assert data["backup_count"] == test_group.backup_count
+        assert data["backup_subject_count"] == test_group.backup_subject_count
         assert data["subject_prefix"] == test_group.subject_prefix
         assert data["subject_start_number"] == test_group.subject_start_number
 
@@ -90,7 +90,7 @@ class TestTestGroupCopy:
             "cycle": "P2",
             "dosage": "200mg",
             "planned_count": 10,
-            "backup_count": 3,
+            "backup_subject_count": 3,
             "subject_prefix": "N",
             "subject_start_number": 100,
         }
@@ -109,7 +109,7 @@ class TestTestGroupCopy:
         assert data["cycle"] == override_data["cycle"]
         assert data["dosage"] == override_data["dosage"]
         assert data["planned_count"] == override_data["planned_count"]
-        assert data["backup_count"] == override_data["backup_count"]
+        assert data["backup_subject_count"] == override_data["backup_subject_count"]
         assert data["subject_prefix"] == override_data["subject_prefix"]
         assert data["subject_start_number"] == override_data["subject_start_number"]
 
@@ -272,7 +272,7 @@ class TestTestGroupCRUD:
             "cycle": "P1",
             "dosage": "50mg",
             "planned_count": 8,
-            "backup_count": 2,
+            "backup_subject_count": 2,
             "subject_prefix": "T",
             "subject_start_number": 1,
             "detection_configs": [

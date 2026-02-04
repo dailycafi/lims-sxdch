@@ -95,7 +95,7 @@ async def list_test_groups(
                 tg.subject_prefix,
                 tg.subject_start_number or 1,
                 tg.planned_count,
-                tg.backup_count or 0
+                tg.backup_subject_count or 0
             )
         response.append(tg_dict)
     
@@ -125,7 +125,7 @@ async def get_test_group(
             test_group.subject_prefix,
             test_group.subject_start_number or 1,
             test_group.planned_count,
-            test_group.backup_count or 0
+            test_group.backup_subject_count or 0
         )
     
     return response
@@ -167,7 +167,7 @@ async def create_test_group(
         cycle=data.cycle,
         dosage=data.dosage,
         planned_count=data.planned_count,
-        backup_count=data.backup_count,
+        backup_subject_count=data.backup_subject_count,
         subject_prefix=data.subject_prefix,
         subject_start_number=data.subject_start_number,
         backup_subject_prefix=data.backup_subject_prefix,
@@ -226,7 +226,7 @@ async def update_test_group(
         "cycle": test_group.cycle,
         "dosage": test_group.dosage,
         "planned_count": test_group.planned_count,
-        "backup_count": test_group.backup_count,
+        "backup_subject_count": test_group.backup_subject_count,
         "subject_prefix": test_group.subject_prefix,
         "subject_start_number": test_group.subject_start_number,
         "backup_subject_prefix": test_group.backup_subject_prefix,
@@ -398,20 +398,32 @@ async def copy_test_group(
     )
     max_order = max_order_result.scalar_one_or_none() or 0
     
-    # 创建新的试验组
+    # 处理可选的覆盖数据
+    override_data = data.model_dump(exclude_unset=True, exclude={"source_id"})
+
+    # 处理 detection_configs 和 collection_points
+    detection_configs_data = source.detection_configs
+    if "detection_configs" in override_data and override_data["detection_configs"] is not None:
+        detection_configs_data = [dc.model_dump() if hasattr(dc, 'model_dump') else dc for dc in override_data["detection_configs"]]
+
+    collection_points_data = source.collection_points
+    if "collection_points" in override_data and override_data["collection_points"] is not None:
+        collection_points_data = [cp.model_dump() if hasattr(cp, 'model_dump') else cp for cp in override_data["collection_points"]]
+
+    # 创建新的试验组（应用覆盖数据）
     new_test_group = TestGroup(
         project_id=source.project_id,
-        name=None,  # 不再使用 name 字段
-        cycle=source.cycle,
-        dosage=source.dosage,
-        planned_count=source.planned_count,
-        backup_count=source.backup_count,
-        subject_prefix=source.subject_prefix,
-        subject_start_number=source.subject_start_number,
-        backup_subject_prefix=source.backup_subject_prefix,
-        backup_subject_start_number=source.backup_subject_start_number,
-        detection_configs=source.detection_configs,
-        collection_points=source.collection_points,
+        name=override_data.get("name", source.name),
+        cycle=override_data.get("cycle", source.cycle),
+        dosage=override_data.get("dosage", source.dosage),
+        planned_count=override_data.get("planned_count", source.planned_count),
+        backup_subject_count=override_data.get("backup_subject_count", source.backup_subject_count),
+        subject_prefix=override_data.get("subject_prefix", source.subject_prefix),
+        subject_start_number=override_data.get("subject_start_number", source.subject_start_number),
+        backup_subject_prefix=override_data.get("backup_subject_prefix", source.backup_subject_prefix),
+        backup_subject_start_number=override_data.get("backup_subject_start_number", source.backup_subject_start_number),
+        detection_configs=detection_configs_data,
+        collection_points=collection_points_data,
         display_order=max_order + 1,
         created_by=current_user.id,
         is_confirmed=False,  # 复制的试验组默认未确认

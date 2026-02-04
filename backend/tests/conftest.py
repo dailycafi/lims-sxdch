@@ -209,7 +209,7 @@ async def test_group(db_session: AsyncSession, test_project: Project) -> TestGro
         cycle="P1",
         dosage="100mg",
         planned_count=5,
-        backup_count=2,
+        backup_subject_count=2,
         subject_prefix="S",
         subject_start_number=1,
         detection_configs=[
@@ -250,7 +250,7 @@ async def confirmed_test_group(db_session: AsyncSession, test_project: Project, 
         cycle="P1",
         dosage="200mg",
         planned_count=3,
-        backup_count=1,
+        backup_subject_count=1,
         subject_prefix="R",
         subject_start_number=1,
         detection_configs=[
