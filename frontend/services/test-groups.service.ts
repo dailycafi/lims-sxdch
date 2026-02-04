@@ -20,9 +20,12 @@ export interface TestGroup {
   cycle?: string;
   dosage?: string;
   planned_count: number;
-  backup_count: number;
+  backup_count: number;  // 保留向后兼容
   subject_prefix?: string;
   subject_start_number: number;
+  // 备用人员编号配置
+  backup_subject_prefix?: string;
+  backup_subject_start_number: number;
   // 多检测类型配置
   detection_configs?: DetectionConfigItem[];
   collection_points?: CollectionPointItem[];
@@ -43,9 +46,12 @@ export interface TestGroupCreate {
   cycle?: string;
   dosage?: string;
   planned_count?: number;
-  backup_count?: number;
+  backup_count?: number;  // 保留向后兼容
   subject_prefix?: string;
   subject_start_number?: number;
+  // 备用人员编号配置
+  backup_subject_prefix?: string;
+  backup_subject_start_number?: number;
   // 多检测类型配置
   detection_configs?: DetectionConfigItem[];
   collection_points?: CollectionPointItem[];
@@ -57,9 +63,12 @@ export interface TestGroupUpdate {
   cycle?: string;
   dosage?: string;
   planned_count?: number;
-  backup_count?: number;
+  backup_count?: number;  // 保留向后兼容
   subject_prefix?: string;
   subject_start_number?: number;
+  // 备用人员编号配置
+  backup_subject_prefix?: string;
+  backup_subject_start_number?: number;
   // 多检测类型配置
   detection_configs?: DetectionConfigItem[];
   collection_points?: CollectionPointItem[];

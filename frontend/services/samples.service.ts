@@ -1,6 +1,38 @@
 import { api } from '@/lib/api';
 import { Sample, SampleCreate, SampleBorrowRequest, SampleTransferRequest } from '@/types/api';
 
+export interface ParseSampleListResult {
+  success: boolean;
+  sample_codes: string[];
+  count: number;
+  column_used: string | null;
+}
+
+export interface PendingSample {
+  id: number;
+  sample_code: string;
+  barcode: string | null;
+  subject_code: string | null;
+  test_type: string | null;
+  collection_time: string | null;
+  cycle_group: string | null;
+  is_primary: boolean;
+}
+
+export interface PendingSamplesResult {
+  samples: PendingSample[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface ReviewerInfo {
+  success: boolean;
+  reviewer_id: number;
+  reviewer_name: string;
+  reviewer_username: string;
+}
+
 export class SamplesService {
   /**
    * 获取样本列表
@@ -178,6 +210,48 @@ export class SamplesService {
    */
   static async getInventoryRecords(sampleId: number): Promise<any[]> {
     const response = await api.get(`/samples/${sampleId}/inventory-records`);
+    return response.data;
+  }
+
+  /**
+   * 解析样本清单文件
+   */
+  static async parseSampleList(file: File): Promise<ParseSampleListResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<ParseSampleListResult>(
+      '/samples/receive/parse-sample-list',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  /**
+   * 获取待接收样本列表
+   */
+  static async getPendingSamples(params: {
+    project_id: number;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<PendingSamplesResult> {
+    const response = await api.get<PendingSamplesResult>('/samples/receive/pending-samples', { params });
+    return response.data;
+  }
+
+  /**
+   * 验证复核人
+   */
+  static async verifyReviewer(username: string, password: string): Promise<ReviewerInfo> {
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('password', password);
+    const response = await api.post<ReviewerInfo>(
+      '/samples/receive/verify-reviewer',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
     return response.data;
   }
 }

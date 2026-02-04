@@ -24,9 +24,12 @@ class TestGroupBase(BaseModel):
     cycle: Optional[str] = None
     dosage: Optional[str] = None
     planned_count: int = 0
-    backup_count: int = 0
+    backup_count: int = 0  # 保留向后兼容
     subject_prefix: Optional[str] = None
     subject_start_number: int = 1
+    # 备用人员编号配置
+    backup_subject_prefix: Optional[str] = None
+    backup_subject_start_number: int = 1
     # 多检测类型配置
     detection_configs: Optional[List[DetectionConfigItem]] = None
     collection_points: Optional[List[CollectionPointItem]] = None
@@ -44,9 +47,12 @@ class TestGroupUpdate(BaseModel):
     cycle: Optional[str] = None
     dosage: Optional[str] = None
     planned_count: Optional[int] = None
-    backup_count: Optional[int] = None
+    backup_count: Optional[int] = None  # 保留向后兼容
     subject_prefix: Optional[str] = None
     subject_start_number: Optional[int] = None
+    # 备用人员编号配置
+    backup_subject_prefix: Optional[str] = None
+    backup_subject_start_number: Optional[int] = None
     # 多检测类型配置
     detection_configs: Optional[List[DetectionConfigItem]] = None
     collection_points: Optional[List[CollectionPointItem]] = None

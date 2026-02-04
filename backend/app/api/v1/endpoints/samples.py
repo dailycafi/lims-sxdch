@@ -715,6 +715,212 @@ async def update_sample(
     return sample
 
 
+@router.post("/receive/parse-sample-list")
+async def parse_sample_list(
+    file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """解析上传的样本清单文件（Excel/CSV），返回样本编号列表"""
+    if not check_sample_permission(current_user, "receive"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以操作"
+        )
+
+    filename = file.filename.lower() if file.filename else ""
+    if not (filename.endswith('.xlsx') or filename.endswith('.xls') or filename.endswith('.csv')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 Excel (.xlsx, .xls) 或 CSV (.csv) 文件"
+        )
+
+    try:
+        content = await file.read()
+
+        if filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        else:
+            df = pd.read_excel(BytesIO(content))
+
+        sample_codes = []
+        possible_columns = ['sample_code', '样本编号', '样本号', 'code', 'barcode', '条形码']
+
+        matched_column = None
+        for col in possible_columns:
+            if col in df.columns:
+                matched_column = col
+                break
+
+        if matched_column:
+            sample_codes = df[matched_column].dropna().astype(str).str.strip().tolist()
+            sample_codes = [code for code in sample_codes if code]
+        elif len(df.columns) > 0:
+            first_col = df.columns[0]
+            sample_codes = df[first_col].dropna().astype(str).str.strip().tolist()
+            sample_codes = [code for code in sample_codes if code]
+
+        return {
+            "success": True,
+            "sample_codes": sample_codes,
+            "count": len(sample_codes),
+            "column_used": matched_column or (df.columns[0] if len(df.columns) > 0 else None)
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"解析文件失败: {str(e)}"
+        )
+
+
+@router.get("/receive/pending-samples")
+async def get_pending_samples(
+    project_id: int,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取项目下待接收（pending）状态的样本列表"""
+    if not check_sample_permission(current_user, "receive"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以操作"
+        )
+
+    await assert_project_access(db, current_user, project_id)
+
+    query = select(Sample).where(
+        Sample.project_id == project_id,
+        Sample.status == SampleStatus.PENDING
+    )
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            (Sample.sample_code.ilike(search_term)) |
+            (Sample.subject_code.ilike(search_term)) |
+            (Sample.barcode.ilike(search_term))
+        )
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    query = query.order_by(Sample.sample_code).offset(skip).limit(limit)
+    result = await db.execute(query)
+    samples = result.scalars().all()
+
+    return {
+        "samples": [
+            {
+                "id": s.id,
+                "sample_code": s.sample_code,
+                "barcode": s.barcode,
+                "subject_code": s.subject_code,
+                "test_type": s.test_type,
+                "collection_time": s.collection_time,
+                "cycle_group": s.cycle_group,
+                "is_primary": s.is_primary
+            }
+            for s in samples
+        ],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.post("/receive/verify-reviewer")
+async def verify_reviewer(
+    username: str = Form(...),
+    password: str = Form(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """验证复核人身份（必须是 sample_admin 且不能是当前操作人）"""
+    from app.core.security import verify_password
+
+    if not check_sample_permission(current_user, "receive"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有样本管理员可以操作"
+        )
+
+    result = await db.execute(select(User).where(User.username == username))
+    reviewer = result.scalar_one_or_none()
+
+    if not reviewer:
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="reviewer_verification",
+            entity_id=0,
+            action="verify_failed",
+            details={"reason": "用户不存在", "username": username},
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名或密码错误"
+        )
+
+    if not verify_password(password, reviewer.hashed_password):
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            entity_type="reviewer_verification",
+            entity_id=reviewer.id,
+            action="verify_failed",
+            details={"reason": "密码错误", "username": username},
+            timestamp=datetime.utcnow()
+        )
+        db.add(audit_log)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名或密码错误"
+        )
+
+    if reviewer.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="复核人不能是当前操作人"
+        )
+
+    if reviewer.role != UserRole.SAMPLE_ADMIN and reviewer.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="复核人必须是样本管理员"
+        )
+
+    if not reviewer.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该用户已被禁用"
+        )
+
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        entity_type="reviewer_verification",
+        entity_id=reviewer.id,
+        action="verify_success",
+        details={"reviewer_name": reviewer.full_name, "username": username},
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    return {
+        "success": True,
+        "reviewer_id": reviewer.id,
+        "reviewer_name": reviewer.full_name,
+        "reviewer_username": reviewer.username
+    }
+
+
 @router.post("/receive")
 async def receive_samples(
     project_id: int = Form(...),
@@ -728,6 +934,10 @@ async def receive_samples(
     storage_location: Optional[str] = Form(None),
     temperature_file: Optional[UploadFile] = File(None),
     express_photos: List[UploadFile] = File(None),
+    sample_list_file: Optional[UploadFile] = File(None),
+    selected_sample_ids: Optional[str] = Form(None),
+    additional_notes: Optional[str] = Form(None),
+    reviewer_id: Optional[int] = Form(None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -778,13 +988,13 @@ async def receive_samples(
             file_extension = os.path.splitext(photo.filename)[1]
             file_name_base = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{idx}"
             file_name = f"{file_name_base}{file_extension}"
-            
+
             file_content = await photo.read()
-            
+
             # 优先尝试上传到七牛云
             qiniu_key = f"express_photos/{file_name}"
             qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
-            
+
             if qiniu_url:
                 express_photo_paths.append(qiniu_url)
             else:
@@ -792,12 +1002,54 @@ async def receive_samples(
                 upload_dir = "uploads/express_photos"
                 os.makedirs(upload_dir, exist_ok=True)
                 file_path = os.path.join(upload_dir, file_name)
-                
+
                 with open(file_path, "wb") as f:
                     f.write(file_content)
                 # 保存为相对URL
                 express_photo_paths.append(f"/uploads/express_photos/{file_name}")
-    
+
+    # 保存样本清单文件
+    sample_list_file_path = None
+    if sample_list_file and sample_list_file.filename:
+        file_extension = os.path.splitext(sample_list_file.filename)[1]
+        file_name_base = f"sample_list_{project_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        file_name = f"{file_name_base}{file_extension}"
+
+        file_content = await sample_list_file.read()
+
+        qiniu_key = f"sample_lists/{file_name}"
+        qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
+
+        if qiniu_url:
+            sample_list_file_path = qiniu_url
+        else:
+            upload_dir = "uploads/sample_lists"
+            os.makedirs(upload_dir, exist_ok=True)
+            file_path = os.path.join(upload_dir, file_name)
+
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+            sample_list_file_path = f"/uploads/sample_lists/{file_name}"
+
+    # 处理选中的样本ID
+    parsed_sample_ids = None
+    if selected_sample_ids:
+        try:
+            parsed_sample_ids = json.loads(selected_sample_ids)
+            if isinstance(parsed_sample_ids, list):
+                await db.execute(
+                    Sample.__table__.update()
+                    .where(Sample.id.in_(parsed_sample_ids))
+                    .values(status=SampleStatus.RECEIVED)
+                )
+        except json.JSONDecodeError:
+            pass
+
+    # 处理复核人信息
+    reviewed_at = None
+    if reviewer_id:
+        reviewed_at = datetime.utcnow()
+
     # 创建接收记录
     receive_record = SampleReceiveRecord(
         project_id=project_id,
@@ -811,6 +1063,11 @@ async def receive_samples(
         sample_status=sample_status,
         storage_location=storage_location,
         express_photos=json.dumps(express_photo_paths) if express_photo_paths else None,
+        sample_list_file_path=sample_list_file_path,
+        selected_sample_ids=json.dumps(parsed_sample_ids) if parsed_sample_ids else None,
+        additional_notes=additional_notes,
+        reviewed_by=reviewer_id,
+        reviewed_at=reviewed_at,
         received_by=current_user.id,
         received_at=datetime.utcnow(),
         status="pending"  # 待清点
@@ -829,13 +1086,16 @@ async def receive_samples(
         details={
             "project_id": project_id,
             "sample_count": sample_count,
-            "transport_method": transport_method
+            "transport_method": transport_method,
+            "selected_sample_count": len(parsed_sample_ids) if parsed_sample_ids else 0,
+            "reviewer_id": reviewer_id,
+            "has_sample_list": sample_list_file_path is not None
         },
         timestamp=datetime.utcnow()
     )
     db.add(audit_log)
     await db.commit()
-    
+
     return {"message": f"成功接收 {sample_count} 个样本", "receive_id": receive_record.id}
 
 
