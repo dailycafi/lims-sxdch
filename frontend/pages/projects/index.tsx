@@ -302,7 +302,7 @@ export default function ProjectsPage({ tabId, isActive }: Partial<TabContentProp
             <Table bleed={true} striped>
               <TableHead>
                 <TableRow>
-                  <TableHeader className="pl-6">实验室项目编号</TableHeader>
+                  <TableHeader className="pl-6">测试机构项目编号</TableHeader>
                   <TableHeader>申办方项目编号</TableHeader>
                   <TableHeader>申办方</TableHeader>
                   <TableHeader>状态</TableHeader>
@@ -333,7 +333,7 @@ export default function ProjectsPage({ tabId, isActive }: Partial<TabContentProp
                         <TableCell className="text-right pr-6">
                           <Link href={`/projects/${project.id}`}>
                             <Button plain>
-                              配置项目
+                              编辑
                             </Button>
                           </Link>
                         </TableCell>

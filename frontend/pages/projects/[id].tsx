@@ -79,7 +79,7 @@ interface SampleCodeElement {
 
 const sampleCodeElements: SampleCodeElement[] = [
   { id: 'sponsor_code', name: 'sponsor_code', label: '申办方项目编号', number: '①' },
-  { id: 'lab_code', name: 'lab_code', label: '实验室项目编号', number: '②' },
+  { id: 'lab_code', name: 'lab_code', label: '测试机构项目编号', number: '②' },
   { id: 'clinic_code', name: 'clinic_code', label: '临床机构编号', number: '③' },
   { id: 'subject_id', name: 'subject_id', label: '受试者编号', number: '④' },
   { id: 'test_type', name: 'test_type', label: '检测类型', number: '⑤' },
@@ -701,7 +701,7 @@ export default function ProjectDetailPage() {
                 <dd className="mt-1 text-zinc-900">{project.sponsor_project_code}</dd>
               </div>
               <div>
-                <dt className="text-zinc-500">实验室项目编号</dt>
+                <dt className="text-zinc-500">测试机构项目编号</dt>
                 <dd className="mt-1 text-zinc-900">{project.lab_project_code}</dd>
               </div>
               <div>
@@ -1438,7 +1438,7 @@ export default function ProjectDetailPage() {
               </Field>
 
               <Field className="flex items-center gap-4">
-                <Label className="w-32 flex-shrink-0">实验室项目编号</Label>
+                <Label className="w-32 flex-shrink-0">测试机构项目编号</Label>
                 <div className="flex-1">
                   <Input
                     value={editForm.lab_project_code}
