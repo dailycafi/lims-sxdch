@@ -109,3 +109,6 @@ yarn-error.log*
 # User feedback documents
 feedback-docs/
 !feedback-docs/README.md
+
+# Git worktrees
+worktrees/
