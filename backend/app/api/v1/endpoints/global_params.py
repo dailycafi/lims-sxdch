@@ -1298,12 +1298,14 @@ class QCSampleOptionsResponse(BaseModel):
     """稳定性及质控样本配置选项响应"""
     sample_categories: List[str] = []  # 样本类别 (STB/QC)
     codes: List[str] = []  # 代码 (L/M/H)
+    storage_conditions: List[str] = []  # 保存条件（温度选项）
 
 
 class QCSampleOptionsUpdate(BaseModel):
     """稳定性及质控样本配置选项更新"""
     sample_categories: Optional[List[str]] = None
     codes: Optional[List[str]] = None
+    storage_conditions: Optional[List[str]] = None  # 保存条件（温度选项）
 
 
 # 配置选项的键名
@@ -1328,6 +1330,7 @@ async def get_qc_sample_options(
     return QCSampleOptionsResponse(
         sample_categories=data.get("sample_categories", []),
         codes=data.get("codes", []),
+        storage_conditions=data.get("storage_conditions", []),
     )
 
 
@@ -1394,5 +1397,6 @@ async def update_qc_sample_options(
     return QCSampleOptionsResponse(
         sample_categories=new_data.get("sample_categories", []),
         codes=new_data.get("codes", []),
+        storage_conditions=new_data.get("storage_conditions", []),
     )
 
