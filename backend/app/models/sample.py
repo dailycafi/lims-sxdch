@@ -93,7 +93,7 @@ class SampleReceiveRecord(Base):
     project = relationship("Project")
     clinical_org = relationship("Organization", foreign_keys=[clinical_org_id])
     transport_org = relationship("Organization", foreign_keys=[transport_org_id])
-    receiver = relationship("User")
+    receiver = relationship("User", foreign_keys=[received_by])
 
 
 class SampleBorrowRequest(Base):
