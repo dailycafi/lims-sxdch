@@ -55,9 +55,15 @@ export class UsersService {
 
   /**
    * 重置用户密码（管理员操作）
+   * 如果不提供 newPassword，系统将自动生成随机复杂密码
+   * @returns 包含消息和可能的生成密码
    */
-  static async resetPassword(id: number, newPassword: string): Promise<void> {
-    await api.post(`/users/${id}/reset-password`, { new_password: newPassword });
+  static async resetPassword(id: number, newPassword?: string): Promise<{ message: string; generated_password?: string }> {
+    const response = await api.post<{ message: string; generated_password?: string }>(
+      `/users/${id}/reset-password`,
+      newPassword ? { new_password: newPassword } : {}
+    );
+    return response.data;
   }
 
   /**
