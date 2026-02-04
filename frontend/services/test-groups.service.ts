@@ -121,6 +121,15 @@ export const testGroupsAPI = {
     return response.data;
   },
 
+  // 复制试验组并覆盖数据
+  copyTestGroupWithData: async (sourceId: number, overrideData: Partial<TestGroupCreate>): Promise<TestGroup> => {
+    const response = await api.post('/test-groups/copy', {
+      source_id: sourceId,
+      ...overrideData
+    });
+    return response.data;
+  },
+
   // 获取项目的采集点列表
   getCollectionPoints: async (projectId: number): Promise<CollectionPoint[]> => {
     const response = await api.get(`/projects/${projectId}/collection-points`);
