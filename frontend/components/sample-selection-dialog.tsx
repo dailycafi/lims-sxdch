@@ -3,7 +3,7 @@ import { Dialog, DialogTitle, DialogBody, DialogActions } from '@/components/dia
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Text } from '@/components/text';
-import { Checkbox, CheckboxField } from '@/components/checkbox';
+import { Checkbox } from '@/components/checkbox';
 import { MagnifyingGlassIcon, CheckCircleIcon } from '@heroicons/react/20/solid';
 import { api } from '@/lib/api';
 import { toast } from 'react-hot-toast';

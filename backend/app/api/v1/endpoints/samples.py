@@ -827,9 +827,7 @@ async def get_pending_samples(
             }
             for s in samples
         ],
-        "total": total,
-        "skip": skip,
-        "limit": limit
+        "total": total
     }
 
 
@@ -887,10 +885,10 @@ async def verify_reviewer(
     if reviewer.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="复核人不能是当前操作人"
+            detail="复核人不能与当前操作人相同"
         )
 
-    if reviewer.role != UserRole.SAMPLE_ADMIN and reviewer.role != UserRole.SYSTEM_ADMIN:
+    if not check_sample_permission(reviewer, "receive"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="复核人必须是样本管理员"
@@ -907,7 +905,7 @@ async def verify_reviewer(
         entity_type="reviewer_verification",
         entity_id=reviewer.id,
         action="verify_success",
-        details={"reviewer_name": reviewer.full_name, "username": username},
+        details={"reviewer_username": username},
         timestamp=datetime.utcnow()
     )
     db.add(audit_log)
@@ -916,7 +914,7 @@ async def verify_reviewer(
     return {
         "success": True,
         "reviewer_id": reviewer.id,
-        "reviewer_name": reviewer.full_name,
+        "reviewer_name": reviewer.full_name or reviewer.username,
         "reviewer_username": reviewer.username
     }
 
@@ -949,38 +947,34 @@ async def receive_samples(
         )
 
     await assert_project_access(db, current_user, project_id)
-    
+
     import os
     from app.services.qiniu_service import qiniu_service
-    
+
     # 保存温度文件
     temperature_file_path = None
     if temperature_file:
         file_extension = os.path.splitext(temperature_file.filename)[1]
-        # 使用统一的文件名格式
         file_name_base = f"{temperature_monitor_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         file_name = f"{file_name_base}{file_extension}"
-        
+
         file_content = await temperature_file.read()
-        
-        # 优先尝试上传到七牛云
+
         qiniu_key = f"temperature/{file_name}"
         qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
-        
+
         if qiniu_url:
             temperature_file_path = qiniu_url
         else:
-            # 回退到本地存储
             upload_dir = "uploads/temperature"
             os.makedirs(upload_dir, exist_ok=True)
             file_path = os.path.join(upload_dir, file_name)
-            
+
             with open(file_path, "wb") as f:
                 f.write(file_content)
-            
-            # 保存为相对URL
+
             temperature_file_path = f"/uploads/temperature/{file_name}"
-    
+
     # 保存快递单照片
     express_photo_paths = []
     if express_photos:
@@ -991,21 +985,18 @@ async def receive_samples(
 
             file_content = await photo.read()
 
-            # 优先尝试上传到七牛云
             qiniu_key = f"express_photos/{file_name}"
             qiniu_url = qiniu_service.upload_file(file_content, qiniu_key)
 
             if qiniu_url:
                 express_photo_paths.append(qiniu_url)
             else:
-                # 回退到本地存储
                 upload_dir = "uploads/express_photos"
                 os.makedirs(upload_dir, exist_ok=True)
                 file_path = os.path.join(upload_dir, file_name)
 
                 with open(file_path, "wb") as f:
                     f.write(file_content)
-                # 保存为相对URL
                 express_photo_paths.append(f"/uploads/express_photos/{file_name}")
 
     # 保存样本清单文件
@@ -1045,11 +1036,6 @@ async def receive_samples(
         except json.JSONDecodeError:
             pass
 
-    # 处理复核人信息
-    reviewed_at = None
-    if reviewer_id:
-        reviewed_at = datetime.utcnow()
-
     # 创建接收记录
     receive_record = SampleReceiveRecord(
         project_id=project_id,
@@ -1067,16 +1053,16 @@ async def receive_samples(
         selected_sample_ids=json.dumps(parsed_sample_ids) if parsed_sample_ids else None,
         additional_notes=additional_notes,
         reviewed_by=reviewer_id,
-        reviewed_at=reviewed_at,
+        reviewed_at=datetime.utcnow() if reviewer_id else None,
         received_by=current_user.id,
         received_at=datetime.utcnow(),
-        status="pending"  # 待清点
+        status="pending"
     )
-    
+
     db.add(receive_record)
     await db.commit()
     await db.refresh(receive_record)
-    
+
     # 创建审计日志
     audit_log = AuditLog(
         user_id=current_user.id,
@@ -1087,9 +1073,8 @@ async def receive_samples(
             "project_id": project_id,
             "sample_count": sample_count,
             "transport_method": transport_method,
-            "selected_sample_count": len(parsed_sample_ids) if parsed_sample_ids else 0,
             "reviewer_id": reviewer_id,
-            "has_sample_list": sample_list_file_path is not None
+            "selected_sample_count": len(parsed_sample_ids) if parsed_sample_ids else 0
         },
         timestamp=datetime.utcnow()
     )
