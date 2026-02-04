@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/router';
 import { toast } from 'react-hot-toast';
@@ -10,7 +10,6 @@ import { Select } from '@/components/select';
 import { Textarea } from '@/components/textarea';
 import { Dialog, DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/dialog';
 import { Heading } from '@/components/heading';
-import { DescriptionList, DescriptionTerm, DescriptionDetails } from '@/components/description-list';
 import { Badge } from '@/components/badge';
 import { Text } from '@/components/text';
 import { Divider } from '@/components/divider';
@@ -20,27 +19,22 @@ import { ESignatureDialog } from '@/components/e-signature-dialog';
 import { useAuthStore } from '@/store/auth';
 import { useProjectStore } from '@/store/project';
 import { Tabs } from '@/components/tabs';
-import { 
-  CogIcon, 
-  DocumentTextIcon, 
+import {
+  CogIcon,
+  DocumentTextIcon,
   AdjustmentsHorizontalIcon,
-  XMarkIcon,
   PlusIcon,
   TrashIcon,
   PencilSquareIcon,
   MagnifyingGlassIcon,
   BeakerIcon,
-  ClipboardDocumentListIcon,
-  DocumentDuplicateIcon,
-  CheckCircleIcon,
-  LockClosedIcon,
   UserGroupIcon
 } from '@heroicons/react/20/solid';
 import { TagInput } from '@/components/tag-input';
 import { TestGroupManager } from '@/components/test-group-manager';
 import { Tooltip } from '@/components/tooltip';
 import { Fieldset, Field, Label, FieldGroup } from '@/components/fieldset';
-import { SampleCodeRuleEditor, DEFAULT_ELEMENTS as SAMPLE_CODE_ELEMENTS, SEPARATOR_OPTIONS as SAMPLE_CODE_SEPARATOR_OPTIONS, CodeSlot } from '@/components/sample-code-rule';
+import { SampleCodeRuleEditor, SAMPLE_CODE_ELEMENTS, SEPARATOR_OPTIONS, CodeSlot } from '@/components/sample-code-rule';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
@@ -741,7 +735,7 @@ export default function ProjectDetailPage() {
                       if (!slot.elementId) return null;
                       const element = SAMPLE_CODE_ELEMENTS.find(e => e.id === slot.elementId);
                       if (!element) return null;
-                      const separatorLabel = SAMPLE_CODE_SEPARATOR_OPTIONS.find(s => s.id === slot.separator)?.label || '';
+                      const separatorLabel = SEPARATOR_OPTIONS.find(s => s.id === slot.separator)?.label || '';
                       return (
                         <div key={index} className="flex items-baseline gap-2">
                           <span className="font-bold text-red-600 w-4">{SLOT_LABELS[index]}</span>
@@ -829,11 +823,10 @@ export default function ProjectDetailPage() {
           {configTab === 'rules' ? (
             <SampleCodeRuleEditor
               slots={slots}
-              onChange={setSlots}
-              elements={SAMPLE_CODE_ELEMENTS}
+              onSlotsChange={setSlots}
               projectData={{
-                sponsorCode: project?.sponsor_project_code,
-                labCode: project?.lab_project_code,
+                sponsor_project_code: project?.sponsor_project_code,
+                lab_project_code: project?.lab_project_code,
               }}
             />
           ) : configTab === 'options' ? (

@@ -1,138 +1,257 @@
-import { useState, useCallback, useRef } from 'react';
-import { DraggableElementChip } from './DraggableElementChip';
+import { useState, useCallback } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import clsx from 'clsx';
+import { ArrowPathIcon } from '@heroicons/react/20/solid';
+import { DraggableElement } from './DraggableElement';
+import { SortableSlot } from './SortableSlot';
 import { DropZone } from './DropZone';
-import { RulePreview } from './RulePreview';
-import { TemplateManager } from './TemplateManager';
-import type { CodeSlot, SampleCodeElement } from './types';
-import { DEFAULT_ELEMENTS } from './types';
+import { PreviewDisplay } from './PreviewDisplay';
+import {
+  CodeSlot,
+  SampleCodeElement,
+  SAMPLE_CODE_ELEMENTS,
+  ELEMENT_COLORS,
+} from './types';
 
 interface SampleCodeRuleEditorProps {
   slots: CodeSlot[];
-  onChange: (slots: CodeSlot[]) => void;
-  elements?: SampleCodeElement[];
+  onSlotsChange: (slots: CodeSlot[]) => void;
   projectData?: {
-    sponsorCode?: string;
-    labCode?: string;
+    sponsor_project_code?: string;
+    lab_project_code?: string;
   };
 }
 
 export function SampleCodeRuleEditor({
   slots,
-  onChange,
-  elements = DEFAULT_ELEMENTS,
-  projectData
+  onSlotsChange,
+  projectData,
 }: SampleCodeRuleEditorProps) {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const [activeElement, setActiveElement] = useState<SampleCodeElement | null>(null);
 
-  const usedElementIds = new Set(slots.map(s => s.elementId));
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
-  const handleDragEnd = useCallback((element: SampleCodeElement) => {
-    if (usedElementIds.has(element.id)) return;
+  // Get used element IDs
+  const usedElementIds = new Set(slots.map((s) => s.elementId).filter(Boolean));
 
-    const newSlot: CodeSlot = {
-      elementId: element.id,
-      separator: '-',
-    };
-    onChange([...slots, newSlot]);
-  }, [slots, onChange, usedElementIds]);
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const data = active.data.current;
 
-  const handleReorder = useCallback((newSlots: CodeSlot[]) => {
-    onChange(newSlots);
-  }, [onChange]);
+    if (data?.type === 'source') {
+      setActiveElement(data.element);
+    } else if (data?.type === 'slot') {
+      const element = SAMPLE_CODE_ELEMENTS.find((e) => e.id === data.slot.elementId);
+      setActiveElement(element || null);
+    }
+  };
 
-  const handleRemove = useCallback((index: number) => {
-    const newSlots = slots.filter((_, i) => i !== index);
-    onChange(newSlots);
-  }, [slots, onChange]);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveElement(null);
 
-  const handleSeparatorChange = useCallback((index: number, separator: string) => {
-    const newSlots = slots.map((slot, i) =>
-      i === index ? { ...slot, separator } : slot
-    );
-    onChange(newSlots);
-  }, [slots, onChange]);
+    if (!over) return;
 
-  const handleReset = useCallback(() => {
-    onChange([]);
-  }, [onChange]);
+    const activeData = active.data.current;
+    const overId = over.id;
 
-  const handleApplyTemplate = useCallback((templateSlots: CodeSlot[]) => {
-    onChange(templateSlots);
-  }, [onChange]);
+    // Case 1: Dragging from source to drop zone
+    if (activeData?.type === 'source' && overId === 'target-zone') {
+      const element = activeData.element as SampleCodeElement;
+      // Add new slot with this element
+      const newSlots = [
+        ...slots,
+        { elementId: element.id, separator: '-' },
+      ];
+      onSlotsChange(newSlots);
+      return;
+    }
+
+    // Case 2: Dragging from source to a specific slot position
+    if (activeData?.type === 'source' && String(overId).startsWith('slot-')) {
+      const element = activeData.element as SampleCodeElement;
+      const targetIndex = parseInt(String(overId).replace('slot-', ''), 10);
+
+      // Insert new slot at position
+      const newSlots = [...slots];
+      newSlots.splice(targetIndex + 1, 0, { elementId: element.id, separator: '-' });
+      onSlotsChange(newSlots);
+      return;
+    }
+
+    // Case 3: Reordering slots within the target zone
+    if (activeData?.type === 'slot' && String(overId).startsWith('slot-')) {
+      const activeIndex = activeData.index;
+      const overIndex = parseInt(String(overId).replace('slot-', ''), 10);
+
+      if (activeIndex !== overIndex) {
+        const newSlots = arrayMove(slots, activeIndex, overIndex);
+        onSlotsChange(newSlots);
+      }
+      return;
+    }
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    // Could add visual feedback here if needed
+  };
+
+  const handleRemoveSlot = useCallback(
+    (index: number) => {
+      const newSlots = slots.filter((_, i) => i !== index);
+      onSlotsChange(newSlots);
+    },
+    [slots, onSlotsChange]
+  );
+
+  const handleSeparatorChange = useCallback(
+    (index: number, separator: string) => {
+      const newSlots = slots.map((slot, i) =>
+        i === index ? { ...slot, separator } : slot
+      );
+      onSlotsChange(newSlots);
+    },
+    [slots, onSlotsChange]
+  );
+
+  const handleReset = () => {
+    onSlotsChange([]);
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-base font-semibold text-zinc-900">编号预览</span>
-        </div>
-        <RulePreview
-          slots={slots}
-          elements={elements}
-          projectData={projectData}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-base font-semibold text-zinc-900">目标区域</span>
-          <button
-            onClick={handleReset}
-            className="text-xs text-zinc-600 font-medium hover:text-zinc-900"
-          >
-            重置所有
-          </button>
-        </div>
-        <div
-          ref={dropZoneRef}
-          onDragEnter={() => setIsDragOver(true)}
-          onDragLeave={(e) => {
-            if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
-              setIsDragOver(false);
-            }
-          }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => setIsDragOver(false)}
-        >
-          <DropZone
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+    >
+      <div className="space-y-6">
+        {/* Preview Area */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-base font-semibold text-zinc-900">
+              编号预览
+            </span>
+          </div>
+          <PreviewDisplay
             slots={slots}
-            elements={elements}
-            onReorder={handleReorder}
-            onRemove={handleRemove}
-            onSeparatorChange={handleSeparatorChange}
-            isDragOver={isDragOver}
+            elements={SAMPLE_CODE_ELEMENTS}
+            projectData={projectData}
           />
         </div>
-        <p className="text-xs text-zinc-500 px-1">
-          拖拽下方要素到此区域，在区域内可继续拖拽调整顺序
-        </p>
-      </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-base font-semibold text-zinc-900">可用要素</span>
+        {/* Target Zone */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-base font-semibold text-zinc-900">
+              已选要素（可拖拽排序）
+            </span>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs text-zinc-600 font-medium hover:text-zinc-900 flex items-center gap-1"
+            >
+              <ArrowPathIcon className="w-3.5 h-3.5" />
+              重置
+            </button>
+          </div>
+
+          <DropZone id="target-zone">
+            {slots.length === 0 ? (
+              <div className="flex items-center justify-center h-[80px] text-zinc-400 text-sm">
+                拖拽下方要素到此处
+              </div>
+            ) : (
+              <SortableContext
+                items={slots.map((_, i) => `slot-${i}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-wrap gap-3">
+                  {slots.map((slot, index) => {
+                    const element = SAMPLE_CODE_ELEMENTS.find(
+                      (e) => e.id === slot.elementId
+                    );
+                    const isLast =
+                      index === slots.length - 1 ||
+                      slots.slice(index + 1).every((s) => !s.elementId);
+
+                    return (
+                      <SortableSlot
+                        key={`slot-${index}`}
+                        slot={slot}
+                        index={index}
+                        element={element}
+                        isLast={isLast}
+                        onRemove={() => handleRemoveSlot(index)}
+                        onSeparatorChange={(sep) => handleSeparatorChange(index, sep)}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            )}
+          </DropZone>
         </div>
-        <div className="p-4 bg-white rounded-xl border border-zinc-200 shadow-sm">
-          <div className="flex flex-wrap gap-2">
-            {elements.map((element) => (
-              <DraggableElementChip
-                key={element.id}
-                element={element}
-                isUsed={usedElementIds.has(element.id)}
-                onDragEnd={handleDragEnd}
-              />
-            ))}
+
+        {/* Source Elements */}
+        <div className="space-y-3">
+          <div className="px-1">
+            <span className="text-base font-semibold text-zinc-900">
+              可用要素（拖拽添加）
+            </span>
+          </div>
+          <div className="p-4 bg-white rounded-xl border border-zinc-200">
+            <div className="flex flex-wrap gap-3">
+              {SAMPLE_CODE_ELEMENTS.map((element) => (
+                <DraggableElement
+                  key={element.id}
+                  element={element}
+                  isUsed={usedElementIds.has(element.id)}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-zinc-200 pt-4">
-        <TemplateManager
-          currentSlots={slots}
-          onApplyTemplate={handleApplyTemplate}
-        />
-      </div>
-    </div>
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {activeElement && (
+          <div
+            className={clsx(
+              'px-4 py-2.5 rounded-lg border-2 font-medium text-sm shadow-xl',
+              ELEMENT_COLORS[activeElement.id]?.bg || 'bg-gray-100',
+              ELEMENT_COLORS[activeElement.id]?.text || 'text-gray-800',
+              ELEMENT_COLORS[activeElement.id]?.border || 'border-gray-300'
+            )}
+          >
+            <span className="mr-1.5 font-bold">{activeElement.number}</span>
+            {activeElement.label}
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }

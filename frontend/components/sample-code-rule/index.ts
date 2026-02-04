@@ -1,6 +1,6 @@
 export { SampleCodeRuleEditor } from './SampleCodeRuleEditor';
-export { DraggableElementChip } from './DraggableElementChip';
+export { DraggableElement } from './DraggableElement';
+export { SortableSlot } from './SortableSlot';
 export { DropZone } from './DropZone';
-export { RulePreview } from './RulePreview';
-export { TemplateManager } from './TemplateManager';
+export { PreviewDisplay } from './PreviewDisplay';
 export * from './types';
